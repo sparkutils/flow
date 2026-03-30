@@ -2,9 +2,10 @@ package com.sparkutils.flow
 
 import com.sparkutils.quality.{DefaultProcessor, Id, NoOpDefaultProcessor, OutputExpression, VersionedId, collectRunner, expressionRunner, ruleEngineRunner, ruleFolderRunner, typedExpressionRunner}
 import com.sparkutils.quality.impl.views.ViewLoadResults
-import org.apache.spark.sql.functions.expr
+import org.apache.spark.sql.functions.{array, expr, col}
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 import Utils._
+import com.sparkutils.quality.functions.group_results
 import org.apache.spark.sql.types.DataType
 
 /**
@@ -13,15 +14,17 @@ import org.apache.spark.sql.types.DataType
  * @param steps steps which are processed in order
  * @param cacheStepResults each step result should be cached before providing the next step
  * @param showInterim calls show on interim results
+ *
  */
-class Flow(ruleSuiteGroup: VersionedId, steps: Seq[Step], cacheStepResults: Boolean = false, showInterim: Boolean = false) {
+class Flow(ruleSuiteGroup: VersionedId, steps: Seq[Step], cacheStepResults: Boolean = false,
+           showInterim: Boolean = false, flowAuditColName: String = "flow_audit") {
   private val logger = org.slf4j.LoggerFactory.getLogger(classOf[Flow])
   import logger._
 
   // TODO move this to the server, allowing upgrades for all jobs on shared cluster
   private def process(dataFrame: DataFrame, step: Step, index: Int): DataFrame = {
     import step.operation._
-    val col: Column =
+    val op: Column =
       function.toLowerCase.replaceAll("_","") match {
         case "collect" | "collectrunner" =>
           collectRunner(step.ruleSuite, resultDataType = options.dataType("resultDataType"),
@@ -58,7 +61,14 @@ class Flow(ruleSuiteGroup: VersionedId, steps: Seq[Step], cacheStepResults: Bool
             variableFuncGroup = options.int("variableFuncGroup", 20))
         // TODO dq ?
       }
-    val rdf = dataFrame.select(expr("*"), col.as(fieldName))
+
+    val statsColumn =
+      step.combineAuditWith.map{ fname =>
+        Seq(group_results( array( op.getField("ruleSuiteResults"), col(fname).getField("ruleSuiteResults") ) ).
+          as(flowAuditColName))
+      }.getOrElse(Seq.empty)
+
+    val rdf = dataFrame.select(Seq(expr("*"), op.as(fieldName)) ++ statsColumn :_*)
     resultApproach match {
       case AsIs => rdf
       case ExpandNested => rdf.selectExpr("*", s"$fieldName.*")
@@ -66,7 +76,8 @@ class Flow(ruleSuiteGroup: VersionedId, steps: Seq[Step], cacheStepResults: Bool
         val og = rdf.columns.toSet
         val full = rdf.selectExpr("*", s"$fieldName.result.*", fieldName).columns
         val dupes = full.groupBy(identity).filter( p => p._2.length > 1 ).keys.toSet
-        rdf.selectExpr(((og -- dupes).toSeq ++ Seq( s"$fieldName.result.*", s"$fieldName.ruleSuiteResults as $fieldName")) :_*)
+        rdf.selectExpr(((og -- dupes).toSeq ++ Seq( s"$fieldName.result.*", fieldName)) :_*)
+
       case StarOnly => rdf.selectExpr(s"$fieldName.*")
       case OutputFieldOnly => rdf.selectExpr(s"$fieldName")
     }

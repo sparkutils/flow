@@ -3,7 +3,7 @@ package com.sparkutils.flowTests
 import com.sparkutils.flow.{AsIs, Flow, MergeFields, Operation, OutputFieldOnly, StarOnly, Step}
 import com.sparkutils.flowTests.utils.SharedPureConnectTests
 import com.sparkutils.quality.impl.views.ViewConfig
-import com.sparkutils.quality.{DefaultProcessor, ExpressionRule, Id, LambdaFunction, NoOpRunOnPassProcessor, OutputExpression, Rule, RuleSet, RuleSuite, RunOnPassProcessor, registerLambdaFunctions}
+import com.sparkutils.quality.{DefaultProcessor, ExpressionRule, Id, LambdaFunction, NoOpRunOnPassProcessor, OutputExpression, Rule, RuleSet, RuleSuite, RuleSuiteGroupResults, RunOnPassProcessor, registerLambdaFunctions}
 import org.apache.spark.sql.DataFrame
 import org.scalatest.Matchers
 
@@ -81,7 +81,13 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
     )
   }
 
-  test("folders should correctly nest") {
+  def verifyRuleSuites[T](r: Seq[T])(ruleSuiteGroup: T => RuleSuiteGroupResults): Unit = {
+    r.map(ruleSuiteGroup(_).ruleSuiteResults.keys.toSeq).distinct.map(_.sortBy(i=>(i.id, i.version))) shouldBe Seq(
+      Seq(Id(1,1), Id(2,0))
+    )
+  }
+
+  test("folders should correctly nest and merge fields with chained audit") {
     val flow = new Flow(Id(1,1), Seq(
       Step(rulesRaw(Seq(
         (ExpressionRule("product = 'edt'"),  RunOnPassProcessor(1000, Id(1040, 1),
@@ -91,14 +97,16 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
       Step(rulesRaw(Seq(
         (ExpressionRule("product like 'fx%'"),  RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("set(account = 'newacc')")))
-      )).copy(defaultProcessor = DefaultProcessor(Id(1041,1), OutputExpression("row -> row"))), // force an identity default
-        "view2", Seq.empty, Operation("folder", "view2E", Map.empty, MergeFields), Map.empty, "view3")
+      )).copy(defaultProcessor = DefaultProcessor(Id(1041,1), OutputExpression("row -> row")),
+        id = Id(2,0)), // force an identity default and Id change to verify combineAuditWith
+        "view2", Seq.empty, Operation("folder", "view2E", Map.empty, MergeFields), Map.empty, "view3",
+        combineAuditWith = Some("view1E"))
     ), showInterim = true)
 
     val s = sparkSession
     import s.implicits._
     val res = flow.run(sparkSession, testData.toDF)
-    val rows = res.drop("view1E", "view2E").as[TestOn].collect()
+    val rows = res.drop("view1E", "view2E", "flow_audit").as[TestOn].collect()
     rows shouldBe Seq(
       TestOn("edt", "4201", 10),
       TestOn("otc", "5201", 40),
@@ -107,6 +115,11 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
       TestOn("fxotc", "newacc", 40),
       TestOn("eqotc", "4201", 60)
     )
+
+    import frameless._
+    import com.sparkutils.quality.implicits._
+    val rgs = res.selectExpr("flow_audit.*").as[RuleSuiteGroupResults].collect()
+    verifyRuleSuites(rgs)(identity)
   }
 
 }

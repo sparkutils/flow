@@ -9,7 +9,7 @@ case class FlowException(msg: String, cause: Throwable = null) extends Exception
  * How should the result be used
  */
 sealed trait ResultApproach
-
+// todo should the interim being kept be result
 /**
  * Keeps the configured processor field as a nested type e.g. selectExpr("*"), this can be changed by a ResultProcessor
  */
@@ -54,5 +54,7 @@ case class Operation(function: String, fieldName: String, options: Map[String, S
  * @param operation
  * @param properties properties associated with this step, for example filenames or id's to save results against
  * @param outputView the output view name
+ * @param combineAuditWith when defined will trigger a group_results( unify_result ) with the operation fieldName
  */
-case class Step(ruleSuite: RuleSuite, inputView: String, views: Seq[ViewConfig], operation: Operation, properties: Map[String, String], outputView: String)
+case class Step(ruleSuite: RuleSuite, inputView: String, views: Seq[ViewConfig], operation: Operation,
+                properties: Map[String, String], outputView: String, combineAuditWith: Option[String] = None)
