@@ -2,7 +2,7 @@ package com.sparkutils.flow
 
 import com.sparkutils.quality.{DefaultProcessor, Id, NoOpDefaultProcessor, OutputExpression, VersionedId, collectRunner, expressionRunner, ruleEngineRunner, ruleFolderRunner, typedExpressionRunner}
 import com.sparkutils.quality.impl.views.ViewLoadResults
-import org.apache.spark.sql.functions.{array, expr, col}
+import org.apache.spark.sql.functions.{array, expr, col => scol}
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 import Utils._
 import com.sparkutils.quality.functions.group_results
@@ -12,35 +12,34 @@ import org.apache.spark.sql.types.DataType
  * Represents a number of steps for processing data
  *
  * @param steps steps which are processed in order
- * @param cacheStepResults each step result should be cached before providing the next step
  * @param showInterim calls show on interim results
  *
  */
-class Flow(ruleSuiteGroup: VersionedId, steps: Seq[Step], cacheStepResults: Boolean = false,
-           showInterim: Boolean = false, flowAuditColName: String = "flow_audit") {
+@SerialVersionUID(1L)
+class Flow(ruleSuiteGroup: VersionedId, steps: Seq[Step], showInterim: Boolean = false, flowAuditColName: String = "flow_audit", inline: Boolean = false) extends Serializable {
   private val logger = org.slf4j.LoggerFactory.getLogger(classOf[Flow])
   import logger._
 
   // TODO move this to the server, allowing upgrades for all jobs on shared cluster
   private def process(dataFrame: DataFrame, step: Step, index: Int): DataFrame = {
     import step.operation._
-    val op: Column =
+    val (col: Column, childrenRaw: Seq[String]) = (
       function.toLowerCase.replaceAll("_","") match {
         case "collect" | "collectrunner" =>
-          collectRunner(step.ruleSuite, resultDataType = options.dataType("resultDataType"),
+          (collectRunner(step.ruleSuite, resultDataType = options.dataType("resultDataType"),
             variablesPerFunc = options.int("variablesPerFunc", 40),
             variableFuncGroup = options.int("variableFuncGroup", 20),
             flatten = options.boolean("flatten", true),
             includeNulls = options.boolean("includeNulls"),
             useInPlaceArray = options.boolean("useInPlaceArray", true),
             unrollInPlaceArray = options.boolean("unrollInPlaceArray"),
-            unrollOutputArraySize = options.int("unrollOutputArraySize", 1))
+            unrollOutputArraySize = options.int("unrollOutputArraySize", 1)).as(fieldName), Seq("ruleSuiteResults", "result"))
         case "engine" | "ruleengine" | "ruleenginerunner" =>
-          ruleEngineRunner(step.ruleSuite,
+          (ruleEngineRunner(step.ruleSuite,
             resultDataType = options.dataType("resultDataType"),
             debugMode = options.boolean("debugMode"),
             variablesPerFunc = options.int("variablesPerFunc", 40),
-            variableFuncGroup = options.int("variableFuncGroup", 20))
+            variableFuncGroup = options.int("variableFuncGroup", 20)).as(fieldName), Seq("ruleSuiteResults", "salientRule", "result"))
         case "folder" | "folderrunner" =>
           val rs =
             if (step.ruleSuite.defaultProcessor != NoOpDefaultProcessor.noOp)
@@ -50,7 +49,7 @@ class Flow(ruleSuiteGroup: VersionedId, steps: Seq[Step], cacheStepResults: Bool
               // identity function - let the row through
               step.ruleSuite.copy(defaultProcessor = DefaultProcessor(Id(-1,-1), OutputExpression("row -> row")))
 
-          ruleFolderRunner(rs,
+          (ruleFolderRunner(rs,
             startingStruct = options.expr("startingStruct").getOrElse{
               // default to the current row
               expr("struct(*)")
@@ -58,29 +57,60 @@ class Flow(ruleSuiteGroup: VersionedId, steps: Seq[Step], cacheStepResults: Bool
             useType = options.structType("useType").orElse(options.structType("resultDataType")),
             debugMode = options.boolean("debugMode"),
             variablesPerFunc = options.int("variablesPerFunc", 40),
-            variableFuncGroup = options.int("variableFuncGroup", 20))
+            variableFuncGroup = options.int("variableFuncGroup", 20)).as(fieldName), Seq("ruleSuiteResults", "result"))
         // TODO dq ?
-      }
+      } )
 
-    val statsColumn =
-      step.combineAuditWith.map{ fname =>
-        Seq(group_results( array( op.getField("ruleSuiteResults"), col(fname).getField("ruleSuiteResults") ) ).
-          as(flowAuditColName))
-      }.getOrElse(Seq.empty)
+    val children = childrenRaw.map(col.getField)
 
-    val rdf = dataFrame.select(Seq(expr("*"), op.as(fieldName)) ++ statsColumn :_*)
-    resultApproach match {
-      case AsIs => rdf
-      case ExpandNested => rdf.selectExpr("*", s"$fieldName.*")
-      case MergeFields => // dq probably doesn't work
-        val og = rdf.columns.toSet
-        val full = rdf.selectExpr("*", s"$fieldName.result.*", fieldName).columns
-        val dupes = full.groupBy(identity).filter( p => p._2.length > 1 ).keys.toSet
-        rdf.selectExpr(((og -- dupes).toSeq ++ Seq( s"$fieldName.result.*", fieldName)) :_*)
+    def wrapped() = {
+      val rdf = dataFrame.select(expr("*"), col.as(fieldName))
+      val notUnified =
+        resultApproach match {
+          case AsIs => rdf
+          case ExpandNested => rdf.selectExpr("*", s"$fieldName.*")
+          case MergeFields => // dq probably doesn't work
+            val og = rdf.columns.toSet
+            val full = rdf.selectExpr("*", s"$fieldName.result.*", fieldName).columns
+            val dupes = full.groupBy(identity).filter(p => p._2.length > 1).keys.toSet
+            rdf.selectExpr(((og -- dupes).toSeq ++ Seq(s"$fieldName.result.*", fieldName)): _*)
+          case StarOnly => rdf.selectExpr(s"$fieldName.*")
+          case OutputFieldOnly => rdf.selectExpr(s"$fieldName")
+        }
 
-      case StarOnly => rdf.selectExpr(s"$fieldName.*")
-      case OutputFieldOnly => rdf.selectExpr(s"$fieldName")
+      step.combineAuditWith.map { fname =>
+        notUnified.withColumn(flowAuditColName,
+          expr(s"group_results( array( $fieldName.ruleSuiteResults, $fname.ruleSuiteResults ) )"))
+      }.getOrElse(notUnified)
     }
+
+    def inlineImpl() = {
+      val columns = Seq(expr("*"), col) ++
+        step.combineAuditWith.map{ fname =>
+          Seq(group_results( array( col.getField("ruleSuiteResults"), scol(fname).getField("ruleSuiteResults") ) ).
+            as(flowAuditColName))
+        }.getOrElse(Seq.empty)
+
+      //val rdf = dataFrame.select(Seq(expr("*"), col.as(fieldName)) ++ statsColumn :_*)
+      resultApproach match {
+        case AsIs => dataFrame.select(columns :_*)
+        case ExpandNested => dataFrame.select(columns ++ children :_*)//rdf.selectExpr("*", s"$fieldName.*")
+        case MergeFields => // dq probably doesn't work
+
+          val starter = dataFrame.select(columns : _*)
+          val og = starter.columns.toSet + fieldName
+          val nested = starter.selectExpr(s"$fieldName.result.*").columns
+          starter.selectExpr((og -- nested).toSeq ++ Seq( s"$fieldName.result.*") :_*)
+
+        case StarOnly => dataFrame.select(children: _*)
+        case OutputFieldOnly => dataFrame.select(col)
+      }
+    }
+
+    if (inline)
+      inlineImpl()
+    else
+      wrapped()
   }
 
   /**
@@ -190,7 +220,7 @@ class Flow(ruleSuiteGroup: VersionedId, steps: Seq[Step], cacheStepResults: Bool
    */
   protected def stepCompleted(result: DataFrame, step: Step, index: Int): DataFrame = {
     val ndf =
-      if (cacheStepResults)
+      if (step.cacheResults)
         result.cache
       else
         result

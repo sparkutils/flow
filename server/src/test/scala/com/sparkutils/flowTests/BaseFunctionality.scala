@@ -1,6 +1,7 @@
 package com.sparkutils.flowTests
 
 import com.sparkutils.flow.{AsIs, Flow, MergeFields, Operation, OutputFieldOnly, StarOnly, Step}
+import com.sparkutils.flowTests.RulesGen.rulesRaw
 import com.sparkutils.flowTests.utils.SharedPureConnectTests
 import com.sparkutils.quality.impl.views.ViewConfig
 import com.sparkutils.quality.{DefaultProcessor, ExpressionRule, Id, LambdaFunction, NoOpRunOnPassProcessor, OutputExpression, Rule, RuleSet, RuleSuite, RuleSuiteGroupResults, RunOnPassProcessor, registerLambdaFunctions}
@@ -12,18 +13,7 @@ case class TestOn(product: String, account: String, subcode: Int)
 case class NewPosting(transfer_type: String, account: String, product: String, subcode: Int)
 case class Posting(transfer_type: String, account: String)
 
-class BaseFunctionality extends SharedPureConnectTests with Matchers {
-
-
-  val testData = Seq(
-    TestOn("edt", "4201", 40),
-    TestOn("otc", "5201", 40),
-    TestOn("fi", "4251", 50),
-    TestOn("fx", "4206", 90),
-    TestOn("fxotc", "4201", 40),
-    TestOn("eqotc", "4201", 60)
-  )
-
+object RulesGen {
 
   def rulesRaw(expressionRules: Seq[(ExpressionRule, RunOnPassProcessor)]) = {
     registerLambdaFunctions(Seq(
@@ -43,6 +33,19 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
 
     ruleSuite
   }
+}
+
+class BaseFunctionality extends SharedPureConnectTests with Matchers {
+
+
+  val testData = Seq(
+    TestOn("edt", "4201", 40),
+    TestOn("otc", "5201", 40),
+    TestOn("fi", "4251", 50),
+    TestOn("fx", "4206", 90),
+    TestOn("fxotc", "4201", 40),
+    TestOn("eqotc", "4201", 60)
+  )
 
   test("Simple chain of engines should work with filter") {
     val flow = new Flow(Id(1,1), Seq(
@@ -66,6 +69,11 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
       )), "filteredView4", Seq(ViewConfig("filteredView4", Right("select * from view4 where salientRule is not null"))),
         Operation("engine", "view4E", Map.empty, OutputFieldOnly), Map.empty, "view5")
     ))//, showInterim = true)
+
+    doSimpleEngine(flow)
+  }
+
+  def doSimpleEngine(flow: Flow) {
 
     val s = sparkSession
     import s.implicits._
@@ -101,8 +109,12 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
         id = Id(2,0)), // force an identity default and Id change to verify combineAuditWith
         "view2", Seq.empty, Operation("folder", "view2E", Map.empty, MergeFields), Map.empty, "view3",
         combineAuditWith = Some("view1E"))
-    ), showInterim = true)
+    ), inline = true)
 
+    doFolderTest(flow)
+  }
+
+  def doFolderTest(flow: Flow) {
     val s = sparkSession
     import s.implicits._
     val res = flow.run(sparkSession, testData.toDF)
@@ -121,5 +133,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
     val rgs = res.selectExpr("flow_audit.*").as[RuleSuiteGroupResults].collect()
     verifyRuleSuites(rgs)(identity)
   }
+
+
 
 }

@@ -22,9 +22,9 @@ trait TestSetup extends SparkTestSuite with SharedSessions { self: TestSuite =>
     })
   }
 
-  override def connectServerLoggingLevel = "DEBUG"
+  //override def connectServerLoggingLevel = "DEBUG"
 
-  override def loggingLevel: String = "INFO"
+  //override def loggingLevel: String = "INFO"
 
   override def sparkConnectServerConfig(): Map[String, String] =
     super.sparkConnectServerConfig() + //useDebugConnectLogs +
