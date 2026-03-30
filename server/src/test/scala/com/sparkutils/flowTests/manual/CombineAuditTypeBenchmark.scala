@@ -65,7 +65,7 @@ object CombineAuditBenchmark extends Bench.OfflineReport with TestUtils {
         (ExpressionRule("(lower % 2) = 0"),  RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("set(higher = lower + 10)")))
       )), "view1", Seq.empty, Operation("folder", "view1E", Map.empty, MergeFields), Map.empty, "view2")) ++
-      stepsGen(params._1), inline = inline).
+      stepsGen(params._1)).
       run(sparkSession, df(params._2)).
       write.format("noop").mode(Overwrite).save()
   }
@@ -92,12 +92,6 @@ object CombineAuditBenchmark extends Bench.OfflineReport with TestUtils {
     //  verbose -> true
   ) in {
 
-    measure method "flow wrapped audit" in {
-      val s = sparkSession
-      sparkSession.sparkContext.setLogLevel(loggingLevel) // set to debug to get actual code lines etc.
-
-      using(generator) in evaluate( false )
-    }
     measure method "flow inline audit" in {
       val s = sparkSession
       sparkSession.sparkContext.setLogLevel(loggingLevel) // set to debug to get actual code lines etc.

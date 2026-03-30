@@ -109,7 +109,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
         id = Id(2,0)), // force an identity default and Id change to verify combineAuditWith
         "view2", Seq.empty, Operation("folder", "view2E", Map.empty, MergeFields), Map.empty, "view3",
         combineAuditWith = Some("view1E"))
-    ), inline = true)
+    ))
 
     doFolderTest(flow)
   }

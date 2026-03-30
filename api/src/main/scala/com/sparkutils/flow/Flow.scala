@@ -16,7 +16,7 @@ import org.apache.spark.sql.types.DataType
  *
  */
 @SerialVersionUID(1L)
-class Flow(ruleSuiteGroup: VersionedId, steps: Seq[Step], showInterim: Boolean = false, flowAuditColName: String = "flow_audit", inline: Boolean = false) extends Serializable {
+class Flow(ruleSuiteGroup: VersionedId, steps: Seq[Step], showInterim: Boolean = false, flowAuditColName: String = "flow_audit") extends Serializable {
   private val logger = org.slf4j.LoggerFactory.getLogger(classOf[Flow])
   import logger._
 
@@ -63,54 +63,27 @@ class Flow(ruleSuiteGroup: VersionedId, steps: Seq[Step], showInterim: Boolean =
 
     val children = childrenRaw.map(col.getField)
 
-    def wrapped() = {
-      val rdf = dataFrame.select(expr("*"), col.as(fieldName))
-      val notUnified =
-        resultApproach match {
-          case AsIs => rdf
-          case ExpandNested => rdf.selectExpr("*", s"$fieldName.*")
-          case MergeFields => // dq probably doesn't work
-            val og = rdf.columns.toSet
-            val full = rdf.selectExpr("*", s"$fieldName.result.*", fieldName).columns
-            val dupes = full.groupBy(identity).filter(p => p._2.length > 1).keys.toSet
-            rdf.selectExpr(((og -- dupes).toSeq ++ Seq(s"$fieldName.result.*", fieldName)): _*)
-          case StarOnly => rdf.selectExpr(s"$fieldName.*")
-          case OutputFieldOnly => rdf.selectExpr(s"$fieldName")
-        }
+    val columns = Seq(expr("*"), col) ++
+      step.combineAuditWith.map{ fname =>
+        Seq(group_results( array( col.getField("ruleSuiteResults"), scol(fname).getField("ruleSuiteResults") ) ).
+          as(flowAuditColName))
+      }.getOrElse(Seq.empty)
 
-      step.combineAuditWith.map { fname =>
-        notUnified.withColumn(flowAuditColName,
-          expr(s"group_results( array( $fieldName.ruleSuiteResults, $fname.ruleSuiteResults ) )"))
-      }.getOrElse(notUnified)
+    //val rdf = dataFrame.select(Seq(expr("*"), col.as(fieldName)) ++ statsColumn :_*)
+    resultApproach match {
+      case AsIs => dataFrame.select(columns :_*)
+      case ExpandNested => dataFrame.select(columns ++ children :_*)//rdf.selectExpr("*", s"$fieldName.*")
+      case MergeFields => // dq probably doesn't work
+
+        val starter = dataFrame.select(columns : _*)
+        val og = starter.columns.toSet + fieldName
+        val nested = starter.selectExpr(s"$fieldName.result.*").columns
+        starter.selectExpr((og -- nested).toSeq ++ Seq( s"$fieldName.result.*") :_*)
+
+      case StarOnly => dataFrame.select(children: _*)
+      case OutputFieldOnly => dataFrame.select(col)
     }
 
-    def inlineImpl() = {
-      val columns = Seq(expr("*"), col) ++
-        step.combineAuditWith.map{ fname =>
-          Seq(group_results( array( col.getField("ruleSuiteResults"), scol(fname).getField("ruleSuiteResults") ) ).
-            as(flowAuditColName))
-        }.getOrElse(Seq.empty)
-
-      //val rdf = dataFrame.select(Seq(expr("*"), col.as(fieldName)) ++ statsColumn :_*)
-      resultApproach match {
-        case AsIs => dataFrame.select(columns :_*)
-        case ExpandNested => dataFrame.select(columns ++ children :_*)//rdf.selectExpr("*", s"$fieldName.*")
-        case MergeFields => // dq probably doesn't work
-
-          val starter = dataFrame.select(columns : _*)
-          val og = starter.columns.toSet + fieldName
-          val nested = starter.selectExpr(s"$fieldName.result.*").columns
-          starter.selectExpr((og -- nested).toSeq ++ Seq( s"$fieldName.result.*") :_*)
-
-        case StarOnly => dataFrame.select(children: _*)
-        case OutputFieldOnly => dataFrame.select(col)
-      }
-    }
-
-    if (inline)
-      inlineImpl()
-    else
-      wrapped()
   }
 
   /**
