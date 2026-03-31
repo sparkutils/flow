@@ -4,7 +4,9 @@ import frameless._
 
 object implicits {
 
-  implicit val resultApproachEnc = Injection[ResultApproach, String](_.getClass.getSimpleName, {
+  implicit val resultApproachEnc = Injection[ResultApproach, String](
+    _.getClass.getSimpleName.dropRight(1),// drop the module $
+    {
     case "AsIs" => AsIs
     case "ExpandNested" => ExpandNested
     case "MergeFields" => MergeFields

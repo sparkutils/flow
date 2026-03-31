@@ -1,7 +1,9 @@
 package com.sparkutils.flow
 
-import com.sparkutils.quality.RuleSuite
+import com.sparkutils.quality.{Id, RuleSuite}
 import com.sparkutils.quality.impl.views.ViewConfig
+import org.apache.spark.sql.Column
+import org.apache.spark.sql.functions.{col => scol}
 
 @SerialVersionUID(1L)
 case class FlowException(msg: String, cause: Throwable = null) extends Exception(msg, cause) with Serializable
@@ -50,11 +52,17 @@ case object OutputFieldOnly extends ResultApproach
  */
 @SerialVersionUID(1L)
 case class Operation(function: String, fieldName: String, options: Map[String, String], resultApproach: ResultApproach)
+  extends Serializable
 
 // TODO adding maps requires moving to spark 4
 
+@SerialVersionUID(1L)
+case class ViewRow(ruleSuiteId: Int, ruleSuiteVersion: Int, name: String, token: Option[String], filter: Option[String], sql: Option[String])
+  extends Serializable
+
 /**
- * Each step represents a ruleSuite applied via an operation over a view.  This resulting dataframe is then passed to a callback
+ * Each step represents a ruleSuite applied via an operation over a view.  This resulting dataframe is then passed to a
+ * callback
  * @param ruleSuite
  * @param inputView
  * @param views
@@ -65,5 +73,26 @@ case class Operation(function: String, fieldName: String, options: Map[String, S
  * @param cacheResults should the resulting dataframe be cached
  */
 @SerialVersionUID(1L)
-case class Step(ruleSuite: RuleSuite, inputView: String, views: Seq[ViewConfig], operation: Operation,
-                properties: Map[String, String], outputView: String, combineAuditWith: Option[String] = None, cacheResults: Boolean = false)
+case class Step(ruleSuite: RuleSuite, inputView: String, views: Seq[ViewRow], operation: Operation,
+                properties: Map[String, String], outputView: String, combineAuditWith: Option[String] = None,
+                cacheResults: Boolean = false) extends Serializable
+
+// TODO - better to use a dag directly?
+
+/**
+ * Configuration columns for View loading
+ * @param ruleSuiteIdColumn
+ * @param ruleSuiteVersionColumn
+ * @param name
+ * @param token
+ * @param filter
+ * @param sql
+ */
+@SerialVersionUID(1L)
+case class ViewConfigColumns(
+    ruleSuiteId: Column = scol("ruleSuiteId"),
+    ruleSuiteVersion: Column = scol("ruleSuiteVersion"),
+    name: Column = scol("name"),
+    token: Column = scol("token"),
+    filter: Column = scol("filter"),
+    sql: Column = scol("sql")) extends Serializable

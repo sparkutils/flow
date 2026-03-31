@@ -1,6 +1,6 @@
 package com.sparkutils.flow
 
-import com.sparkutils.quality.{DefaultProcessor, Id, NoOpDefaultProcessor, OutputExpression, VersionedId, collectRunner, expressionRunner, ruleEngineRunner, ruleFolderRunner, typedExpressionRunner}
+import com.sparkutils.quality.{DataFrameLoader, DefaultProcessor, Id, NoOpDefaultProcessor, OutputExpression, VersionedId, collectRunner, expressionRunner, ruleEngineRunner, ruleFolderRunner, typedExpressionRunner}
 import com.sparkutils.quality.impl.views.ViewLoadResults
 import org.apache.spark.sql.functions.{array, expr, col => scol}
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
@@ -9,14 +9,20 @@ import com.sparkutils.quality.functions.group_results
 import org.apache.spark.sql.types.DataType
 
 /**
- * Represents a number of steps for processing data
+ * Represents a number of steps for processing data.  By default, views configured by token will throw not implemented,
+ * provide a DataFrameLoader where tokens are used.
  *
  * @param steps steps which are processed in order
  * @param showInterim calls show on interim results
+ * @param
  *
  */
 @SerialVersionUID(1L)
-class Flow(ruleSuiteGroup: VersionedId, steps: Seq[Step], showInterim: Boolean = false, flowAuditColName: String = "flow_audit") extends Serializable {
+class Flow(val flowId: VersionedId, val steps: Seq[Step],
+           val flowAuditColName: String = "flow_audit", loader: DataFrameLoader = new DataFrameLoader {
+              override def load(token: String): DataFrame = ???
+            },
+           showInterim: Boolean = false, viewColumns: ViewConfigColumns = ViewConfigColumns()) extends Serializable {
   private val logger = org.slf4j.LoggerFactory.getLogger(classOf[Flow])
   import logger._
 
@@ -61,7 +67,7 @@ class Flow(ruleSuiteGroup: VersionedId, steps: Seq[Step], showInterim: Boolean =
         // TODO dq ?
       } )
 
-    val children = childrenRaw.map(col.getField)
+    val children = childrenRaw.map(n => col.getField(n).as(n))
 
     val columns = Seq(expr("*"), col) ++
       step.combineAuditWith.map{ fname =>
@@ -69,10 +75,9 @@ class Flow(ruleSuiteGroup: VersionedId, steps: Seq[Step], showInterim: Boolean =
           as(flowAuditColName))
       }.getOrElse(Seq.empty)
 
-    //val rdf = dataFrame.select(Seq(expr("*"), col.as(fieldName)) ++ statsColumn :_*)
     resultApproach match {
       case AsIs => dataFrame.select(columns :_*)
-      case ExpandNested => dataFrame.select(columns ++ children :_*)//rdf.selectExpr("*", s"$fieldName.*")
+      case ExpandNested => dataFrame.select(columns ++ children :_*)
       case MergeFields => // dq probably doesn't work
 
         val starter = dataFrame.select(columns : _*)
@@ -84,6 +89,21 @@ class Flow(ruleSuiteGroup: VersionedId, steps: Seq[Step], showInterim: Boolean =
       case OutputFieldOnly => dataFrame.select(col)
     }
 
+  }
+
+  protected def loadViews(sparkSession: SparkSession, step: Step, index: Int): ViewLoadResults = {
+    // TODO ViewRow and loadConfigs should probably be public https://github.com/sparkutils/quality/issues/123
+    import sparkSession.implicits._
+    val (config, names) = com.sparkutils.quality.loadViewConfigs(loader = loader,
+      viewDF = step.views.toDF,
+      ruleSuiteIdColumn = viewColumns.ruleSuiteId,
+      ruleSuiteVersionColumn = viewColumns.ruleSuiteVersion,
+      ruleSuiteId = step.ruleSuite.id,
+      name = viewColumns.name,
+      token = viewColumns.token,
+      filter = viewColumns.filter,
+      sql = viewColumns.sql)
+    com.sparkutils.quality.loadViews(config)
   }
 
   /**
@@ -108,12 +128,12 @@ class Flow(ruleSuiteGroup: VersionedId, steps: Seq[Step], showInterim: Boolean =
    * @return
    */
   def run(sparkSession: SparkSession): DataFrame = {
-    info(s"Starting Flow id: ${ruleSuiteGroup.id}, version: ${ruleSuiteGroup.version}")
+    info(s"Starting Flow id: ${flowId.id}, version: ${flowId.version}")
 
     if (steps.nonEmpty) {
       val df = steps.zipWithIndex.foldLeft(sparkSession.sql(s"select * from `${steps.head.inputView}` ")) {
         case (df, (step, index)) =>
-          val vl = com.sparkutils.quality.loadViews(step.views)
+          val vl = loadViews(sparkSession, step, index)
           stepViewsLoaded(vl, step, index)
           val starter = startStep(df, step, index)
           val res = process(starter, step, index)
@@ -126,7 +146,7 @@ class Flow(ruleSuiteGroup: VersionedId, steps: Seq[Step], showInterim: Boolean =
           stepCompleted(res, step, index)
       }
 
-      info(s"Finished Flow id: ${ruleSuiteGroup.id}, version: ${ruleSuiteGroup.version}")
+      info(s"Finished Flow id: ${flowId.id}, version: ${flowId.version}")
       df
     } else {
       throw FlowException("Empty Flow provided")
@@ -145,17 +165,17 @@ class Flow(ruleSuiteGroup: VersionedId, steps: Seq[Step], showInterim: Boolean =
     }
 
     if (vl.failedToLoadDueToCycles && step.views.nonEmpty) {
-      val err = FlowException(s"View Cycle - Step $index, RuleSuite id: ${ruleSuiteGroup.id}, version: ${ruleSuiteGroup.version} could not be started due to view cycle detection")
+      val err = FlowException(s"View Cycle - Step $index, RuleSuite id: ${flowId.id}, version: ${flowId.version} could not be started due to view cycle detection")
       error(err.msg)
       throw err
     }
     if (vl.notLoadedViews.nonEmpty) {
       if (vl.notLoadedViews.contains(step.inputView)) {
-        val err = FlowException(s"View Cycle - Step $index, RuleSuite id: ${ruleSuiteGroup.id}, version: ${ruleSuiteGroup.version} could not be started as the Steps inputView `${step.inputView}` could not be loaded")
+        val err = FlowException(s"View Cycle - Step $index, RuleSuite id: ${flowId.id}, version: ${flowId.version} could not be started as the Steps inputView `${step.inputView}` could not be loaded")
         error(err.msg)
         throw err
       } else {
-        val msg = s"View Cycle - Step $index, RuleSuite id: ${ruleSuiteGroup.id}, version: ${ruleSuiteGroup.version} could not load the following views - "
+        val msg = s"View Cycle - Step $index, RuleSuite id: ${flowId.id}, version: ${flowId.version} could not load the following views - "
         warn(msg + vl.notLoadedViews.map(v => s"`$v`").mkString)
       }
     } else {
@@ -170,7 +190,7 @@ class Flow(ruleSuiteGroup: VersionedId, steps: Seq[Step], showInterim: Boolean =
    * @param logInfo
    */
   final protected def infoLogStep(step: Step, index: Int, logInfo: String): Unit = {
-    info(s"Step $index, RuleSuite id: ${ruleSuiteGroup.id}, version: ${ruleSuiteGroup.version} $logInfo")
+    info(s"Step $index, RuleSuite id: ${flowId.id}, version: ${flowId.version} $logInfo")
   }
 
   /**
