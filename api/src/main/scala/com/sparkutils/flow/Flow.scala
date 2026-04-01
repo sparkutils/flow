@@ -94,7 +94,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
   protected def loadViews(sparkSession: SparkSession, step: Step, index: Int): ViewLoadResults = {
     // TODO ViewRow and loadConfigs should probably be public https://github.com/sparkutils/quality/issues/123
     import sparkSession.implicits._
-    val (config, names) = com.sparkutils.quality.loadViewConfigs(loader = loader,
+    val (config, _) = com.sparkutils.quality.loadViewConfigs(loader = loader,
       viewDF = step.views.toDF,
       ruleSuiteIdColumn = viewColumns.ruleSuiteId,
       ruleSuiteVersionColumn = viewColumns.ruleSuiteVersion,
