@@ -4,6 +4,7 @@ import com.sparkutils.quality.{Id, RuleSuite}
 import com.sparkutils.quality.impl.views.ViewConfig
 import org.apache.spark.sql.Column
 import org.apache.spark.sql.functions.{col => scol}
+import scalax.collection.edges.UnDiEdge
 
 @SerialVersionUID(1L)
 case class FlowException(msg: String, cause: Throwable = null) extends Exception(msg, cause) with Serializable
@@ -63,6 +64,8 @@ case class ViewRow(ruleSuiteId: Int, ruleSuiteVersion: Int, name: String, token:
 /**
  * Each step represents a ruleSuite applied via an operation over a view.  This resulting dataframe is then passed to a
  * callback
+ * @param name this steps name
+ * @param dependencies the set of steps which must be run before this Step can start
  * @param ruleSuite
  * @param inputView
  * @param views
@@ -73,7 +76,7 @@ case class ViewRow(ruleSuiteId: Int, ruleSuiteVersion: Int, name: String, token:
  * @param cacheResults should the resulting dataframe be cached
  */
 @SerialVersionUID(1L)
-case class Step(ruleSuite: RuleSuite, inputView: String, views: Seq[ViewRow], operation: Operation,
+case class Step(name: String, dependencies: Set[String], ruleSuite: RuleSuite, inputView: String, views: Seq[ViewRow], operation: Operation,
                 properties: Map[String, String], outputView: String, combineAuditWith: Option[String] = None,
                 cacheResults: Boolean = false) extends Serializable
 

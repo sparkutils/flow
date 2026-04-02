@@ -61,18 +61,18 @@ object CombineAuditBenchmark extends Bench.OfflineReport with TestUtils {
 
   def evaluate[T](inline: Boolean)(params: (Int, Int)) = {
     new Flow(Id(1,1), Seq(
-      Step(rulesRaw(Seq(
+      Step("0", Set.empty, rulesRaw(Seq(
         (ExpressionRule("(lower % 2) = 0"),  RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("set(higher = lower + 10)")))
       )), "view1", Seq.empty, Operation("folder", "view1E", Map.empty, MergeFields), Map.empty, "view2")) ++
       stepsGen(params._1)).
       run(sparkSession, df(params._2)).
-      write.format("noop").mode(Overwrite).save()
+      head._2._2.write.format("noop").mode(Overwrite).save()
   }
 
   def stepsGen(size: Int) =
     for{i <- 1 until size} yield
-      Step(rulesRaw(Seq(
+      Step(s"$i", Set.empty, rulesRaw(Seq(
         (ExpressionRule("(higher % 5) = 0"),  RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("set(lower = lower - 3)")))
       )).copy(id = Id(i + 1,0)),// Id change to verify combineAuditWith

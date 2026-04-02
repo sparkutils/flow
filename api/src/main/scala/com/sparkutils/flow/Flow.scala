@@ -7,6 +7,11 @@ import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 import Utils._
 import com.sparkutils.quality.functions.group_results
 import org.apache.spark.sql.types.DataType
+import scalax.collection.ToString.{SetElemsOnSeparateLines, SetsOnSeparateLines}
+import scalax.collection.edges.{DiEdge, DiEdgeImplicits, UnDiEdge, UnDiEdgeImplicits}
+import scalax.collection.immutable.Graph
+
+import scala.annotation.tailrec
 
 /**
  * Represents a number of steps for processing data.  By default, views configured by token will throw not implemented,
@@ -26,8 +31,39 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
   private val logger = org.slf4j.LoggerFactory.getLogger(classOf[Flow])
   import logger._
 
+  @transient
+  lazy val theGraph: Graph[Step, DiEdge[Step]] = {
+    val map = steps.map(s => s.name -> s).toMap
+
+    val graph = steps.foldLeft(scalax.collection.immutable.Graph.from[Step, DiEdge[Step]](steps, Seq.empty)){
+      (cur, step) =>
+        if (step.dependencies.isEmpty)
+          cur
+        else {
+          step.dependencies.foldLeft(cur){
+            (cur, dependency) =>
+              map.get(dependency).fold(
+                throw FlowException(s"Step ${step.name} refers to a dependency $dependency Step which does not exist")
+              ) { dependent =>
+                cur + dependent ~> step
+              }
+          }
+        }
+    }
+
+    //println(graph.render(style = SetElemsOnSeparateLines(2)))
+    //println()
+    graph
+  }
+
+  /**
+   * Represents the root nodes, steps which do not have a dependency
+   */
+  lazy val roots: Seq[Step] = //theGraph.nodes.flatMap(n => if (n.edges.exists(_.node2 == n)) None else Some(n) )
+    steps.filter(_.dependencies.isEmpty)
+
   // TODO move this to the server, allowing upgrades for all jobs on shared cluster
-  private def process(dataFrame: DataFrame, step: Step, index: Int): DataFrame = {
+  private def process(dataFrame: DataFrame, step: Step): DataFrame = {
     import step.operation._
     val (col: Column, childrenRaw: Seq[String]) = (
       function.toLowerCase.replaceAll("_","") match {
@@ -91,7 +127,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
 
   }
 
-  protected def loadViews(sparkSession: SparkSession, step: Step, index: Int): ViewLoadResults = {
+  protected def loadViews(sparkSession: SparkSession, step: Step): ViewLoadResults = {
     // TODO ViewRow and loadConfigs should probably be public https://github.com/sparkutils/quality/issues/123
     import sparkSession.implicits._
     val (config, _) = com.sparkutils.quality.loadViewConfigs(loader = loader,
@@ -105,14 +141,14 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
       sql = viewColumns.sql)
     com.sparkutils.quality.loadViews(config)
   }
-
+// TODO - what should this be?  Probably should have a "roots" function and setup calls for each root
   /**
    * Process the data starting with the provided DataFrame registered as the first steps inputView
    * @param sparkSession
    * @param starting
    * @return
    */
-  def run(sparkSession: SparkSession, starting: DataFrame): DataFrame = {
+  def run(sparkSession: SparkSession, starting: DataFrame): Map[String, (Step, DataFrame)] = {
     if (steps.nonEmpty) {
       starting.createOrReplaceTempView(steps.head.inputView)
       run(sparkSession)
@@ -125,29 +161,37 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
    * Process using the registered views
    * @param sparkSession
    * @param starting
-   * @return
+   * @return Pairs of end Steps with their resulting DataFrames
    */
-  def run(sparkSession: SparkSession): DataFrame = {
+  def run(sparkSession: SparkSession): Map[String, (Step, DataFrame)] = {
     info(s"Starting Flow id: ${flowId.id}, version: ${flowId.version}")
 
-    if (steps.nonEmpty) {
-      val df = steps.zipWithIndex.foldLeft(sparkSession.sql(s"select * from `${steps.head.inputView}` ")) {
-        case (df, (step, index)) =>
-          val vl = loadViews(sparkSession, step, index)
-          stepViewsLoaded(vl, step, index)
-          val starter = startStep(df, step, index)
-          val res = process(starter, step, index)
+    if (steps.nonEmpty) { // should be via graph...
+
+      // all the paths from all the roots
+      val paths = roots.map( n => n -> theGraph.get(n).outerNodeTraverser.toSeq )
+
+      //@tailrec
+      //def processRoots(root: Step, steps: Seq[Step]): (Step, DataFrame) =
+
+      // process
+      val df = steps.foldLeft(sparkSession.sql(s"select * from `${steps.head.inputView}` ")) {
+        case (df, step) =>
+          val vl = loadViews(sparkSession, step)
+          stepViewsLoaded(vl, step)
+          val starter = startStep(df, step)
+          val res = process(starter, step)
 
           if (isDebugEnabled || showInterim) {
-            infoLogStep(step, index, "Result Sample")
+            infoLogStep(step, "Result Sample")
             res.show()
           }
 
-          stepCompleted(res, step, index)
+          stepCompleted(res, step)
       }
 
       info(s"Finished Flow id: ${flowId.id}, version: ${flowId.version}")
-      df
+      ???
     } else {
       throw FlowException("Empty Flow provided")
     }
@@ -157,40 +201,38 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
    * By default, throws errors with failedToLoadDutToCycles or if the step inputView could not be loaded
    * @param vl
    * @param step
-   * @param index
    */
-  protected def stepViewsLoaded(vl: ViewLoadResults, step: Step, index: Int) = {
+  protected def stepViewsLoaded(vl: ViewLoadResults, step: Step) = {
     if (vl.replaced.nonEmpty) {
       info(s"")
     }
 
     if (vl.failedToLoadDueToCycles && step.views.nonEmpty) {
-      val err = FlowException(s"View Cycle - Step $index, RuleSuite id: ${flowId.id}, version: ${flowId.version} could not be started due to view cycle detection")
+      val err = FlowException(s"View Cycle - Step ${step.name}, RuleSuite id: ${flowId.id}, version: ${flowId.version} could not be started due to view cycle detection")
       error(err.msg)
       throw err
     }
     if (vl.notLoadedViews.nonEmpty) {
       if (vl.notLoadedViews.contains(step.inputView)) {
-        val err = FlowException(s"View Cycle - Step $index, RuleSuite id: ${flowId.id}, version: ${flowId.version} could not be started as the Steps inputView `${step.inputView}` could not be loaded")
+        val err = FlowException(s"View Cycle - Step ${step.name}, RuleSuite id: ${flowId.id}, version: ${flowId.version} could not be started as the Steps inputView `${step.inputView}` could not be loaded")
         error(err.msg)
         throw err
       } else {
-        val msg = s"View Cycle - Step $index, RuleSuite id: ${flowId.id}, version: ${flowId.version} could not load the following views - "
+        val msg = s"View Cycle - Step ${step.name}, RuleSuite id: ${flowId.id}, version: ${flowId.version} could not load the following views - "
         warn(msg + vl.notLoadedViews.map(v => s"`$v`").mkString)
       }
     } else {
-      infoLogStep(step, index, "Views Loaded")
+      infoLogStep(step, "Views Loaded")
     }
   }
 
   /**
    * Logs at info leve the step
    * @param step
-   * @param index
    * @param logInfo
    */
-  final protected def infoLogStep(step: Step, index: Int, logInfo: String): Unit = {
-    info(s"Step $index, RuleSuite id: ${flowId.id}, version: ${flowId.version} $logInfo")
+  final protected def infoLogStep(step: Step, logInfo: String): Unit = {
+    info(s"Step ${step.name}, RuleSuite id: ${flowId.id}, version: ${flowId.version} $logInfo")
   }
 
   /**
@@ -198,11 +240,10 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
    *
    * @param input either an empty dataset or the previous steps dataframe
    * @param step
-   * @param index
    * @return the actual dataset used as input to the set
    */
-  protected def startStep(input: DataFrame, step: Step, index: Int): DataFrame = {
-    infoLogStep(step, index, "Started")
+  protected def startStep(input: DataFrame, step: Step): DataFrame = {
+    infoLogStep(step, "Started")
     input.sparkSession.sql(s"select * from `${step.inputView}`")
   }
 
@@ -211,7 +252,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
    * @param step
    * @return a, by default, optionally cached dataFrame
    */
-  protected def stepCompleted(result: DataFrame, step: Step, index: Int): DataFrame = {
+  protected def stepCompleted(result: DataFrame, step: Step): DataFrame = {
     val ndf =
       if (step.cacheResults)
         result.cache
@@ -220,7 +261,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
 
     ndf.createOrReplaceTempView(step.outputView)
 
-    infoLogStep(step, index, "Completed")
+    infoLogStep(step, "Completed")
 
     ndf
   }
