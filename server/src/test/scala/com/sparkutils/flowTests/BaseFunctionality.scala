@@ -1,5 +1,6 @@
 package com.sparkutils.flowTests
 
+import com.sparkutils.flow.impl.util.{ProcessBarrier, SharedStopCondition}
 import com.sparkutils.flow.{AsIs, Flow, MergeFields, Operation, OutputFieldOnly, StarOnly, Step, ViewRow, fromDatasets, toDatasets}
 import com.sparkutils.flowTests.RulesGen.rulesRaw
 import com.sparkutils.flowTests.utils.SharedPureConnectTests
@@ -12,6 +13,10 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import java.util.concurrent.locks.{ReadWriteLock, ReentrantLock, ReentrantReadWriteLock}
 import scala.annotation.tailrec
 import scala.collection.parallel.CollectionConverters.ImmutableIterableIsParallelizable
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration.{Duration, MINUTES}
+import scala.concurrent.{Await, Future, Promise}
+import scala.util.Try
 
 case class TestOn(product: String, account: String, subcode: Int)
 
@@ -108,60 +113,11 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
     flow.roots.foreach(r => chaseDown(flow.theGraph.get(r), 0))
 
      */
-    class HaveDoneBarrier[T](val hint: String) {
-      private val lock = new ReentrantReadWriteLock()
-      private val result = new AtomicReference[T]() // allow nulls
-      private val haveResult = new AtomicBoolean(false)
-      private val thrown = new AtomicReference[Throwable](null)
 
-      def processed(): Boolean = haveResult.get()
 
-      /**
-       * Will wait until completion by another thread or try to complete in this thread.  If another thread threw,
-       * this threads call will throw the same error
-       * @param thunk
-       * @return either Some T if there has been a previous result or None if the result is currently being processed
-       *         by the same thread.
-       */
-      def process(thunk: => T): Option[T] = {
-        if (processed())
-          Some(result.get())
-        else {
-          if (thrown.get() != null) {
-            throw thrown.get()
-          }
-          if (lock.writeLock().isHeldByCurrentThread)
-            None
-          else
-            // we need to attempt to run it
-            if (lock.writeLock().tryLock())
-              try{
-                if (!processed()) {
-                  result.set(thunk)
-                  haveResult.set(true)
-                }
-                Some(result.get())
-              } catch {
-                case t: Throwable =>
-                  thrown.set(t)
-                  throw t
-              } finally {
-                lock.writeLock().unlock()
-              }
-            else {
-              // we need to wait for completion
-              lock.readLock().lock()
-              try {
-                Some(result.get())
-              } finally {
-                lock.readLock().unlock()
-              }
-            }
-        }
-      }
+    val sharedCondition = new SharedStopCondition()
 
-    }
-    val visited = flow.steps.map(s => s.name -> new HaveDoneBarrier[Unit](s.name)).toMap
+    val visited = flow.steps.map(s => s.name -> new ProcessBarrier[String](s.name, sharedCondition, Duration.Inf)).toMap
 
     //@tailrec
     def chaseDown(elem: flow.theGraph.NodeT, depth: Int): Unit = {
@@ -181,6 +137,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
         visited(cur.name).process {
 
           println(s"${indent}processing ${cur.name}")
+          cur.name
         }
         elem.diSuccessors.foreach {
           dependent =>
@@ -190,9 +147,11 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
 
     }
     // start from the top
-    flow.roots.par.map{r => chaseDown(flow.theGraph.get(r), 0);1}.sum
+    flow.roots.par.foreach{r => chaseDown(flow.theGraph.get(r), 0);1}
+    val all = Future.sequence( visited.map(_._2.future) )
+    val r = Await.result(all, Duration(1L, MINUTES))
 
-    println("")
+    r.toSet shouldBe flow.steps.map(_.name).toSet
   }
 
   def engineFlow = new Flow(Id(1,1), Seq(
