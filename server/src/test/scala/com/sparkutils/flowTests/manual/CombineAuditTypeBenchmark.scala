@@ -14,6 +14,8 @@ import org.apache.spark.sql.{Column, SaveMode}
 import org.apache.spark.storage.StorageLevel
 import org.scalameter.api.{Bench, _}
 
+import scala.concurrent.ExecutionContext.Implicits.global
+
 object Args {
   val args = List(
     "-Xmx10g","-Xms10g",// 16GB on github runners, 10gb ok on 21 (12 blows), 12gb fine on jdk 8.
@@ -66,7 +68,7 @@ object CombineAuditBenchmark extends Bench.OfflineReport with TestUtils {
           OutputExpression("set(higher = lower + 10)")))
       )), "view1", Seq.empty, Operation("folder", "view1E", Map.empty, MergeFields), Map.empty, "view2")) ++
       stepsGen(params._1)).
-      run(sparkSession, df(params._2)).
+      run(sparkSession, _ => Some(df(params._2))).
       head._2._2.write.format("noop").mode(Overwrite).save()
   }
 

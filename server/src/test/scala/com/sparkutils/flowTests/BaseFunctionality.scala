@@ -1,22 +1,12 @@
 package com.sparkutils.flowTests
 
-import com.sparkutils.flow.impl.util.{ProcessBarrier, SharedStopCondition}
 import com.sparkutils.flow.{AsIs, Flow, MergeFields, Operation, OutputFieldOnly, StarOnly, Step, ViewRow, fromDatasets, toDatasets}
 import com.sparkutils.flowTests.RulesGen.rulesRaw
 import com.sparkutils.flowTests.utils.SharedPureConnectTests
-import com.sparkutils.quality.impl.views.ViewConfig
-import com.sparkutils.quality.{DefaultProcessor, ExpressionRule, Id, LambdaFunction, NoOpRunOnPassProcessor, OutputExpression, Rule, RuleSet, RuleSuite, RuleSuiteGroupResults, RunOnPassProcessor, registerLambdaFunctions}
-import org.apache.spark.sql.DataFrame
+import com.sparkutils.quality.{DefaultProcessor, ExpressionRule, Id, LambdaFunction, OutputExpression, Rule, RuleSet, RuleSuite, RuleSuiteGroupResults, RunOnPassProcessor, registerLambdaFunctions}
 import org.scalatest.Matchers
 
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
-import java.util.concurrent.locks.{ReadWriteLock, ReentrantLock, ReentrantReadWriteLock}
-import scala.annotation.tailrec
-import scala.collection.parallel.CollectionConverters.ImmutableIterableIsParallelizable
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration.{Duration, MINUTES}
-import scala.concurrent.{Await, Future, Promise}
-import scala.util.Try
 
 case class TestOn(product: String, account: String, subcode: Int)
 
@@ -81,77 +71,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
         Operation("engine", "view4E", Map.empty, OutputFieldOnly), Map.empty, "view5")
     ))
 
-    /*val visited = collection.mutable.Map.empty[String, Boolean]
 
-    flow.steps.foreach(s => visited.put(s.name, false))
-
-    //@tailrec
-    def chaseDown(elem: flow.theGraph.NodeT, depth: Int): Unit = {
-      val cur = elem.source
-      val indent = " ".repeat(depth)
-      if (!visited(cur.name)) {
-        println(s"${indent}visiting ${cur.name}")
-        visited.put(cur.name, true)
-
-        // do their roots
-        elem.diPredecessors.foreach {
-          parent =>
-            chaseDown(parent, depth + 1)
-        }
-
-        println(s"${indent}processing ${cur.name}")
-
-        elem.diSuccessors.foreach {
-          dependent =>
-            chaseDown(dependent, depth + 1)
-        }
-      } else {
-        println(s"${indent}already seen ${cur.name}")
-      }
-    }
-    // start from the top
-    flow.roots.foreach(r => chaseDown(flow.theGraph.get(r), 0))
-
-     */
-
-
-    val sharedCondition = new SharedStopCondition()
-
-    val visited = flow.steps.map(s => s.name -> new ProcessBarrier[String](s.name, sharedCondition, Duration.Inf)).toMap
-
-    //@tailrec
-    def chaseDown(elem: flow.theGraph.NodeT, depth: Int): Unit = {
-      val cur = elem.source
-      val indent = " ".repeat(depth)
-
-      if (visited(cur.name).processed()) {
-        println(s"${indent}already processed ${cur.name}")
-      } else {
-        println(s"${indent}visiting ${cur.name}")
-
-        // do their roots
-        elem.diPredecessors.foreach {
-          parent =>
-            chaseDown(parent, depth + 1)
-        }
-        visited(cur.name).process {
-
-          println(s"${indent}processing ${cur.name}")
-          cur.name
-        }
-        elem.diSuccessors.foreach {
-          dependent =>
-            chaseDown(dependent, depth + 1)
-        }
-      }
-
-    }
-    // start from the top
-    flow.roots.par.foreach{r => chaseDown(flow.theGraph.get(r), 0);1}
-    val all = Future.sequence( visited.map(_._2.future) )
-    val r = Await.result(all, Duration(1L, MINUTES))
-
-    r.toSet shouldBe flow.steps.map(_.name).toSet
   }
 
   def engineFlow = new Flow(Id(1,1), Seq(
@@ -163,7 +83,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
       (ExpressionRule("product like 'fx%'"),  RunOnPassProcessor(1000, Id(1040, 1),
         OutputExpression("array(account_row('from'), account_row('from', 'other_account2'))")))
     )).copy(id = Id(2,1)), "view2", Seq.empty, Operation("engine", "view2E", Map.empty, AsIs), Map.empty, "view3"),
-    Step("c",Set("a"),rulesRaw(Seq(
+    Step("c",Set("a", "b"),rulesRaw(Seq(
       (ExpressionRule("view1E.result is not null"),  RunOnPassProcessor(1000, Id(1040, 1),
         OutputExpression("view1E.result"))),
       (ExpressionRule("view2E.result is not null"),  RunOnPassProcessor(1000, Id(1041, 1),
@@ -188,11 +108,11 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
 
     val s = sparkSession
     import s.implicits._
-    val ires = flow.run(sparkSession, testData.toDF())
-    ires.size shouldBe 2  // root a and b
-    ires.map(_._1).toSeq shouldBe Seq("b", "d")
+    val ires = flow.run(sparkSession, _ => Some(testData.toDF()))
+    ires.size shouldBe 4
+    ires.map(_._1).toSeq shouldBe Seq("a", "b", "c", "d")
 
-    val res = ires.last._2._2
+    val res = ires("d")._2
     // after removing the nulls in step 4's filter
     res.count() shouldBe 3
 
@@ -234,7 +154,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
   def doFolderTest(flow: Flow): Unit = {
     val s = sparkSession
     import s.implicits._
-    val res = flow.run(sparkSession, testData.toDF()).head._2._2
+    val res = flow.run(sparkSession, _ => Some(testData.toDF()))("b")._2
     val rows = res.drop("view1E", "view2E", "flow_audit").as[TestOn].collect()
     rows shouldBe Seq(
       TestOn("edt", "4201", 10),

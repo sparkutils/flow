@@ -1,17 +1,16 @@
 package com.sparkutils.flow
 
-import com.sparkutils.quality.{DataFrameLoader, DefaultProcessor, Id, NoOpDefaultProcessor, OutputExpression, VersionedId, collectRunner, expressionRunner, ruleEngineRunner, ruleFolderRunner, typedExpressionRunner}
+import com.sparkutils.quality.{DataFrameLoader, DefaultProcessor, Id, NoOpDefaultProcessor, OutputExpression, VersionedId, collectRunner, ruleEngineRunner, ruleFolderRunner, typedExpressionRunner}
 import com.sparkutils.quality.impl.views.ViewLoadResults
 import org.apache.spark.sql.functions.{array, expr, col => scol}
-import org.apache.spark.sql.{Column, DataFrame, SparkSession}
+import org.apache.spark.sql.{Column, DataFrame, ShimUtils, SparkSession}
 import Utils._
 import com.sparkutils.quality.functions.group_results
-import org.apache.spark.sql.types.DataType
-import scalax.collection.ToString.{SetElemsOnSeparateLines, SetsOnSeparateLines}
-import scalax.collection.edges.{DiEdge, DiEdgeImplicits, UnDiEdge, UnDiEdgeImplicits}
+import scalax.collection.edges.{DiEdge, DiEdgeImplicits}
 import scalax.collection.immutable.Graph
 
-import scala.annotation.tailrec
+import scala.concurrent.duration.{Duration, HOURS}
+import scala.concurrent.{Await, ExecutionContext, Future, Promise}
 
 /**
  * Represents a number of steps for processing data.  By default, views configured by token will throw not implemented,
@@ -24,10 +23,13 @@ import scala.annotation.tailrec
  */
 @SerialVersionUID(1L)
 class Flow(val flowId: VersionedId, val steps: Seq[Step],
-           val flowAuditColName: String = "flow_audit", loader: DataFrameLoader = new DataFrameLoader {
+           val flowAuditColName: String = "flow_audit", val duration: Duration = Duration(1L, HOURS),
+           loader: DataFrameLoader = new DataFrameLoader {
               override def load(token: String): DataFrame = ???
             },
-           showInterim: Boolean = false, viewColumns: ViewConfigColumns = ViewConfigColumns()) extends Serializable {
+           showInterim: Boolean = false, viewColumns: ViewConfigColumns = ViewConfigColumns())(
+             implicit ec: ExecutionContext
+           ) extends Serializable {
   private val logger = org.slf4j.LoggerFactory.getLogger(classOf[Flow])
   import logger._
 
@@ -59,8 +61,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
   /**
    * Represents the root nodes, steps which do not have a dependency
    */
-  lazy val roots: Seq[Step] = //theGraph.nodes.flatMap(n => if (n.edges.exists(_.node2 == n)) None else Some(n) )
-    steps.filter(_.dependencies.isEmpty)
+  private val (roots, rest) = steps.partition(_.dependencies.isEmpty)
 
   // TODO move this to the server, allowing upgrades for all jobs on shared cluster
   private def process(dataFrame: DataFrame, step: Step): DataFrame = {
@@ -141,61 +142,133 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
       sql = viewColumns.sql)
     com.sparkutils.quality.loadViews(config)
   }
-// TODO - what should this be?  Probably should have a "roots" function and setup calls for each root
+
+  private def performStep(df: DataFrame, step: Step): DataFrame = {
+    // ensure the same session is used for the df, otherwise the session may fall back to the classic when called
+    // from another thread, mostly a testing issue, but would also apply to DBR using connect on a classic cluster
+    SparkSession.setActiveSession(df.sparkSession)
+    val vl = loadViews(df.sparkSession, step)
+    stepViewsLoaded(vl, step)
+    val starter = startStep(df, step)
+    val res = process(starter, step)
+
+    if (isDebugEnabled || showInterim) {
+      infoLogStep(step, "Result Sample")
+      res.show()
+    }
+
+    stepCompleted(res, step)
+  }
+
   /**
-   * Process the data starting with the provided DataFrame registered as the first steps inputView
-   * @param sparkSession
-   * @param starting
-   * @return
+   * Builds the chain of Promises from roots, completing roots triggers processing of the rest of the DAG
+   * @return (roots, full) promises
    */
-  def run(sparkSession: SparkSession, starting: DataFrame): Map[String, (Step, DataFrame)] = {
-    if (steps.nonEmpty) {
-      starting.createOrReplaceTempView(steps.head.inputView)
-      run(sparkSession)
-    } else {
+  private def buildPromises(): (Map[String, Promise[(Step, DataFrame)]], Map[String, Promise[(Step, DataFrame)]]) = {
+    val rootPromises = roots.map(s => s.name -> Promise[(Step, DataFrame)]).toMap
+    val promises = scala.collection.mutable.Map.empty ++ rootPromises
+
+    def chaseDown(elem: theGraph.NodeT): Future[(Step, DataFrame)] = {
+      val cur = elem.source
+
+      val r =
+        promises.get(cur.name).map(_.future).getOrElse {
+          val p = Promise[(Step, DataFrame)]()
+          promises.put(cur.name, p)
+
+          // do their roots
+          val f = Future.sequence(
+            elem.diPredecessors.map {
+              parent =>
+                chaseDown(parent)
+            }
+          )
+
+          val newF: Future[(Step, DataFrame)] = f.map { names =>
+            (cur, performStep(names.head._2, cur))
+          }
+
+          p.completeWith(newF)
+          p.future
+        }
+
+      // children should stitch on their parent only
+      elem.diSuccessors.foreach {
+        dependent =>
+          chaseDown(dependent)
+      }
+
+      r
+    }
+    rest.foreach{r => chaseDown(theGraph.get(r))}
+
+    (rootPromises, scala.collection.immutable.Map.empty ++ promises)
+  }
+
+  private def verifySteps(): Unit = {
+    if (steps.isEmpty) {
       throw FlowException("Empty Flow provided")
+    }
+    val dupes = steps.groupBy(_.name).filter(_._2.size > 1)
+    if (dupes.nonEmpty) {
+      throw FlowException(s"Flow provided Steps with duplicate names ${dupes.keys.mkString(",")}")
     }
   }
 
   /**
-   * Process using the registered views
+   * A convenience function to start processing with an optionally provided DataFrame registered as the first steps inputView.
+   *
+   * The entire Flow must be complete within the Flow.duration
+   *
+   * @param sparkSession
+   * @param starting a function called for each Root Step (a Step having no dependencies), when a DataFrame is provided
+   *                 it is registered as a temporary view with the name of the inputView.  When None is returned and the
+   *                 inputView is not present an error is thrown
+   * @return
+   */
+  def run(sparkSession: SparkSession, starting: Step => Option[DataFrame]): Map[String, (Step, DataFrame)] = {
+    verifySteps()
+    info(s"Starting Flow id: ${flowId.id}, version: ${flowId.version}")
+
+    val (rootPromises, promises) = buildPromises()
+
+    // processing th roots sets of the rest
+    roots.map {
+      root =>
+        val p = rootPromises(root.name)
+        try {
+          val df = starting(root)
+          val r = (root,
+            df.fold(
+              performStep( sparkSession.sql(s"select * from `${root.inputView}` "), root)
+            ) { df =>
+              df.createOrReplaceTempView(root.inputView)
+              performStep(df, root)
+            }
+          )
+          p success r
+        } catch {
+          case t: Throwable => p failure t
+        }
+    }
+
+    val all = Future.sequence(promises.map(_._2.future))
+    val r = Await.result(all, duration)
+
+    info(s"Finished Flow id: ${flowId.id}, version: ${flowId.version}")
+    r.map(p => p._1.name -> p).toMap
+  }
+
+  /**
+   * Process using the registered views using registered views as the roots
    * @param sparkSession
    * @param starting
    * @return Pairs of end Steps with their resulting DataFrames
    */
-  def run(sparkSession: SparkSession): Map[String, (Step, DataFrame)] = {
-    info(s"Starting Flow id: ${flowId.id}, version: ${flowId.version}")
-
-    if (steps.nonEmpty) { // should be via graph...
-
-      // all the paths from all the roots
-      val paths = roots.map( n => n -> theGraph.get(n).outerNodeTraverser.toSeq )
-
-      //@tailrec
-      //def processRoots(root: Step, steps: Seq[Step]): (Step, DataFrame) =
-
-      // process
-      val df = steps.foldLeft(sparkSession.sql(s"select * from `${steps.head.inputView}` ")) {
-        case (df, step) =>
-          val vl = loadViews(sparkSession, step)
-          stepViewsLoaded(vl, step)
-          val starter = startStep(df, step)
-          val res = process(starter, step)
-
-          if (isDebugEnabled || showInterim) {
-            infoLogStep(step, "Result Sample")
-            res.show()
-          }
-
-          stepCompleted(res, step)
-      }
-
-      info(s"Finished Flow id: ${flowId.id}, version: ${flowId.version}")
-      ???
-    } else {
-      throw FlowException("Empty Flow provided")
-    }
-  }
+  def run(sparkSession: SparkSession): Map[String, (Step, DataFrame)] =
+    run(sparkSession, {
+      _ => None
+    })
 
   /**
    * By default, throws errors with failedToLoadDutToCycles or if the step inputView could not be loaded

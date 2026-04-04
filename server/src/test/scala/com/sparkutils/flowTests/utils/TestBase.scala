@@ -1,7 +1,7 @@
 package com.sparkutils.flowTests.utils
 
 import com.sparkutils.quality
-import com.sparkutils.testing.SparkTestUtils.{connectMemory, scoverageClassPathsConfig}
+import com.sparkutils.testing.SparkTestUtils.{connectMemory, scoverageClassPathsConfig, useDebugConnectLogs}
 import com.sparkutils.testing.{ConnectionType, SessionsStateHolder, SparkTestSuite, UseBoth}
 import com.sparkutils.testing.markers.ConnectSafe
 import com.sparkutils.testing.sessionStrategies.{GlobalSession, SharedSessions}
