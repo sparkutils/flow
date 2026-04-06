@@ -1,11 +1,13 @@
 package com.sparkutils.flow
 
-import com.sparkutils.quality.{DataFrameLoader, DefaultProcessor, Id, NoOpDefaultProcessor, OutputExpression, VersionedId, collectRunner, ruleEngineRunner, ruleFolderRunner, typedExpressionRunner}
+import com.sparkutils.quality.{DataFrameLoader, DefaultProcessor, Id, NoOpDefaultProcessor, OutputExpression, VersionedId, ViewConfigColumns, collectRunner, ruleEngineRunner, ruleFolderRunner, typedExpressionRunner}
 import com.sparkutils.quality.impl.views.ViewLoadResults
 import org.apache.spark.sql.functions.{array, expr, col => scol}
-import org.apache.spark.sql.{Column, DataFrame, ShimUtils, SparkSession}
+import org.apache.spark.sql.{Column, DataFrame, ShimUtils, SparkSession, functions}
 import Utils._
-import com.sparkutils.quality.functions.group_results
+import com.sparkutils.flow.impl.util.FlowExceptionConstants.{CycleDetected, DuplicateNames, EmptyFlow, EmptyStepName, InvalidViewNames, MissingStep}
+import com.sparkutils.quality.functions.{group_audit, group_results}
+import com.sparkutils.quality.impl.Encoders
 import scalax.collection.edges.{DiEdge, DiEdgeImplicits}
 import scalax.collection.immutable.Graph
 
@@ -16,20 +18,25 @@ import scala.concurrent.{Await, ExecutionContext, Future, Promise}
  * Represents a number of steps for processing data.  By default, views configured by token will throw not implemented,
  * provide a DataFrameLoader where tokens are used.
  *
- * @param steps steps which are processed in order
+ * @param flowId overall id for this flow, same granularity as a RuleSuiteGroup
+ * @param steps steps which are processed via their DAG dependencies
+ * @param flowAuditColName when enabled on a step's combineAuditWith uses this column name
+ * @param duration The overall timeout to wait for completion of this Flow, by default 1hr
+ * @param loader The DataFrameLoader used to handle view token loading, by default throws on any token
  * @param showInterim calls show on interim results
+ * @param viewColumns columns used to process a Step's ViewRows, by default the names are those of the ViewRow columns
  * @param
  *
  */
 @SerialVersionUID(1L)
 class Flow(val flowId: VersionedId, val steps: Seq[Step],
            val flowAuditColName: String = "flow_audit", val duration: Duration = Duration(1L, HOURS),
-           loader: DataFrameLoader = new DataFrameLoader {
+           val loader: DataFrameLoader = new DataFrameLoader {
               override def load(token: String): DataFrame = ???
             },
            showInterim: Boolean = false, viewColumns: ViewConfigColumns = ViewConfigColumns())(
              implicit ec: ExecutionContext
-           ) extends Serializable {
+           ) extends Serializable with FlowDataHandling {
   private val logger = org.slf4j.LoggerFactory.getLogger(classOf[Flow])
   import logger._
 
@@ -45,7 +52,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
           step.dependencies.foldLeft(cur){
             (cur, dependency) =>
               map.get(dependency).fold(
-                throw FlowException(s"Step ${step.name} refers to a dependency $dependency Step which does not exist")
+                throw FlowException(MissingStep(step.name, dependency))
               ) { dependent =>
                 cur + dependent ~> step
               }
@@ -66,6 +73,10 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
   // TODO move this to the server, allowing upgrades for all jobs on shared cluster
   private def process(dataFrame: DataFrame, step: Step): DataFrame = {
     import step.operation._
+
+    val struct = inputSchema(dataFrame, step)
+    val withoutFlowAudit = struct.filterNot(_.name == flowAuditColName).map(_.name)
+
     val (col: Column, childrenRaw: Seq[String]) = (
       function.toLowerCase.replaceAll("_","") match {
         case "collect" | "collectrunner" =>
@@ -94,8 +105,8 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
 
           (ruleFolderRunner(rs,
             startingStruct = options.expr("startingStruct").getOrElse{
-              // default to the current row
-              expr("struct(*)")
+              // default to the current row - flow_audit otherwise MergeFields will have dupes
+              expr(s"struct(${withoutFlowAudit.mkString(",")})")
             },
             useType = options.structType("useType").orElse(options.structType("resultDataType")),
             debugMode = options.boolean("debugMode"),
@@ -106,11 +117,24 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
 
     val children = childrenRaw.map(n => col.getField(n).as(n))
 
-    val columns = Seq(expr("*"), col) ++
-      step.combineAuditWith.map{ fname =>
-        Seq(group_results( array( col.getField("ruleSuiteResults"), scol(fname).getField("ruleSuiteResults") ) ).
-          as(flowAuditColName))
-      }.getOrElse(Seq.empty)
+    val (starterColumns, existingAudit) =
+      // if flowAuditColName is present and the correct type, select all the others, assuming via having a parent step
+      // isn't enough if StarOnly or OutputFieldOnly is provided
+      //
+      if (struct.exists(s => s.name == flowAuditColName && s.dataType == Encoders.ruleSuiteGroupResultsTypedEnc.catalystRepr))
+        (withoutFlowAudit.map(scol) :+ col, Seq(scol(flowAuditColName)))
+      else
+        (Seq(expr("*"), col), Seq.empty)
+
+    val group_auditF =
+      group_audit( col,
+        step.combineAuditWith.map{ fnames =>
+          fnames.map{fname => expr(fname)}.toSeq
+        }.getOrElse(Seq.empty) ++ existingAudit
+          :_*).as(flowAuditColName)
+
+    // auto add audit
+    val columns = starterColumns :+ group_auditF// :+ functions.size(group_auditF).as(flowAuditColName+"_size")
 
     resultApproach match {
       case AsIs => dataFrame.select(columns :_*)
@@ -118,9 +142,9 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
       case MergeFields => // dq probably doesn't work
 
         val starter = dataFrame.select(columns : _*)
-        val og = starter.columns.toSet + fieldName
+        val og = starter.columns.toSet
         val nested = starter.selectExpr(s"$fieldName.result.*").columns
-        starter.selectExpr((og -- nested).toSeq ++ Seq( s"$fieldName.result.*") :_*)
+        starter.select((og -- nested - flowAuditColName).map(scol).toSeq ++ Seq( expr(s"$fieldName.result.*"), group_auditF) :_*)
 
       case StarOnly => dataFrame.select(children: _*)
       case OutputFieldOnly => dataFrame.select(col)
@@ -132,7 +156,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
     // TODO ViewRow and loadConfigs should probably be public https://github.com/sparkutils/quality/issues/123
     import sparkSession.implicits._
     val (config, _) = com.sparkutils.quality.loadViewConfigs(loader = loader,
-      viewDF = step.views.toDF,
+      viewDF = step.views.toDF(),
       ruleSuiteIdColumn = viewColumns.ruleSuiteId,
       ruleSuiteVersionColumn = viewColumns.ruleSuiteVersion,
       ruleSuiteId = step.ruleSuite.id,
@@ -165,7 +189,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
    * @return (roots, full) promises
    */
   private def buildPromises(): (Map[String, Promise[(Step, DataFrame)]], Map[String, Promise[(Step, DataFrame)]]) = {
-    val rootPromises = roots.map(s => s.name -> Promise[(Step, DataFrame)]).toMap
+    val rootPromises = roots.map(s => s.name -> Promise[(Step, DataFrame)]()).toMap
     val promises = scala.collection.mutable.Map.empty ++ rootPromises
 
     def chaseDown(elem: theGraph.NodeT): Future[(Step, DataFrame)] = {
@@ -206,12 +230,29 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
   }
 
   private def verifySteps(): Unit = {
+    def badViewName(name: String): Boolean = {
+      (name eq null) || name.isEmpty
+    }
+
     if (steps.isEmpty) {
-      throw FlowException("Empty Flow provided")
+      throw FlowException(EmptyFlow)
+    }
+    if (steps.exists(s => (s.name eq null) || s.name.isEmpty)) {
+      throw FlowException(EmptyStepName)
+    }
+    steps.find(s => badViewName(s.inputView) || badViewName(s.outputView)).foreach{
+      step =>
+      throw FlowException(InvalidViewNames(step))
     }
     val dupes = steps.groupBy(_.name).filter(_._2.size > 1)
     if (dupes.nonEmpty) {
-      throw FlowException(s"Flow provided Steps with duplicate names ${dupes.keys.mkString(",")}")
+      throw FlowException(s"$DuplicateNames (${dupes.keys.mkString(",")})")
+    }
+    val cyc = theGraph.findCycle
+    // for info only val paths = roots.map( n => n -> theGraph.get(n).outerNodeTraverser.toSeq )
+    cyc.foreach{
+      cycle =>
+        throw FlowException(s"$CycleDetected $cycle")
     }
   }
 
@@ -223,7 +264,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
    * @param sparkSession
    * @param starting a function called for each Root Step (a Step having no dependencies), when a DataFrame is provided
    *                 it is registered as a temporary view with the name of the inputView.  When None is returned and the
-   *                 inputView is not present an error is thrown
+   *                 inputView is not present an error is thrown, this is delegated to the FlowDataHandling.loadData function
    * @return
    */
   def run(sparkSession: SparkSession, starting: Step => Option[DataFrame]): Map[String, (Step, DataFrame)] = {
@@ -240,7 +281,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
           val df = starting(root)
           val r = (root,
             df.fold(
-              performStep( sparkSession.sql(s"select * from `${root.inputView}` "), root)
+              performStep( loadData(sparkSession = sparkSession, token = root.inputView), root)
             ) { df =>
               df.createOrReplaceTempView(root.inputView)
               performStep(df, root)
@@ -275,7 +316,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
    * @param vl
    * @param step
    */
-  protected def stepViewsLoaded(vl: ViewLoadResults, step: Step) = {
+  private def stepViewsLoaded(vl: ViewLoadResults, step: Step) = {
     if (vl.replaced.nonEmpty) {
       info(s"")
     }
@@ -309,7 +350,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
   }
 
   /**
-   * By default, logs and returns input a dataframe from Step.inputViewName
+   * By default, logs and returns input a dataframe via FlowDataHandling.loadData using Step.inputViewName as the token
    *
    * @param input either an empty dataset or the previous steps dataframe
    * @param step
@@ -317,18 +358,19 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
    */
   protected def startStep(input: DataFrame, step: Step): DataFrame = {
     infoLogStep(step, "Started")
-    input.sparkSession.sql(s"select * from `${step.inputView}`")
+    // TODO if there is a single parent and input and output view match, allow input to be used directly
+    loadData(input.sparkSession, token = step.inputView)
   }
 
   /**
-   * The default implementation optionally caches (cacheStepResults) and, where present, uses the view name of the next step
+   * The default implementation optionally caches (cacheStepResults) and uses the outputViewName to register a temp view
    * @param step
    * @return a, by default, optionally cached dataFrame
    */
   protected def stepCompleted(result: DataFrame, step: Step): DataFrame = {
     val ndf =
       if (step.cacheResults)
-        result.cache
+        result.cache()
       else
         result
 

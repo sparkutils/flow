@@ -79,7 +79,7 @@ object CombineAuditBenchmark extends Bench.OfflineReport with TestUtils {
           OutputExpression("set(lower = lower - 3)")))
       )).copy(id = Id(i + 1,0)),// Id change to verify combineAuditWith
         s"view${i+1}", Seq.empty, Operation("folder", s"view${i+1}E", Map.empty, MergeFields), Map.empty, s"view${i+2}",
-        combineAuditWith = Some(s"view${i}E"))
+        combineAuditWith = Some(Set(s"view${i}E")))
 
   val rows = Gen.range("rows")(100000, 100000, 25000)
   val stepsCount = Gen.range("steps")(8, 8, 1)

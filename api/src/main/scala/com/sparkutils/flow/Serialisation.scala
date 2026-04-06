@@ -2,7 +2,7 @@ package com.sparkutils.flow
 
 import com.sparkutils.quality
 import com.sparkutils.quality.implicits.combinedRuleSuiteRowTypedExpEnc
-import com.sparkutils.quality.{CombinedRuleSuiteRows, Id, LambdaFunctionRow, OutputExpressionRow, RuleRow, RuleSuite, RuleSuiteRow, VersionedId, register_rule_suite_group_variable, rule_suite, rule_suite_from, toDS, toLambdaDS, toOutputExpressionDS, toRuleSuiteRow}
+import com.sparkutils.quality.{CombinedRuleSuiteRows, Id, LambdaFunctionRow, OutputExpressionRow, RuleRow, RuleSuite, RuleSuiteRow, VersionedId, ViewRow, register_rule_suite_group_variable, rule_suite, rule_suite_from, toDS, toLambdaDS, toOutputExpressionDS, toRuleSuiteRow}
 import org.apache.spark.sql.{Column, DataFrame, Dataset, Encoder, SparkSession}
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.{Column, DataFrame, Dataset, SparkSession}
@@ -11,7 +11,7 @@ import org.apache.spark.sql.{Column, DataFrame, Dataset, SparkSession}
 case class StepRow(flowId: Int, flowVersion: Int, name: String, dependencies: scala.collection.immutable.Set[String], ruleSuiteId: Int,
                    ruleSuiteVersion: Int, inputView: String,
                    operation: Operation, properties: Map[String, String], outputView: String,
-                   combineAuditWith: Option[String], cacheResults: Boolean)
+                   combineAuditWith: Option[Set[String]], cacheResults: Boolean)
 
 @SerialVersionUID(1L)
 case class FlowRow(flowId: Int, flowVersion: Int, flowAuditColName: String)
@@ -107,7 +107,7 @@ trait Serialisation {
 
     val flowFilter = s"flowID = ${flowId.id} and flowVersion = ${flowId.version} "
 
-    val flowSteps = steps.filter(flowFilter)
+    val flowSteps = loadSteps(steps.toDF()).filter(flowFilter)
     if (flowSteps.isEmpty) {
       throw FlowException(s"Flow $flowId could not be loaded as the Step's dataset does not contain that flow")
     }

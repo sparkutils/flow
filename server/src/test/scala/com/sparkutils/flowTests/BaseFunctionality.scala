@@ -1,12 +1,15 @@
 package com.sparkutils.flowTests
 
-import com.sparkutils.flow.{AsIs, Flow, MergeFields, Operation, OutputFieldOnly, StarOnly, Step, ViewRow, fromDatasets, toDatasets}
-import com.sparkutils.flowTests.RulesGen.rulesRaw
+import com.sparkutils.flow.impl.util.FlowExceptionConstants.{CycleDetected, DuplicateNames, EmptyFlow, EmptyStepName, InvalidViewNames, MissingStep}
+import com.sparkutils.flow.{AsIs, Flow, FlowDataHandling, FlowException, MergeFields, Operation, OutputFieldOnly, StarOnly, Step, fromDatasets, toDatasets}
+import com.sparkutils.flowTests.RulesGen.{rulesRaw, testData}
 import com.sparkutils.flowTests.utils.SharedPureConnectTests
-import com.sparkutils.quality.{DefaultProcessor, ExpressionRule, Id, LambdaFunction, OutputExpression, Rule, RuleSet, RuleSuite, RuleSuiteGroupResults, RunOnPassProcessor, registerLambdaFunctions}
+import com.sparkutils.quality.{DataFrameLoader, DefaultProcessor, ExpressionRule, Id, LambdaFunction, OutputExpression, Rule, RuleSet, RuleSuite, RuleSuiteGroupResults, RunOnPassProcessor, ViewRow, registerLambdaFunctions}
+import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.scalatest.Matchers
 
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.util.Try
 
 case class TestOn(product: String, account: String, subcode: Int)
 
@@ -14,6 +17,15 @@ case class NewPosting(transfer_type: String, account: String, product: String, s
 case class Posting(transfer_type: String, account: String)
 
 object RulesGen {
+
+  val testData = Seq(
+    TestOn("edt", "4201", 40),
+    TestOn("otc", "5201", 40),
+    TestOn("fi", "4251", 50),
+    TestOn("fx", "4206", 90),
+    TestOn("fxotc", "4201", 40),
+    TestOn("eqotc", "4201", 60)
+  )
 
   def rulesRaw(expressionRules: Seq[(ExpressionRule, RunOnPassProcessor)]) = {
     registerLambdaFunctions(Seq(
@@ -37,16 +49,8 @@ object RulesGen {
 
 class BaseFunctionality extends SharedPureConnectTests with Matchers {
 
-  val testData = Seq(
-    TestOn("edt", "4201", 40),
-    TestOn("otc", "5201", 40),
-    TestOn("fi", "4251", 50),
-    TestOn("fx", "4206", 90),
-    TestOn("fxotc", "4201", 40),
-    TestOn("eqotc", "4201", 60)
-  )
-
-  test("multiple roots and paths") {
+  test("multiple roots and paths should work") {
+    // a and c are roots, d joins both c and b
     val flow = new Flow(Id(1,1), Seq(
       Step("a",Set.empty,rulesRaw(Seq(
         (ExpressionRule("product = 'edt'"),  RunOnPassProcessor(1000, Id(1040, 1),
@@ -55,30 +59,43 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
       Step("b",Set("a"),rulesRaw(Seq(
         (ExpressionRule("product like 'fx%'"),  RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("array(account_row('from'), account_row('from', 'other_account2'))")))
-      )).copy(id = Id(2,1)), "view2", Seq.empty, Operation("engine", "view2E", Map.empty, AsIs), Map.empty, "view3"),
+      )).copy(id = Id(2,1)), "view2", Seq.empty, Operation("engine", "view2E", Map.empty, AsIs), Map.empty, "view3"//,
+        //combineAuditWith = Some(Set("view1E"))
+      ),
       Step("c",Set.empty,rulesRaw(Seq(
-        (ExpressionRule("view1E.result is not null"),  RunOnPassProcessor(1000, Id(1040, 1),
-          OutputExpression("view1E.result"))),
-        (ExpressionRule("view2E.result is not null"),  RunOnPassProcessor(1000, Id(1041, 1),
-          OutputExpression("view2E.result")))
-      )).copy(id = Id(3,1)), "view3", Seq.empty, Operation("engine", "view3E", Map.empty, StarOnly), Map.empty, "view4"),
+        (ExpressionRule("product == 'edt'"),  RunOnPassProcessor(1000, Id(1040, 1),
+          OutputExpression("null")))
+      )).copy(id = Id(3,1)), "view3", Seq.empty, Operation("engine", "view3E", Map.empty, AsIs), Map.empty, "view4"),
       Step("d",Set("c", "b"),rulesRaw(Seq(
         (ExpressionRule("true"),  RunOnPassProcessor(1000, Id(1041, 1),
-          OutputExpression("result")))
+          OutputExpression("view1E.result")))
       )).copy(id = Id(4,1)), "filteredView4", Seq(
         ViewRow(ruleSuiteId = 4, ruleSuiteVersion = 1, name = "filteredView4", token = None, filter = None,
-          sql = Some("select * from view4 where salientRule is not null"))),
-        Operation("engine", "view4E", Map.empty, OutputFieldOnly), Map.empty, "view5")
-    ))
+          sql = Some("select v4.*, v3.flow_audit view3_audit, v3.view1E from view4 v4 join view3 v3 on v4.product = v3.product where v4.view3E.salientRule is not null"))),
+        Operation("engine", "view4E", Map.empty, AsIs), Map.empty, "view5",
+        combineAuditWith = Some(Set("view3_audit"))) // flow_audit here is from v4
+    ), showInterim = true)
 
+    val s = sparkSession
+    import s.implicits._
+    val ires = flow.run(sparkSession, _ => Some(testData.toDF()))
+    ires.size shouldBe 4
+    ires.keys.toSeq shouldBe Seq("a", "b", "c", "d")
 
+    // completion with the full set of responses is main test, 2nd is to ensure combineAuditWith works across
+    // multiple parents
+
+    import com.sparkutils.quality.implicits._
+    val rgs = ires("d")._2.selectExpr("flow_audit.*").as[RuleSuiteGroupResults].collect()
+    verifyRuleSuites(rgs, Set(Id(1,1), Id(2,1), Id(3,1), Id(4,1)))(identity)
   }
 
-  def engineFlow = new Flow(Id(1,1), Seq(
+  // c depends on both a and b
+  def engineFlow(dataHandling: Boolean = false) = new Flow(Id(1,1), Seq(
     Step("a",Set.empty,rulesRaw(Seq(
       (ExpressionRule("product = 'edt'"),  RunOnPassProcessor(1000, Id(1040, 1),
         OutputExpression("array(account_row('from'), account_row('to', 'other_account1'))")))
-    )), "view1", Seq.empty, Operation("engine", "view1E", Map.empty, AsIs), Map.empty, "view2"),
+    )), "view1", Seq.empty, Operation("engine", "view1E", Map.empty, AsIs), Map.empty, "view2", cacheResults = true),
     Step("b",Set("a"),rulesRaw(Seq(
       (ExpressionRule("product like 'fx%'"),  RunOnPassProcessor(1000, Id(1040, 1),
         OutputExpression("array(account_row('from'), account_row('from', 'other_account2'))")))
@@ -96,21 +113,34 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
       ViewRow(ruleSuiteId = 4, ruleSuiteVersion = 1, name = "filteredView4", token = None, filter = None,
         sql = Some("select * from view4 where salientRule is not null"))),
       Operation("engine", "view4E", Map.empty, OutputFieldOnly), Map.empty, "view5")
-  ))
-
-  test("Simple chain of engines should work with filter") {
-    val flow = engineFlow
-
-    doSimpleEngine(flow)
+  )) with FlowDataHandling {
+    override protected def loadData(sparkSession: SparkSession, token: String): DataFrame = {
+      if (dataHandling)
+        // same as the real code, just forces the default to work
+        sparkSession.sql(s"select * from `${token}` ")
+      else
+        super.loadData(sparkSession: SparkSession, token: String)
+    }
   }
 
-  def doSimpleEngine(flow: Flow): Unit = {
+  test("Simple chain of engines should work with filter") {
+    val flow = engineFlow()
+
+    doSimpleEngine(flow)
+
+    // verify the default route delegating to loadData
+    val flow2 = engineFlow(true)
+
+    doSimpleEngine(flow2, sessionOnly = true)
+  }
+
+  def doSimpleEngine(flow: Flow, sessionOnly: Boolean = false): Unit = {
 
     val s = sparkSession
     import s.implicits._
-    val ires = flow.run(sparkSession, _ => Some(testData.toDF()))
+    val ires = if (sessionOnly) flow.run(sparkSession) else flow.run(sparkSession, _ => Some(testData.toDF()))
     ires.size shouldBe 4
-    ires.map(_._1).toSeq shouldBe Seq("a", "b", "c", "d")
+    ires.keys.toSeq shouldBe Seq("a", "b", "c", "d")
 
     val res = ires("d")._2
     // after removing the nulls in step 4's filter
@@ -124,9 +154,10 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
     )
   }
 
-  def verifyRuleSuites[T](r: Seq[T])(ruleSuiteGroup: T => RuleSuiteGroupResults): Unit = {
-    r.map(ruleSuiteGroup(_).ruleSuiteResults.keys.toSeq).distinct.map(_.sortBy(i=>(i.id, i.version))) shouldBe Seq(
-      Seq(Id(1,1), Id(2,0))
+  def verifyRuleSuites[T](r: Seq[T], expected: Set[Id] = Set(Id(1,1), Id(2,0)))(
+    ruleSuiteGroup: T => RuleSuiteGroupResults): Unit = {
+    r.map(ruleSuiteGroup(_).ruleSuiteResults.keys.toSet).distinct shouldBe Seq(
+      expected
     )
   }
 
@@ -142,7 +173,8 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
     )).copy(defaultProcessor = DefaultProcessor(Id(1041,1), OutputExpression("row -> row")),
       id = Id(2,0)), // force an identity default and Id change to verify combineAuditWith
       "view2", Seq.empty, Operation("folder", "view2E", Map.empty, MergeFields), Map.empty, "view3",
-      combineAuditWith = Some("view1E"))
+    //  combineAuditWith = Some(Set("view1E"))
+    )
   ))
 
   test("folders should correctly nest and merge fields with chained audit") {
@@ -172,7 +204,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
   }
 
   test("Serialising for engine example") {
-    val flow = engineFlow
+    val flow = engineFlow()
     val dses = toDatasets(sparkSession, flow)
 
     val (steps, name) = fromDatasets(sparkSession, dses, flow.flowId)
