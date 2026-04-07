@@ -61,7 +61,7 @@ object CombineAuditBenchmark extends Bench.OfflineReport with TestUtils {
     s.range(n).selectExpr("id as lower", "id+5 as higher").repartition(CombineAuditDataSetup.partitions).persist(StorageLevel.MEMORY_ONLY)
   } //sparkSession.read.parquet(outputDir + "/collectTestData")
 
-  def evaluate[T](inline: Boolean)(params: (Int, Int)) = {
+  def evaluate[T](alternate: Boolean)(params: (Int, Int)) = {
     new Flow(Id(1,1), Seq(
       Step("0", Set.empty, rulesRaw(Seq(
         (ExpressionRule("(lower % 2) = 0"),  RunOnPassProcessor(1000, Id(1040, 1),
@@ -78,11 +78,10 @@ object CombineAuditBenchmark extends Bench.OfflineReport with TestUtils {
         (ExpressionRule("(higher % 5) = 0"),  RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("set(lower = lower - 3)")))
       )).copy(id = Id(i + 1,0)),// Id change to verify combineAuditWith
-        s"view${i+1}", Seq.empty, Operation("folder", s"view${i+1}E", Map.empty, MergeFields), Map.empty, s"view${i+2}",
-        combineAuditWith = Some(Set(s"view${i}E")))
+        s"view${i+1}", Seq.empty, Operation("folder", s"view${i+1}E", Map.empty, MergeFields), Map.empty, s"view${i+2}")
 
-  val rows = Gen.range("rows")(100000, 100000, 25000)
-  val stepsCount = Gen.range("steps")(8, 8, 1)
+  val rows = Gen.range("rows")(200000, 200000, 25000)
+  val stepsCount = Gen.range("steps")(14, 14, 1)
   val generator = Gen.crossProduct(stepsCount, rows)
 
   performance of "Processing Array Collection Transformations" config (
@@ -94,7 +93,14 @@ object CombineAuditBenchmark extends Bench.OfflineReport with TestUtils {
     //  verbose -> true
   ) in {
 
-    measure method "flow inline audit" in {
+    measure method "flow default" in {
+      val s = sparkSession
+      sparkSession.sparkContext.setLogLevel(loggingLevel) // set to debug to get actual code lines etc.
+
+      using(generator) in evaluate(false)
+    }
+
+    measure method "flow alternate" in {
       val s = sparkSession
       sparkSession.sparkContext.setLogLevel(loggingLevel) // set to debug to get actual code lines etc.
 

@@ -8,9 +8,11 @@ import Utils._
 import com.sparkutils.flow.impl.util.FlowExceptionConstants.{CycleDetected, DuplicateNames, EmptyFlow, EmptyStepName, InvalidViewNames, MissingStep}
 import com.sparkutils.quality.functions.{group_audit, group_results}
 import com.sparkutils.quality.impl.Encoders
+import org.apache.spark.sql.types.{DataType, StructType}
 import scalax.collection.edges.{DiEdge, DiEdgeImplicits}
 import scalax.collection.immutable.Graph
 
+import scala.collection.parallel.CollectionConverters.ImmutableIterableIsParallelizable
 import scala.concurrent.duration.{Duration, HOURS}
 import scala.concurrent.{Await, ExecutionContext, Future, Promise}
 
@@ -77,7 +79,13 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
     val struct = inputSchema(dataFrame, step)
     val withoutFlowAudit = struct.filterNot(_.name == flowAuditColName).map(_.name)
 
-    val (col: Column, childrenRaw: Seq[String]) = (
+    val dataRefTypeFields =
+      options.dataType("resultDataType") match {
+        case Some(s: StructType) => Some(s.fields.map(_.name).filterNot(_ == flowAuditColName).toSet)
+        case _ => None
+      }
+
+    val (col: Column, childrenRaw: Seq[String], outputFields: Option[Set[String]]) = (
       function.toLowerCase.replaceAll("_","") match {
         case "collect" | "collectrunner" =>
           (collectRunner(step.ruleSuite, resultDataType = options.dataType("resultDataType"),
@@ -87,13 +95,17 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
             includeNulls = options.boolean("includeNulls"),
             useInPlaceArray = options.boolean("useInPlaceArray", true),
             unrollInPlaceArray = options.boolean("unrollInPlaceArray"),
-            unrollOutputArraySize = options.int("unrollOutputArraySize", 1)).as(fieldName), Seq("ruleSuiteResults", "result"))
+            unrollOutputArraySize = options.int("unrollOutputArraySize", 1)).as(fieldName), Seq("ruleSuiteResults", "result"),
+            dataRefTypeFields
+          )
         case "engine" | "ruleengine" | "ruleenginerunner" =>
           (ruleEngineRunner(step.ruleSuite,
             resultDataType = options.dataType("resultDataType"),
             debugMode = options.boolean("debugMode"),
             variablesPerFunc = options.int("variablesPerFunc", 40),
-            variableFuncGroup = options.int("variableFuncGroup", 20)).as(fieldName), Seq("ruleSuiteResults", "salientRule", "result"))
+            variableFuncGroup = options.int("variableFuncGroup", 20)).as(fieldName), Seq("ruleSuiteResults", "salientRule", "result"),
+            dataRefTypeFields
+          )
         case "folder" | "folderrunner" =>
           val rs =
             if (step.ruleSuite.defaultProcessor != NoOpDefaultProcessor.noOp)
@@ -111,7 +123,13 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
             useType = options.structType("useType").orElse(options.structType("resultDataType")),
             debugMode = options.boolean("debugMode"),
             variablesPerFunc = options.int("variablesPerFunc", 40),
-            variableFuncGroup = options.int("variableFuncGroup", 20)).as(fieldName), Seq("ruleSuiteResults", "result"))
+            variableFuncGroup = options.int("variableFuncGroup", 20)).as(fieldName), Seq("ruleSuiteResults", "result"),
+            dataRefTypeFields.orElse{
+              options.expr("startingStruct").flatMap(_ => None).orElse{
+                Some(withoutFlowAudit.toSet)
+              }
+            }
+          )
         // TODO dq ?
       } )
 
@@ -135,25 +153,37 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
 
     // auto add audit
     val columns = starterColumns :+ group_auditF// :+ functions.size(group_auditF).as(flowAuditColName+"_size")
-
     resultApproach match {
       case AsIs => dataFrame.select(columns :_*)
       case ExpandNested => dataFrame.select(columns ++ children :_*)
       case MergeFields => // dq probably doesn't work
 
-        val starter = dataFrame.select(columns : _*)
-        val og = starter.columns.toSet
-        val nested = starter.selectExpr(s"$fieldName.result.*").columns
-        starter.select((og -- nested - flowAuditColName).map(scol).toSeq ++ Seq( expr(s"$fieldName.result.*"), group_auditF) :_*)
+        outputFields.fold {
+
+          val starter = dataFrame.select(columns: _*)
+          val og = starter.columns.toSet
+          val nested = starter.selectExpr(s"$fieldName.result.*").columns
+          starter.select((og -- nested - flowAuditColName).map(scol).toSeq ++ Seq(expr(s"$fieldName.result.*"), group_auditF): _*)
+
+        }{ outputFields =>
+
+          // if fields are present, either by default in the folder case or by providing a result type that is not an
+          // array we can directly process with a single projection.  In tests this, for 100k rows and a 14 Steps chain
+          // 958ms vs 896ms, shows significant enough improvements to special case
+          val fields = withoutFlowAudit.toSet -- outputFields
+
+          dataFrame.select(Seq(col, group_auditF) ++ fields.map(scol) ++
+            withoutFlowAudit.map(n => col.getField("result").getField(n).as(n) ) :_*)
+
+        }
 
       case StarOnly => dataFrame.select(children: _*)
       case OutputFieldOnly => dataFrame.select(col)
     }
 
-  }
+}
 
   protected def loadViews(sparkSession: SparkSession, step: Step): ViewLoadResults = {
-    // TODO ViewRow and loadConfigs should probably be public https://github.com/sparkutils/quality/issues/123
     import sparkSession.implicits._
     val (config, _) = com.sparkutils.quality.loadViewConfigs(loader = loader,
       viewDF = step.views.toDF(),
@@ -274,7 +304,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
     val (rootPromises, promises) = buildPromises()
 
     // processing th roots sets of the rest
-    roots.map {
+    roots.par.map {
       root =>
         val p = rootPromises(root.name)
         try {
@@ -352,13 +382,12 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
   /**
    * By default, logs and returns input a dataframe via FlowDataHandling.loadData using Step.inputViewName as the token
    *
-   * @param input either an empty dataset or the previous steps dataframe
+   * @param input either an empty dataset or the previous steps dataframe, by default this is ignored
    * @param step
    * @return the actual dataset used as input to the set
    */
   protected def startStep(input: DataFrame, step: Step): DataFrame = {
     infoLogStep(step, "Started")
-    // TODO if there is a single parent and input and output view match, allow input to be used directly
     loadData(input.sparkSession, token = step.inputView)
   }
 

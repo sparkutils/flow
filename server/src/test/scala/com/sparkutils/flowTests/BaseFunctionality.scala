@@ -74,7 +74,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
           sql = Some("select v4.*, v3.flow_audit view3_audit, v3.view1E from view4 v4 join view3 v3 on v4.product = v3.product where v4.view3E.salientRule is not null"))),
         Operation("engine", "view4E", Map.empty, AsIs), Map.empty, "view5",
         combineAuditWith = Some(Set("view3_audit"))) // flow_audit here is from v4
-    ), showInterim = true)
+    ))//, showInterim = true)
 
     val s = sparkSession
     import s.implicits._
