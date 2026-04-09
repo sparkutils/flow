@@ -65,7 +65,7 @@ jobs:
     secrets: inherit
 
   publishShadeBuilds_21:
-    needs: [ publishBuilds_21 ]
+    needs: [ publish_21 ]
     uses: sparkutils/building/.github/workflows/publish_build.yml@main
     with:
       theMatrix: |
