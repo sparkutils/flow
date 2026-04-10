@@ -28,20 +28,20 @@ class StepValidation extends SharedPureConnectTests with Matchers {
       val flow =
         new Flow(Id(1,1), Seq(
           Step("a",Set.empty,rulesRaw(Seq(
-          )), "view1", Seq.empty, Operation("engine", "view1E", Map.empty, AsIs), Map.empty, "view2"),
+          )), "view1", Seq.empty, Operation("engine", "view1E", AsIs), Map.empty, "view2"),
           Step("b",Set("a"),rulesRaw(Seq(
-          )).copy(id = Id(2,1)), "view2", Seq.empty, Operation("engine", "view2E", Map.empty, AsIs), Map.empty, "view3"),
+          )).copy(id = Id(2,1)), "view2", Seq.empty, Operation("engine", "view2E", AsIs), Map.empty, "view3"),
           Step("a",Set.empty,rulesRaw(Seq(
-          )).copy(id = Id(3,1)), "view3", Seq.empty, Operation("engine", "view3E", Map.empty, StarOnly), Map.empty, "view4"),
+          )).copy(id = Id(3,1)), "view3", Seq.empty, Operation("engine", "view3E", StarOnly), Map.empty, "view4"),
           Step("d",Set("c", "b"),rulesRaw(Seq(
           )).copy(id = Id(4,1)), "filteredView4", Seq(),
-            Operation("engine", "view4E", Map.empty, OutputFieldOnly), Map.empty, "view5"),
+            Operation("engine", "view4E", OutputFieldOnly), Map.empty, "view5"),
           Step("c",Set("c", "b"),rulesRaw(Seq(
           )).copy(id = Id(4,1)), "filteredView4", Seq(),
-            Operation("engine", "view4E", Map.empty, OutputFieldOnly), Map.empty, "view5"),
+            Operation("engine", "view4E", OutputFieldOnly), Map.empty, "view5"),
           Step("d",Set("c", "b"),rulesRaw(Seq(
           )).copy(id = Id(4,1)), "filteredView4", Seq(),
-            Operation("engine", "view4E", Map.empty, OutputFieldOnly), Map.empty, "view5")
+            Operation("engine", "view4E", OutputFieldOnly), Map.empty, "view5")
         ))
       doSimpleEngine(flow)
     }
@@ -53,12 +53,12 @@ class StepValidation extends SharedPureConnectTests with Matchers {
       val flow =
         new Flow(Id(1,1), Seq(
           Step("a",Set.empty,rulesRaw(Seq(
-          )), "view1", Seq.empty, Operation("engine", "view1E", Map.empty, AsIs), Map.empty, "view2"),
+          )), "view1", Seq.empty, Operation("engine", "view1E", AsIs), Map.empty, "view2"),
           Step("b",Set("a"),rulesRaw(Seq(
-          )).copy(id = Id(2,1)), "view2", Seq.empty, Operation("engine", "view2E", Map.empty, AsIs), Map.empty, "view3"),
+          )).copy(id = Id(2,1)), "view2", Seq.empty, Operation("engine", "view2E", AsIs), Map.empty, "view3"),
           Step("d",Set("c", "b"),rulesRaw(Seq(
           )).copy(id = Id(4,1)), "filteredView4", Seq(),
-            Operation("engine", "view4E", Map.empty, OutputFieldOnly), Map.empty, "view5")
+            Operation("engine", "view4E", OutputFieldOnly), Map.empty, "view5")
         ))
       doSimpleEngine(flow)
     }
@@ -71,12 +71,12 @@ class StepValidation extends SharedPureConnectTests with Matchers {
         val flow =
           new Flow(Id(1, 1), Seq(
             Step("a", Set.empty, rulesRaw(Seq(
-            )), "view1", Seq.empty, Operation("engine", "view1E", Map.empty, AsIs), Map.empty, "view2"),
+            )), "view1", Seq.empty, Operation("engine", "view1E", AsIs), Map.empty, "view2"),
             Step(name, Set("a"), rulesRaw(Seq(
-            )).copy(id = Id(2, 1)), "view2", Seq.empty, Operation("engine", "view2E", Map.empty, AsIs), Map.empty, "view3"),
+            )).copy(id = Id(2, 1)), "view2", Seq.empty, Operation("engine", "view2E", AsIs), Map.empty, "view3"),
             Step("d", Set("c", "b"), rulesRaw(Seq(
             )).copy(id = Id(4, 1)), "filteredView4", Seq(),
-              Operation("engine", "view4E", Map.empty, OutputFieldOnly), Map.empty, "view5")
+              Operation("engine", "view4E", OutputFieldOnly), Map.empty, "view5")
           ))
         doSimpleEngine(flow)
       }
@@ -90,16 +90,16 @@ class StepValidation extends SharedPureConnectTests with Matchers {
     def test(name: String) = {
       val d = Step("d", Set("c", "b"), rulesRaw(Seq(
       )).copy(id = Id(4, 1)), name, Seq(),
-        Operation("engine", "view3", Map.empty, OutputFieldOnly), Map.empty, "view5"
+        Operation("engine", "view3", OutputFieldOnly), Map.empty, "view5"
       )
 
       val r = intercept[FlowException] {
         val flow =
           new Flow(Id(1, 1), Seq(
             Step("a", Set.empty, rulesRaw(Seq(
-            )), "view1", Seq.empty, Operation("engine", "view1E", Map.empty, AsIs), Map.empty, "view2"),
+            )), "view1", Seq.empty, Operation("engine", "view1E", AsIs), Map.empty, "view2"),
             Step("b", Set("a"), rulesRaw(Seq(
-            )).copy(id = Id(2, 1)), "view2", Seq.empty, Operation("engine", "view2E", Map.empty, AsIs), Map.empty, "view3"),
+            )).copy(id = Id(2, 1)), "view2", Seq.empty, Operation("engine", "view2E", AsIs), Map.empty, "view3"),
             d
           ))
         doSimpleEngine(flow)
@@ -115,15 +115,15 @@ class StepValidation extends SharedPureConnectTests with Matchers {
       val flow =
         new Flow(Id(1,1), Seq(
           Step("a",Set.empty,rulesRaw(Seq(
-          )), "view1", Seq.empty, Operation("engine", "view1E", Map.empty, AsIs), Map.empty, "view2"),
+          )), "view1", Seq.empty, Operation("engine", "view1E", AsIs), Map.empty, "view2"),
           Step("b",Set("a","c"),rulesRaw(Seq(
-          )).copy(id = Id(2,1)), "view2", Seq.empty, Operation("engine", "view2E", Map.empty, AsIs), Map.empty, "view3"),
+          )).copy(id = Id(2,1)), "view2", Seq.empty, Operation("engine", "view2E", AsIs), Map.empty, "view3"),
           Step("c",Set("c", "b"),rulesRaw(Seq(
           )).copy(id = Id(4,1)), "filteredView4", Seq(),
-            Operation("engine", "view4E", Map.empty, OutputFieldOnly), Map.empty, "view5"),
+            Operation("engine", "view4E", OutputFieldOnly), Map.empty, "view5"),
           Step("d",Set("c", "b"),rulesRaw(Seq(
           )).copy(id = Id(4,1)), "filteredView4", Seq(),
-            Operation("engine", "view4E", Map.empty, OutputFieldOnly), Map.empty, "view5")
+            Operation("engine", "view4E", OutputFieldOnly), Map.empty, "view5")
         ))
       doSimpleEngine(flow)
     }

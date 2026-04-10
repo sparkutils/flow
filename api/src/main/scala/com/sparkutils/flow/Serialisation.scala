@@ -10,7 +10,7 @@ import org.apache.spark.sql.{Column, DataFrame, Dataset, SparkSession}
 @SerialVersionUID(1L)
 case class StepRow(flowId: Int, flowVersion: Int, name: String, dependencies: scala.collection.immutable.Set[String], ruleSuiteId: Int,
                    ruleSuiteVersion: Int, inputView: String,
-                   operation: Operation, properties: Map[String, String], outputView: String,
+                   operation: Operation, options: Map[String, String], outputView: String,
                    combineAuditWith: Option[Set[String]], cacheResults: Boolean)
 
 @SerialVersionUID(1L)
@@ -28,7 +28,7 @@ trait Serialisation {
 
   def loadSteps(dataFrame: DataFrame, flowId: Column, flowVersion: Column, name: Column, dependencies: Column,
                 ruleSuiteId: Column, ruleSuiteVersion: Column, inputView: Column, operation: Column,
-                properties: Column, outputView: Column, combineAuditWith: Column, cacheResults: Column): Dataset[StepRow] = {
+                options: Column, outputView: Column, combineAuditWith: Column, cacheResults: Column): Dataset[StepRow] = {
     import frameless._
     import implicits._
     import com.sparkutils.quality.implicits._
@@ -38,7 +38,7 @@ trait Serialisation {
     dataFrame.select(
       flowId.as("flowId"), flowVersion.as("flowVersion"), name.as("name"), dependencies.as("dependencies"),
       ruleSuiteId.as("ruleSuiteId"), ruleSuiteVersion.as("ruleSuiteVersion"), inputView.as("inputView"),
-      operation.as("operation"), properties.as("properties"), outputView.as("outputView"),
+      operation.as("operation"), options.as("options"), outputView.as("outputView"),
       combineAuditWith.as("combineAuditWith"), cacheResults.as("cacheResults")
     ).as[StepRow]
   }
@@ -46,7 +46,7 @@ trait Serialisation {
   def loadSteps(dataFrame: DataFrame): Dataset[StepRow] =
     loadSteps(dataFrame, col("flowId"), col("flowVersion"), col("name"), col("dependencies"),
       col("ruleSuiteId"), col("ruleSuiteVersion"), col("inputView"), col("operation"),
-      col("properties"), col("outputView"), col("combineAuditWith"), col("cacheResults"))
+      col("options"), col("outputView"), col("combineAuditWith"), col("cacheResults"))
 
   // TODO versioned impl
 
@@ -74,7 +74,7 @@ trait Serialisation {
         StepRow(flowId = flow.flowId.id, flowVersion = flow.flowId.version, name = step.name,
           dependencies = step.dependencies,
           ruleSuiteId = step.ruleSuite.id.id, ruleSuiteVersion = step.ruleSuite.id.version, inputView = step.inputView,
-          operation = step.operation, properties = step.properties, outputView = step.outputView,
+          operation = step.operation, options = step.options, outputView = step.outputView,
           combineAuditWith = step.combineAuditWith, cacheResults = step.cacheResults)}.toDS(),
       Seq(FlowRow(flowId = flow.flowId.id, flowVersion = flow.flowId.version,
         flowAuditColName = flow.flowAuditColName)).toDS(),
@@ -130,7 +130,7 @@ trait Serialisation {
             s.filter(s"ruleSuiteId = ${step.ruleSuiteId} and ruleSuiteVersion = ${step.ruleSuiteVersion}").collect().toSeq
           }.getOrElse(Seq.empty)
           Step(step.name, step.dependencies, rs, step.inputView, views, step.operation,
-            step.properties, step.outputView, step.combineAuditWith, step.cacheResults)
+            step.options, step.outputView, step.combineAuditWith, step.cacheResults)
       }
 
     (thisSteps, flowAuditColumn)

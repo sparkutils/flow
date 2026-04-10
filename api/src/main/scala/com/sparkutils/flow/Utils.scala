@@ -1,8 +1,10 @@
 package com.sparkutils.flow
 
-import org.apache.spark.sql.{Column, functions}
+import org.apache.spark.sql.functions.expr
+import org.apache.spark.sql.{Column, ShimUtils, functions}
 import org.apache.spark.sql.types.{DataType, StructType}
 
+import scala.concurrent.duration.{Duration, NANOSECONDS}
 import scala.util.Try
 
 object Utils {
@@ -20,6 +22,9 @@ object Utils {
     def int(keyName: String, default: Int): Int =
       getX(keyName, config, default)(_.toInt)
 
+    def duration(keyName: String, default: Duration): Duration =
+      getX(keyName, config, default)(Duration(_))
+
     def dataType(keyName: String): Option[DataType] = getDataType(keyName, config)
 
     def structType(keyName: String): Option[StructType] = dataType(keyName).map{
@@ -30,4 +35,22 @@ object Utils {
     def expr(keyName: String): Option[Column] = config.get(keyName).map(s => functions.expr(s))
   }
 
+  /**
+   * Captures execution time of the thunk f
+   * @param f
+   * @tparam T
+   * @return
+   */
+  def timed[T](f: => T): (T, Duration) = {
+    val start = System.nanoTime()
+    val ret = f
+    val end = System.nanoTime()
+
+    (ret, Duration(end - start, NANOSECONDS))
+  }
+
+  /* wraps the input to ensure it can be processed in rules
+  protected[flow] def wrapped(column: Column): Column =
+    ShimUtils.callFunction("processor_input_wrapper", expr("*"), column)
+  */
 }

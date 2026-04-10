@@ -8,6 +8,7 @@ import Utils._
 import com.sparkutils.flow.impl.util.FlowExceptionConstants.{CycleDetected, DuplicateNames, EmptyFlow, EmptyStepName, InvalidViewNames, MissingStep}
 import com.sparkutils.quality.functions.{group_audit, group_results}
 import com.sparkutils.quality.impl.Encoders
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.types.{DataType, StructType}
 import scalax.collection.edges.{DiEdge, DiEdgeImplicits}
 import scalax.collection.immutable.Graph
@@ -32,15 +33,13 @@ import scala.concurrent.{Await, ExecutionContext, Future, Promise}
  */
 @SerialVersionUID(1L)
 class Flow(val flowId: VersionedId, val steps: Seq[Step],
-           val flowAuditColName: String = "flow_audit", val duration: Duration = Duration(1L, HOURS),
+           val flowAuditColName: String = flowAuditDefault, val duration: Duration = Duration(1L, HOURS),
            val loader: DataFrameLoader = new DataFrameLoader {
               override def load(token: String): DataFrame = ???
             },
            showInterim: Boolean = false, viewColumns: ViewConfigColumns = ViewConfigColumns())(
              implicit ec: ExecutionContext
-           ) extends Serializable with FlowDataHandling {
-  private val logger = org.slf4j.LoggerFactory.getLogger(classOf[Flow])
-  import logger._
+           ) extends Serializable with FlowDataHandling with Logging {
 
   @transient
   lazy val theGraph: Graph[Step, DiEdge[Step]] = {
@@ -72,66 +71,21 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
    */
   private val (roots, rest) = steps.partition(_.dependencies.isEmpty)
 
-  // TODO move this to the server, allowing upgrades for all jobs on shared cluster
-  private def process(dataFrame: DataFrame, step: Step): DataFrame = {
+  private def processResult(dataFrame: DataFrame, step: Step,
+                            engine: (Column, Seq[String], Option[Set[String]])): DataFrame = {
     import step.operation._
+    import step.options
+
+    val (col, childrenRaw, outputFields) = engine
 
     val struct = inputSchema(dataFrame, step)
     val withoutFlowAudit = struct.filterNot(_.name == flowAuditColName).map(_.name)
 
     val dataRefTypeFields =
-      options.dataType("resultDataType") match {
+      options.dataType(resultDataType) match {
         case Some(s: StructType) => Some(s.fields.map(_.name).filterNot(_ == flowAuditColName).toSet)
         case _ => None
       }
-
-    val (col: Column, childrenRaw: Seq[String], outputFields: Option[Set[String]]) = (
-      function.toLowerCase.replaceAll("_","") match {
-        case "collect" | "collectrunner" =>
-          (collectRunner(step.ruleSuite, resultDataType = options.dataType("resultDataType"),
-            variablesPerFunc = options.int("variablesPerFunc", 40),
-            variableFuncGroup = options.int("variableFuncGroup", 20),
-            flatten = options.boolean("flatten", true),
-            includeNulls = options.boolean("includeNulls"),
-            useInPlaceArray = options.boolean("useInPlaceArray", true),
-            unrollInPlaceArray = options.boolean("unrollInPlaceArray"),
-            unrollOutputArraySize = options.int("unrollOutputArraySize", 1)).as(fieldName), Seq("ruleSuiteResults", "result"),
-            dataRefTypeFields
-          )
-        case "engine" | "ruleengine" | "ruleenginerunner" =>
-          (ruleEngineRunner(step.ruleSuite,
-            resultDataType = options.dataType("resultDataType"),
-            debugMode = options.boolean("debugMode"),
-            variablesPerFunc = options.int("variablesPerFunc", 40),
-            variableFuncGroup = options.int("variableFuncGroup", 20)).as(fieldName), Seq("ruleSuiteResults", "salientRule", "result"),
-            dataRefTypeFields
-          )
-        case "folder" | "folderrunner" =>
-          val rs =
-            if (step.ruleSuite.defaultProcessor != NoOpDefaultProcessor.noOp)
-              // even if the result is null, it's been chosen as such
-              step.ruleSuite
-            else
-              // identity function - let the row through
-              step.ruleSuite.copy(defaultProcessor = DefaultProcessor(Id(-1,-1), OutputExpression("row -> row")))
-
-          (ruleFolderRunner(rs,
-            startingStruct = options.expr("startingStruct").getOrElse{
-              // default to the current row - flow_audit otherwise MergeFields will have dupes
-              expr(s"struct(${withoutFlowAudit.mkString(",")})")
-            },
-            useType = options.structType("useType").orElse(options.structType("resultDataType")),
-            debugMode = options.boolean("debugMode"),
-            variablesPerFunc = options.int("variablesPerFunc", 40),
-            variableFuncGroup = options.int("variableFuncGroup", 20)).as(fieldName), Seq("ruleSuiteResults", "result"),
-            dataRefTypeFields.orElse{
-              options.expr("startingStruct").flatMap(_ => None).orElse{
-                Some(withoutFlowAudit.toSet)
-              }
-            }
-          )
-        // TODO dq ?
-      } )
 
     val children = childrenRaw.map(n => col.getField(n).as(n))
 
@@ -159,7 +113,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
       case MergeFields => // dq probably doesn't work
 
         outputFields.flatMap{s =>
-          if (options.boolean("forceMergeProjection", false))
+          if (options.boolean(forceMergeProjection))
             None
           else
             Some(s)}.fold {
@@ -167,7 +121,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
           val starter = dataFrame.select(columns: _*)
           val og = starter.columns.toSet
           val nested = starter.selectExpr(s"$fieldName.result.*").columns
-          starter.select((og -- nested - flowAuditColName).map(scol).toSeq ++ Seq(expr(s"$fieldName.result.*"), group_auditF): _*)
+          starter.select((og -- nested).map(scol).toSeq ++ Seq(expr(s"$fieldName.result.*")): _*)
 
         }{ outputFields =>
 
@@ -181,11 +135,98 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
 
         }
 
+      case OutputFieldsOnly =>
+
+        outputFields.flatMap{s =>
+          if (options.boolean(forceMergeProjection))
+            None
+          else
+            Some(s)}.fold {
+
+          val og = dataFrame.columns.toSet
+          val starter = dataFrame.select(columns: _*)
+          val startCols = starter.columns.toSet
+          starter.select((og -- startCols).map(scol).toSeq ++
+            Seq(scol(fieldName), scol(flowAuditColName), expr(s"$fieldName.result.*")): _*)
+
+        }{ outputFields =>
+
+          dataFrame.select(Seq(col, group_auditF) ++
+            outputFields.map(n => col.getField("result").getField(n).as(n) ) :_*)
+
+        }
+
       case StarOnly => dataFrame.select(children: _*)
       case OutputFieldOnly => dataFrame.select(col)
     }
 
-}
+  }
+
+  // TODO move this to the server?, allowing upgrades for all jobs on shared cluster
+  private def process(dataFrame: DataFrame, step: Step): DataFrame = {
+    import step.operation._
+    import step.options
+
+    val struct = inputSchema(dataFrame, step)
+    val withoutFlowAudit = struct.filterNot(_.name == flowAuditColName).map(_.name)
+
+    val dataRefTypeFields =
+      options.dataType(resultDataType) match {
+        case Some(s: StructType) => Some(s.fields.map(_.name).filterNot(_ == flowAuditColName).toSet)
+        case _ => None
+      }
+
+    val engine = (
+      function.toLowerCase.replaceAll("_","") match {
+        case CollectRunnerName | "collectrunner" =>
+          (collectRunner(step.ruleSuite, resultDataType = options.dataType(resultDataType),
+            variablesPerFunc = options.int("variablesPerFunc", 40),
+            variableFuncGroup = options.int("variableFuncGroup", 20),
+            flatten = options.boolean(collectFlatten, true),
+            includeNulls = options.boolean(collectIncludeNulls),
+            useInPlaceArray = options.boolean(collectUseInPlaceArray, true),
+            unrollInPlaceArray = options.boolean(collectUnrollInPlaceArray),
+            unrollOutputArraySize = options.int(collectUnrollOutputArraySize, 1)).as(fieldName), Seq("ruleSuiteResults", "result"),
+            dataRefTypeFields
+          )
+        case EngineRunnerName | "ruleengine" | "ruleenginerunner" =>
+          (ruleEngineRunner(step.ruleSuite,
+            resultDataType = options.dataType(resultDataType),
+            debugMode = options.boolean(debugMode),
+            variablesPerFunc = options.int("variablesPerFunc", 40),
+            variableFuncGroup = options.int("variableFuncGroup", 20)).as(fieldName), Seq("ruleSuiteResults", "salientRule", "result"),
+            dataRefTypeFields
+          )
+        case FolderRunnerName | "folderrunner" =>
+          val rs =
+            if (step.ruleSuite.defaultProcessor != NoOpDefaultProcessor.noOp)
+              // even if the result is null, it's been chosen as such
+              step.ruleSuite
+            else
+              // identity function - let the row through
+              step.ruleSuite.copy(defaultProcessor = DefaultProcessor(Id(-1,-1), OutputExpression("row -> row")))
+
+          (ruleFolderRunner(rs,
+            startingStruct = options.expr(startingStruct).getOrElse{
+              // default to the current row - flow_audit otherwise MergeFields will have dupes
+              expr(s"struct(${withoutFlowAudit.mkString(",")})")
+            },
+            useType = options.structType("useType").orElse(options.structType(resultDataType)),
+            debugMode = options.boolean(debugMode),
+            variablesPerFunc = options.int("variablesPerFunc", 40),
+            variableFuncGroup = options.int("variableFuncGroup", 20)).as(fieldName), Seq("ruleSuiteResults", "result"),
+            dataRefTypeFields.orElse{
+              options.expr(startingStruct).flatMap(_ => None).orElse{
+                Some(withoutFlowAudit.toSet)
+              }
+            }
+          )
+        // TODO dq ?
+      } )
+
+    processResult(dataFrame, step, engine)
+
+  }
 
   protected def loadViews(sparkSession: SparkSession, step: Step): ViewLoadResults = {
     import sparkSession.implicits._
@@ -210,7 +251,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
     val starter = startStep(df, step)
     val res = process(starter, step)
 
-    if (isDebugEnabled || showInterim) {
+    if (isTraceEnabled || showInterim) {
       infoLogStep(step, "Result Sample")
       res.show()
     }
@@ -303,7 +344,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
    */
   def run(sparkSession: SparkSession, starting: Step => Option[DataFrame]): Map[String, (Step, DataFrame)] = {
     verifySteps()
-    info(s"Starting Flow id: ${flowId.id}, version: ${flowId.version}")
+    logInfo(s"Starting Flow id: ${flowId.id}, version: ${flowId.version}")
 
     val (rootPromises, promises) = buildPromises()
 
@@ -330,7 +371,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
     val all = Future.sequence(promises.map(_._2.future))
     val r = Await.result(all, duration)
 
-    info(s"Finished Flow id: ${flowId.id}, version: ${flowId.version}")
+    logInfo(s"Finished Flow id: ${flowId.id}, version: ${flowId.version}")
     r.map(p => p._1.name -> p).toMap
   }
 
@@ -352,22 +393,22 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
    */
   private def stepViewsLoaded(vl: ViewLoadResults, step: Step) = {
     if (vl.replaced.nonEmpty) {
-      info(s"")
+      logInfo(s"")
     }
 
     if (vl.failedToLoadDueToCycles && step.views.nonEmpty) {
-      val err = FlowException(s"View Cycle - Step ${step.name}, RuleSuite id: ${flowId.id}, version: ${flowId.version} could not be started due to view cycle detection")
-      error(err.msg)
+      val err = FlowException(s"View Cycle - Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} could not be started due to view cycle detection")
+      logError(err.msg)
       throw err
     }
     if (vl.notLoadedViews.nonEmpty) {
       if (vl.notLoadedViews.contains(step.inputView)) {
-        val err = FlowException(s"View Cycle - Step ${step.name}, RuleSuite id: ${flowId.id}, version: ${flowId.version} could not be started as the Steps inputView `${step.inputView}` could not be loaded")
-        error(err.msg)
+        val err = FlowException(s"View Cycle - Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} could not be started as the Steps inputView `${step.inputView}` could not be loaded")
+        logError(err.msg)
         throw err
       } else {
-        val msg = s"View Cycle - Step ${step.name}, RuleSuite id: ${flowId.id}, version: ${flowId.version} could not load the following views - "
-        warn(msg + vl.notLoadedViews.map(v => s"`$v`").mkString)
+        val msg = s"View Cycle - Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} could not load the following views - "
+        logWarning(msg + vl.notLoadedViews.map(v => s"`$v`").mkString)
       }
     } else {
       infoLogStep(step, "Views Loaded")
@@ -375,12 +416,44 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
   }
 
   /**
-   * Logs at info leve the step
+   * Logs at info level the step
    * @param step
-   * @param logInfo
+   * @param info extra logging information
    */
-  final protected def infoLogStep(step: Step, logInfo: String): Unit = {
-    info(s"Step ${step.name}, RuleSuite id: ${flowId.id}, version: ${flowId.version} $logInfo")
+  final def infoLogStep(step: Step, info: String): Unit = {
+    logInfo(s"Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} $info")
+  }
+  /**
+   * Logs at info level the step
+   * @param step
+   * @param info extra logging information
+   */
+  final def debugLogStep(step: Step, info: String): Unit = {
+    logInfo(s"Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} $info")
+  }
+  /**
+   * Logs at info level the step
+   * @param step
+   * @param info extra logging information
+   */
+  final def traceLogStep(step: Step, info: String): Unit = {
+    logTrace(s"Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} $info")
+  }
+  /**
+   * Logs at info level the step
+   * @param step
+   * @param info extra logging information
+   */
+  final def warnLogStep(step: Step, info: String): Unit = {
+    logWarning(s"Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} $info")
+  }
+  /**
+   * Logs at info level the step
+   * @param step
+   * @param info extra logging information
+   */
+  final protected def errorLogStep(step: Step, info: String): Unit = {
+    logError(s"Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} $info")
   }
 
   /**

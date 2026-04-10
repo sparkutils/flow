@@ -1,7 +1,7 @@
 package com.sparkutils.flowTests
 
 import com.sparkutils.flow.impl.util.FlowExceptionConstants.{CycleDetected, DuplicateNames, EmptyFlow, EmptyStepName, InvalidViewNames, MissingStep}
-import com.sparkutils.flow.{AsIs, Flow, FlowDataHandling, FlowException, MergeFields, Operation, OutputFieldOnly, StarOnly, Step, fromDatasets, toDatasets}
+import com.sparkutils.flow.{AsIs, Flow, FlowDataHandling, FlowException, MergeFields, Operation, OutputFieldOnly, OutputFieldsOnly, ResultApproach, StarOnly, Step, forceMergeProjection, fromDatasets, resultDataType, toDatasets}
 import com.sparkutils.flowTests.RulesGen.{rulesRaw, testData}
 import com.sparkutils.flowTests.utils.SharedPureConnectTests
 import com.sparkutils.quality.{DataFrameLoader, DefaultProcessor, ExpressionRule, Id, LambdaFunction, OutputExpression, Rule, RuleSet, RuleSuite, RuleSuiteGroupResults, RunOnPassProcessor, ViewRow, registerLambdaFunctions}
@@ -55,24 +55,24 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
       Step("a",Set.empty,rulesRaw(Seq(
         (ExpressionRule("product = 'edt'"),  RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("array(account_row('from'), account_row('to', 'other_account1'))")))
-      )), "view1", Seq.empty, Operation("engine", "view1E", Map.empty, AsIs), Map.empty, "view2"),
+      )), "view1", Seq.empty, Operation("engine", "view1E", AsIs), Map.empty, "view2"),
       Step("b",Set("a"),rulesRaw(Seq(
         (ExpressionRule("product like 'fx%'"),  RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("array(account_row('from'), account_row('from', 'other_account2'))")))
-      )).copy(id = Id(2,1)), "view2", Seq.empty, Operation("engine", "view2E", Map.empty, AsIs), Map.empty, "view3"//,
+      )).copy(id = Id(2,1)), "view2", Seq.empty, Operation("engine", "view2E", AsIs), Map.empty, "view3"//,
         //combineAuditWith = Some(Set("view1E"))
       ),
       Step("c",Set.empty,rulesRaw(Seq(
         (ExpressionRule("product == 'edt'"),  RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("null")))
-      )).copy(id = Id(3,1)), "view3", Seq.empty, Operation("engine", "view3E", Map.empty, AsIs), Map.empty, "view4"),
+      )).copy(id = Id(3,1)), "view3", Seq.empty, Operation("engine", "view3E", AsIs), Map.empty, "view4"),
       Step("d",Set("c", "b"),rulesRaw(Seq(
         (ExpressionRule("true"),  RunOnPassProcessor(1000, Id(1041, 1),
           OutputExpression("view1E.result")))
       )).copy(id = Id(4,1)), "filteredView4", Seq(
         ViewRow(ruleSuiteId = 4, ruleSuiteVersion = 1, name = "filteredView4", token = None, filter = None,
           sql = Some("select v4.*, v3.flow_audit view3_audit, v3.view1E from view4 v4 join view3 v3 on v4.product = v3.product where v4.view3E.salientRule is not null"))),
-        Operation("engine", "view4E", Map.empty, AsIs), Map.empty, "view5",
+        Operation("engine", "view4E", AsIs), Map.empty, "view5",
         combineAuditWith = Some(Set("view3_audit"))) // flow_audit here is from v4
     ))//, showInterim = true)
 
@@ -95,24 +95,24 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
     Step("a",Set.empty,rulesRaw(Seq(
       (ExpressionRule("product = 'edt'"),  RunOnPassProcessor(1000, Id(1040, 1),
         OutputExpression("array(account_row('from'), account_row('to', 'other_account1'))")))
-    )), "view1", Seq.empty, Operation("engine", "view1E", Map.empty, AsIs), Map.empty, "view2", cacheResults = true),
+    )), "view1", Seq.empty, Operation("engine", "view1E", AsIs), Map.empty, "view2", cacheResults = true),
     Step("b",Set("a"),rulesRaw(Seq(
       (ExpressionRule("product like 'fx%'"),  RunOnPassProcessor(1000, Id(1040, 1),
         OutputExpression("array(account_row('from'), account_row('from', 'other_account2'))")))
-    )).copy(id = Id(2,1)), "view2", Seq.empty, Operation("engine", "view2E", Map.empty, AsIs), Map.empty, "view3"),
+    )).copy(id = Id(2,1)), "view2", Seq.empty, Operation("engine", "view2E", AsIs), Map.empty, "view3"),
     Step("c",Set("a", "b"),rulesRaw(Seq(
       (ExpressionRule("view1E.result is not null"),  RunOnPassProcessor(1000, Id(1040, 1),
         OutputExpression("view1E.result"))),
       (ExpressionRule("view2E.result is not null"),  RunOnPassProcessor(1000, Id(1041, 1),
         OutputExpression("view2E.result")))
-    )).copy(id = Id(3,1)), "view3", Seq.empty, Operation("engine", "view3E", Map.empty, StarOnly), Map.empty, "view4"),
+    )).copy(id = Id(3,1)), "view3", Seq.empty, Operation("engine", "view3E", StarOnly), Map.empty, "view4"),
     Step("d",Set("c"),rulesRaw(Seq(
       (ExpressionRule("true"),  RunOnPassProcessor(1000, Id(1041, 1),
         OutputExpression("result")))
     )).copy(id = Id(4,1)), "filteredView4", Seq(
       ViewRow(ruleSuiteId = 4, ruleSuiteVersion = 1, name = "filteredView4", token = None, filter = None,
         sql = Some("select * from view4 where salientRule is not null"))),
-      Operation("engine", "view4E", Map.empty, OutputFieldOnly), Map.empty, "view5")
+      Operation("engine", "view4E", OutputFieldOnly), Map.empty, "view5")
   )) with FlowDataHandling {
     override protected def loadData(sparkSession: SparkSession, token: String): DataFrame = {
       if (dataHandling)
@@ -166,13 +166,13 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
       (ExpressionRule("product = 'edt'"),  RunOnPassProcessor(1000, Id(1040, 1),
         OutputExpression("set(subcode = 10)")))
     )), // identity should be added automatically
-      "view1", Seq.empty, Operation("folder", "view1E", Map.empty, MergeFields), Map.empty, "view2"),
+      "view1", Seq.empty, Operation("folder", "view1E", MergeFields), Map.empty, "view2"),
     Step("b",Set("a"),rulesRaw(Seq(
       (ExpressionRule("product like 'fx%'"),  RunOnPassProcessor(1000, Id(1040, 1),
         OutputExpression("set(account = 'newacc')")))
     )).copy(defaultProcessor = DefaultProcessor(Id(1041,1), OutputExpression("row -> row")),
       id = Id(2,0)), // force an identity default and Id change to verify combineAuditWith
-      "view2", Seq.empty, Operation("folder", "view2E", Map.empty, MergeFields), Map.empty, "view3",
+      "view2", Seq.empty, Operation("folder", "view2E", MergeFields), Map.empty, "view3",
     //  combineAuditWith = Some(Set("view1E"))
     )
   ))
@@ -221,15 +221,14 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
 
   test("merge fields with rules using fields which are not in the output") {
 
-    def flow(map: Map[String, String]) = {
+    def flow(map: Map[String, String], resultApproach: ResultApproach = MergeFields) = {
       val flow = new Flow(Id(1, 1), Seq(
         Step("a", Set.empty, rulesRaw(Seq(
           (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1040, 1),
             OutputExpression("struct('a' as a, c as b)")))
         )), // identity should be added automatically
-          "view1", Seq.empty, Operation("engine", "view1E", map, MergeFields), Map.empty, "view2")
+          "view1", Seq.empty, Operation("engine", "view1E", resultApproach), map, "view2")
       ))
-
 
       val s = sparkSession
       import s.implicits._
@@ -239,19 +238,36 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
       ).toDF("c", "d")
 
       val ir = flow.run(s, _ => Some(data))
-      ir.head._2._2.selectExpr("a", "b", "c", "d", "flow_audit", "view1E").collect().length shouldBe 1
+      val cols = Set("a", "b", "flow_audit", "view1E") ++ (
+        resultApproach match {
+          case OutputFieldsOnly => Seq()
+          case MergeFields => Set("c", "d")
+        }
+      )
+
+      ir.head._2._2.schema.map(_.name).toSet shouldBe cols
+      ir.head._2._2.collect().length shouldBe 1
     }
+
+    val resultType = Map(
+      resultDataType -> "struct<a: string, b: string>"
+    )
     // using quicker path
-    flow(Map(
-      "resultDataType" -> "struct<a: string, b: string>"
-    ))
+    flow(resultType)
     // extra projection
     flow(Map.empty)
 
+    val forcedType = resultType + (forceMergeProjection -> "true")
+
     // using resultType but forcing extra projection
-    flow(Map(
-      "resultDataType" -> "struct<a: string, b: string>",
-      "forceMergeProjection" -> "true"
-    ))
+    flow(forcedType)
+
+    // using quicker path
+    flow(resultType, OutputFieldsOnly)
+    // extra projection
+    flow(Map.empty, OutputFieldsOnly)
+
+    // using resultType but forcing extra projection
+    flow(forcedType, OutputFieldsOnly)
   }
 }
