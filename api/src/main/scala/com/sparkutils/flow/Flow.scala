@@ -158,7 +158,11 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
       case ExpandNested => dataFrame.select(columns ++ children :_*)
       case MergeFields => // dq probably doesn't work
 
-        outputFields.fold {
+        outputFields.flatMap{s =>
+          if (options.boolean("forceMergeProjection", false))
+            None
+          else
+            Some(s)}.fold {
 
           val starter = dataFrame.select(columns: _*)
           val og = starter.columns.toSet
@@ -173,7 +177,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
           val fields = withoutFlowAudit.toSet -- outputFields
 
           dataFrame.select(Seq(col, group_auditF) ++ fields.map(scol) ++
-            withoutFlowAudit.map(n => col.getField("result").getField(n).as(n) ) :_*)
+            outputFields.map(n => col.getField("result").getField(n).as(n) ) :_*)
 
         }
 

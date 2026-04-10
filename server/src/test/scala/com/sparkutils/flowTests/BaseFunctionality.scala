@@ -218,4 +218,40 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
     val (steps, name) = fromDatasets(sparkSession, dses, flow.flowId)
     doFolderTest(new Flow(flow.flowId, steps, name))
   }
+
+  test("merge fields with rules using fields which are not in the output") {
+
+    def flow(map: Map[String, String]) = {
+      val flow = new Flow(Id(1, 1), Seq(
+        Step("a", Set.empty, rulesRaw(Seq(
+          (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1040, 1),
+            OutputExpression("struct('a' as a, c as b)")))
+        )), // identity should be added automatically
+          "view1", Seq.empty, Operation("engine", "view1E", map, MergeFields), Map.empty, "view2")
+      ))
+
+
+      val s = sparkSession
+      import s.implicits._
+
+      val data = Seq(
+        Tuple2("c", 1)
+      ).toDF("c", "d")
+
+      val ir = flow.run(s, _ => Some(data))
+      ir.head._2._2.selectExpr("a", "b", "c", "d", "flow_audit", "view1E").collect().length shouldBe 1
+    }
+    // using quicker path
+    flow(Map(
+      "resultDataType" -> "struct<a: string, b: string>"
+    ))
+    // extra projection
+    flow(Map.empty)
+
+    // using resultType but forcing extra projection
+    flow(Map(
+      "resultDataType" -> "struct<a: string, b: string>",
+      "forceMergeProjection" -> "true"
+    ))
+  }
 }
