@@ -116,4 +116,29 @@ trait Constants {
    * @group input schema
    */
   val inputSchemaTimeTakenDefault: Duration = Duration(1, MINUTES)
+
+  /**
+   * DQ Runner name
+   */
+  val DQRunnerName = "dq"
+
+  /**
+   * Optional [[Step.options]] to specify a comma separated list of field names that must be "wrapped". This
+   * should only be used when issues such as UNSUPPORTED_FEATURE.LATERAL_COLUMN_ALIAS_IN_WINDOW occur and typically
+   * only possible with MergeFields or OutputFieldsOnly, the columns mentioned must be added to this set.
+   *
+   * E.g.
+   * {{{
+   *  [UNSUPPORTED_FEATURE.LATERAL_COLUMN_ALIAS_IN_WINDOW] The feature is not supported: Referencing a lateral column alias `c` in window expression "row_number() OVER (ORDER BY lateralAliasReference(c)
+   * }}}
+   *
+   * would require using the option
+   * {{{
+   * wrapInputFields -> "c"
+   * }}}
+   *
+   * @group advanced property
+   */
+  val wrapInputFields = "wrapInputFields"
+
 }

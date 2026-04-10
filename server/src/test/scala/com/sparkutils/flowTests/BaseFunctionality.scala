@@ -1,11 +1,12 @@
 package com.sparkutils.flowTests
 
 import com.sparkutils.flow.impl.util.FlowExceptionConstants.{CycleDetected, DuplicateNames, EmptyFlow, EmptyStepName, InvalidViewNames, MissingStep}
-import com.sparkutils.flow.{AsIs, Flow, FlowDataHandling, FlowException, MergeFields, Operation, OutputFieldOnly, OutputFieldsOnly, ResultApproach, StarOnly, Step, forceMergeProjection, fromDatasets, resultDataType, toDatasets}
+import com.sparkutils.flow.{AsIs, DQRunnerName, Flow, FlowDataHandling, FlowException, FolderRunnerName, MergeFields, Operation, OutputFieldOnly, OutputFieldsOnly, ResultApproach, StarOnly, Step, forceMergeProjection, fromDatasets, resultDataType, toDatasets, wrapInputFields}
 import com.sparkutils.flowTests.RulesGen.{rulesRaw, testData}
 import com.sparkutils.flowTests.utils.SharedPureConnectTests
-import com.sparkutils.quality.{DataFrameLoader, DefaultProcessor, ExpressionRule, Id, LambdaFunction, OutputExpression, Rule, RuleSet, RuleSuite, RuleSuiteGroupResults, RunOnPassProcessor, ViewRow, registerLambdaFunctions}
-import org.apache.spark.sql.{DataFrame, SparkSession}
+import com.sparkutils.quality.{DataFrameLoader, DefaultProcessor, ExpressionRule, Id, LambdaFunction, NoOpRunOnPassProcessor, OutputExpression, Passed, Rule, RuleSet, RuleSuite, RuleSuiteGroupResults, RunOnPassProcessor, ViewRow, registerLambdaFunctions}
+import org.apache.spark.SparkException
+import org.apache.spark.sql.{AnalysisException, DataFrame, SparkSession}
 import org.scalatest.Matchers
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -161,7 +162,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
     )
   }
 
-  def folderFlow = new Flow(Id(1,1), Seq(
+  def folderFlow(extraSteps: Seq[Step] = Seq.empty) = new Flow(Id(1,1), Seq(
     Step("a",Set.empty,rulesRaw(Seq(
       (ExpressionRule("product = 'edt'"),  RunOnPassProcessor(1000, Id(1040, 1),
         OutputExpression("set(subcode = 10)")))
@@ -175,10 +176,10 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
       "view2", Seq.empty, Operation("folder", "view2E", MergeFields), Map.empty, "view3",
     //  combineAuditWith = Some(Set("view1E"))
     )
-  ))
+  ) ++ extraSteps)
 
   test("folders should correctly nest and merge fields with chained audit") {
-    val flow = folderFlow
+    val flow = folderFlow()
 
     doFolderTest(flow)
   }
@@ -212,7 +213,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
   }
 
   test("Serialising for folder example") {
-    val flow = folderFlow
+    val flow = folderFlow()
     val dses = toDatasets(sparkSession, flow)
 
     val (steps, name) = fromDatasets(sparkSession, dses, flow.flowId)
@@ -225,7 +226,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
       val flow = new Flow(Id(1, 1), Seq(
         Step("a", Set.empty, rulesRaw(Seq(
           (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1040, 1),
-            OutputExpression("struct('a' as a, c as b)")))
+            OutputExpression("struct('a' as a, (c || cast(d as string)) as b)")))
         )), // identity should be added automatically
           "view1", Seq.empty, Operation("engine", "view1E", resultApproach), map, "view2")
       ))
@@ -269,5 +270,73 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
 
     // using resultType but forcing extra projection
     flow(forcedType, OutputFieldsOnly)
+  }
+
+  test("dq mixes in") {
+    val flow = folderFlow(Seq(
+      Step(
+        "c", Set("b"), rulesRaw(Seq(
+          (ExpressionRule("true"), NoOpRunOnPassProcessor.noOp)
+        )).copy(Id(100,1)), "view3", Seq.empty, Operation(DQRunnerName, "dq", AsIs), Map.empty, "view4")
+    ))
+
+    val s = sparkSession
+    import com.sparkutils.quality.implicits._
+    import s.implicits._
+    val res = flow.run(sparkSession, _ => Some(testData.toDF()))("c")._2
+
+    val cols = Set("view1E","view2E","product","account","subcode","dq","flow_audit")
+    res.schema.map(_.name).toSet shouldBe cols
+    val cres = res.selectExpr("flow_audit.*").as[RuleSuiteGroupResults].collect()
+    // all true
+    cres.map(r => r.ruleSuiteResults(Id(100,1)).overallResult).exists(r => r != Passed) shouldBe false
+  }
+
+  test("lca works - row_number") {
+
+    def rca(wrap: String = "", resultApproach: ResultApproach = OutputFieldsOnly, forceStar: Boolean = false) = {
+      val flow = new Flow(Id(1, 1), Seq(
+        Step("a", Set.empty, rulesRaw(Seq(
+          (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1040, 1),
+            OutputExpression("set(d = row_number() OVER (ORDER BY c))")))
+        )), // identity should be added automatically
+          "view1", Seq.empty, Operation("folder", "view1E", resultApproach), Map(
+            wrapInputFields -> wrap,
+            forceMergeProjection -> forceStar.toString
+          ), "view2")
+      ))
+
+      val s = sparkSession
+      import s.implicits._
+
+      val data = Seq(
+        Tuple2("c", 1)
+      ).toDF("c", "d")
+
+      val ir = flow.run(s, _ => Some(data))
+
+      ir.head._2._2.collect().length shouldBe 1
+    }
+
+    def testRCA(resultApproach: ResultApproach = OutputFieldsOnly) = {
+      val r = intercept[AnalysisException] {
+        rca(resultApproach = resultApproach)
+      }
+      r.getMessage should include("UNSUPPORTED_FEATURE.LATERAL_COLUMN_ALIAS_IN_WINDOW")
+      r.getMessage should include("lateralAliasReference(c)")
+    }
+    testRCA()
+    testRCA(resultApproach = MergeFields)
+    // force star adds a projection so it's always present
+    rca(forceStar = true)
+    rca(resultApproach = MergeFields, forceStar = true)
+
+    // The alias is c, so although it's the expression for d AND both c + d are required, only c actually needs it
+    rca("c")
+    rca("c", MergeFields)
+    // for completeness, but don't really add any functional testing
+    rca("c", forceStar = true)
+    rca("c", MergeFields, forceStar = true)
+
   }
 }

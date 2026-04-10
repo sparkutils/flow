@@ -5,7 +5,7 @@ import com.sparkutils.quality.impl.views.ViewLoadResults
 import org.apache.spark.sql.functions.{array, expr, col => scol}
 import org.apache.spark.sql.{Column, DataFrame, ShimUtils, SparkSession, functions}
 import Utils._
-import com.sparkutils.flow.impl.util.FlowExceptionConstants.{CycleDetected, DuplicateNames, EmptyFlow, EmptyStepName, InvalidViewNames, MissingStep}
+import com.sparkutils.flow.impl.util.FlowExceptionConstants.{CycleDetected, DuplicateNames, EmptyFlow, EmptyStepName, InvalidDQResultApproach, InvalidViewNames, MissingStep}
 import com.sparkutils.quality.functions.{group_audit, group_results}
 import com.sparkutils.quality.impl.Encoders
 import org.apache.spark.internal.Logging
@@ -76,7 +76,16 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
     import step.operation._
     import step.options
 
-    val (col, childrenRaw, outputFields) = engine
+    val (col, childrenRaw, outputFieldsI) = engine
+
+    val needsAWrap = options.strings(wrapInputFields)
+    val outputFields: Option[Set[String]] =
+      outputFieldsI.flatMap{s =>
+        if (options.boolean(forceMergeProjection))
+          None
+        else
+          Some(s)
+      }
 
     val struct = inputSchema(dataFrame, step)
     val withoutFlowAudit = struct.filterNot(_.name == flowAuditColName).map(_.name)
@@ -105,6 +114,18 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
         }.getOrElse(Seq.empty) ++ existingAudit
           :_*).as(flowAuditColName)
 
+    // if fields are present, either by default in the folder case or by providing a result type that is not an
+    // array we can directly process with a single projection.  In tests this, for 100k rows and a 14 Steps chain
+    // 958ms vs 896ms, shows significant enough improvements to special case
+    def withOutputFields(outputFields: Set[String], extraFields: Set[Column] = Set.empty) =
+      // wrapped needed as otherwise an lca will be added to any repetitive expressions
+      // this stops row number plus another of other queries running
+      dataFrame.select(Seq(col, group_auditF) ++ extraFields ++
+        outputFields.map{n =>
+          val c = col.getField("result").getField(n).as(n)
+          if (needsAWrap(n)) wrapped(c) else c
+        } :_*)
+
     // auto add audit
     val columns = starterColumns :+ group_auditF// :+ functions.size(group_auditF).as(flowAuditColName+"_size")
     resultApproach match {
@@ -112,11 +133,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
       case ExpandNested => dataFrame.select(columns ++ children :_*)
       case MergeFields => // dq probably doesn't work
 
-        outputFields.flatMap{s =>
-          if (options.boolean(forceMergeProjection))
-            None
-          else
-            Some(s)}.fold {
+        outputFields.fold {
 
           val starter = dataFrame.select(columns: _*)
           val og = starter.columns.toSet
@@ -125,23 +142,14 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
 
         }{ outputFields =>
 
-          // if fields are present, either by default in the folder case or by providing a result type that is not an
-          // array we can directly process with a single projection.  In tests this, for 100k rows and a 14 Steps chain
-          // 958ms vs 896ms, shows significant enough improvements to special case
           val fields = withoutFlowAudit.toSet -- outputFields
-
-          dataFrame.select(Seq(col, group_auditF) ++ fields.map(scol) ++
-            outputFields.map(n => col.getField("result").getField(n).as(n) ) :_*)
+          withOutputFields(outputFields, extraFields = fields.map(scol))
 
         }
 
       case OutputFieldsOnly =>
 
-        outputFields.flatMap{s =>
-          if (options.boolean(forceMergeProjection))
-            None
-          else
-            Some(s)}.fold {
+        outputFields.fold {
 
           val og = dataFrame.columns.toSet
           val starter = dataFrame.select(columns: _*)
@@ -149,11 +157,8 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
           starter.select((og -- startCols).map(scol).toSeq ++
             Seq(scol(fieldName), scol(flowAuditColName), expr(s"$fieldName.result.*")): _*)
 
-        }{ outputFields =>
-
-          dataFrame.select(Seq(col, group_auditF) ++
-            outputFields.map(n => col.getField("result").getField(n).as(n) ) :_*)
-
+        }{ o =>
+          withOutputFields(outputFields = o)
         }
 
       case StarOnly => dataFrame.select(children: _*)
@@ -221,7 +226,8 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
               }
             }
           )
-        // TODO dq ?
+        case DQRunnerName | "dqrulerunner" | "rulerunner" =>
+          (com.sparkutils.quality.ruleRunner(step.ruleSuite).as(fieldName), Seq(), None)
       } )
 
     processResult(dataFrame, step, engine)
@@ -304,7 +310,10 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
     (rootPromises, scala.collection.immutable.Map.empty ++ promises)
   }
 
-  private def verifySteps(): Unit = {
+  /**
+   * Base implementation of step verification
+   */
+  protected def verifySteps(): Unit = {
     def badViewName(name: String): Boolean = {
       (name eq null) || name.isEmpty
     }
@@ -328,6 +337,15 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
     cyc.foreach{
       cycle =>
         throw FlowException(s"$CycleDetected $cycle")
+    }
+
+    steps.foreach{
+      step =>
+        (step.operation.function, step.operation.resultApproach) match {
+          case (DQRunnerName | "dqrulerunner" | "rulerunner", MergeFields | OutputFieldsOnly) =>
+            throw FlowException(InvalidDQResultApproach(step))
+          case _ => ()
+        }
     }
   }
 
