@@ -115,15 +115,13 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
           :_*).as(flowAuditColName)
 
     // if fields are present, either by default in the folder case or by providing a result type that is not an
-    // array we can directly process with a single projection.  In tests this, for 100k rows and a 14 Steps chain
-    // 958ms vs 896ms, shows significant enough improvements to special case
-    def withOutputFields(outputFields: Set[String], extraFields: Set[Column] = Set.empty) =
+    // array we can remove two calls to columns action
+    def withOutputFields(starter: DataFrame, outputFields: Set[String], extraFields: Set[Column] = Set.empty) =
       // wrapped needed as otherwise an lca will be added to any repetitive expressions
       // this stops row number plus another of other queries running
-      dataFrame.select(Seq(col, group_auditF) ++ extraFields ++
+      starter.select(Seq(scol(fieldName), scol(flowAuditColName)) ++ extraFields ++
         outputFields.map{n =>
-          val c = col.getField("result").getField(n).as(n)
-          if (needsAWrap(n)) wrapped(c) else c
+          scol(s"$fieldName.result.$n").as(n)
         } :_*)
 
     // auto add audit
@@ -133,9 +131,9 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
       case ExpandNested => dataFrame.select(columns ++ children :_*)
       case MergeFields => // dq probably doesn't work
 
+        val starter = dataFrame.select(columns: _*)
         outputFields.fold {
 
-          val starter = dataFrame.select(columns: _*)
           val og = starter.columns.toSet
           val nested = starter.selectExpr(s"$fieldName.result.*").columns
           starter.select((og -- nested).map(scol).toSeq ++ Seq(expr(s"$fieldName.result.*")): _*)
@@ -143,22 +141,23 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
         }{ outputFields =>
 
           val fields = withoutFlowAudit.toSet -- outputFields
-          withOutputFields(outputFields, extraFields = fields.map(scol))
+          withOutputFields(dataFrame.select(columns: _*), outputFields, extraFields = fields.map(scol))
 
         }
 
       case OutputFieldsOnly =>
 
+        val starter = dataFrame.select(columns: _*)
+
         outputFields.fold {
 
           val og = dataFrame.columns.toSet
-          val starter = dataFrame.select(columns: _*)
           val startCols = starter.columns.toSet
           starter.select((og -- startCols).map(scol).toSeq ++
             Seq(scol(fieldName), scol(flowAuditColName), expr(s"$fieldName.result.*")): _*)
 
         }{ o =>
-          withOutputFields(outputFields = o)
+          withOutputFields(starter, outputFields = o)
         }
 
       case StarOnly => dataFrame.select(children: _*)

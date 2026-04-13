@@ -1,16 +1,13 @@
 package com.sparkutils.flowTests
 
-import com.sparkutils.flow.impl.util.FlowExceptionConstants.{CycleDetected, DuplicateNames, EmptyFlow, EmptyStepName, InvalidViewNames, MissingStep}
-import com.sparkutils.flow.{AsIs, DQRunnerName, Flow, FlowDataHandling, FlowException, FolderRunnerName, MergeFields, Operation, OutputFieldOnly, OutputFieldsOnly, ResultApproach, StarOnly, Step, forceMergeProjection, fromDatasets, resultDataType, toDatasets, wrapInputFields}
+import com.sparkutils.flow._
 import com.sparkutils.flowTests.RulesGen.{rulesRaw, testData}
 import com.sparkutils.flowTests.utils.SharedPureConnectTests
-import com.sparkutils.quality.{DataFrameLoader, DefaultProcessor, ExpressionRule, Id, LambdaFunction, NoOpRunOnPassProcessor, OutputExpression, Passed, Rule, RuleSet, RuleSuite, RuleSuiteGroupResults, RunOnPassProcessor, ViewRow, registerLambdaFunctions}
-import org.apache.spark.SparkException
+import com.sparkutils.quality._
 import org.apache.spark.sql.{AnalysisException, DataFrame, SparkSession}
 import org.scalatest.Matchers
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.util.Try
 
 case class TestOn(product: String, account: String, subcode: Int)
 
@@ -198,7 +195,6 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
       TestOn("eqotc", "4201", 60)
     )
 
-    import frameless._
     import com.sparkutils.quality.implicits._
     val rgs = res.selectExpr("flow_audit.*").as[RuleSuiteGroupResults].collect()
     verifyRuleSuites(rgs)(identity)
@@ -294,14 +290,16 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
 
   test("lca works - row_number") {
 
-    def rca(wrap: String = "", resultApproach: ResultApproach = OutputFieldsOnly, forceStar: Boolean = false) = {
+    def rca(view: String = "", resultApproach: ResultApproach = OutputFieldsOnly, forceStar: Boolean = false) = {
       val flow = new Flow(Id(1, 1), Seq(
         Step("a", Set.empty, rulesRaw(Seq(
           (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1040, 1),
-            OutputExpression("set(d = row_number() OVER (ORDER BY c))")))
+            OutputExpression(s"set(d = (row_number() OVER (ORDER BY ${view}c)) + 1 )"))),
+          (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1041, 1),
+            OutputExpression(s"set(c = if(${view}d = 2, 'a', 'b'))")))
         )), // identity should be added automatically
           "view1", Seq.empty, Operation("folder", "view1E", resultApproach), Map(
-            wrapInputFields -> wrap,
+            //wrapInputFields -> wrap,
             forceMergeProjection -> forceStar.toString
           ), "view2")
       ))
@@ -315,28 +313,29 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
 
       val ir = flow.run(s, _ => Some(data))
 
-      ir.head._2._2.collect().length shouldBe 1
+      ir.head._2._2.columns.toSet shouldBe Set("view1E", "flow_audit", "c", "d")
+      val d = ir.head._2._2.selectExpr("c", "d").as[(String,Option[Int])]
+
+      val r = d.collect()
+      r.length shouldBe 1
+      r.head shouldBe ("b",Some(2))
+      ir.head._2._2
     }
 
-    def testRCA(resultApproach: ResultApproach = OutputFieldsOnly) = {
-      val r = intercept[AnalysisException] {
-        rca(resultApproach = resultApproach)
-      }
-      r.getMessage should include("UNSUPPORTED_FEATURE.LATERAL_COLUMN_ALIAS_IN_WINDOW")
-      r.getMessage should include("lateralAliasReference(c)")
-    }
-    testRCA()
-    testRCA(resultApproach = MergeFields)
+    rca()
+    rca(resultApproach = MergeFields)
     // force star adds a projection so it's always present
     rca(forceStar = true)
     rca(resultApproach = MergeFields, forceStar = true)
 
-    // The alias is c, so although it's the expression for d AND both c + d are required, only c actually needs it
-    rca("c")
-    rca("c", MergeFields)
-    // for completeness, but don't really add any functional testing
-    rca("c", forceStar = true)
-    rca("c", MergeFields, forceStar = true)
+    val view1 = "view1."
 
+    // The alias is c, so although it's the expression for d AND both c + d are required, only c actually needs it
+    val r = rca(view1)
+    //r.show
+    rca(view1, MergeFields)
+    // for completeness, but don't really add any functional testing
+    rca(view1, forceStar = true)
+    rca(view1, MergeFields, forceStar = true)
   }
 }
