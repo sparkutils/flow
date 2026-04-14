@@ -1,6 +1,6 @@
 package com.sparkutils.flowTests.manual
 
-import com.sparkutils.flow.{Flow, MergeFields, Operation, Step}
+import com.sparkutils.flow.{Flow, MergeFields, Operation, Step, forceMergeProjection}
 import com.sparkutils.flowTests.RulesGen.rulesRaw
 import com.sparkutils.flowTests.utils.{SharedPureConnectTests, TestSetup}
 import com.sparkutils.quality
@@ -66,19 +66,23 @@ object CombineAuditBenchmark extends Bench.OfflineReport with TestUtils {
       Step("0", Set.empty, rulesRaw(Seq(
         (ExpressionRule("(lower % 2) = 0"),  RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("set(higher = lower + 10)")))
-      )), "view1", Seq.empty, Operation("folder", "view1E", MergeFields), Map.empty, "view2")) ++
-      stepsGen(params._1)).
+      )), "view1", Seq.empty, Operation("folder", "view1E", MergeFields), Map(
+        forceMergeProjection -> alternate.toString
+      ), "view2")) ++
+      stepsGen(params._1, alternate)).
       run(sparkSession, _ => Some(df(params._2))).
       head._2._2.write.format("noop").mode(Overwrite).save()
   }
 
-  def stepsGen(size: Int) =
+  def stepsGen(size: Int, alternate: Boolean) =
     for{i <- 1 until size} yield
       Step(s"$i", Set.empty, rulesRaw(Seq(
         (ExpressionRule("(higher % 5) = 0"),  RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("set(lower = lower - 3)")))
       )).copy(id = Id(i + 1,0)),// Id change to verify combineAuditWith
-        s"view${i+1}", Seq.empty, Operation("folder", s"view${i+1}E", MergeFields), Map.empty, s"view${i+2}")
+        s"view${i+1}", Seq.empty, Operation("folder", s"view${i+1}E", MergeFields), Map(
+          forceMergeProjection -> alternate.toString
+        ), s"view${i+2}")
 
   val rows = Gen.range("rows")(200000, 200000, 25000)
   val stepsCount = Gen.range("steps")(14, 14, 1)

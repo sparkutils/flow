@@ -78,7 +78,6 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
 
     val (col, childrenRaw, outputFieldsI) = engine
 
-    val needsAWrap = options.strings(wrapInputFields)
     val outputFields: Option[Set[String]] =
       outputFieldsI.flatMap{s =>
         if (options.boolean(forceMergeProjection))
@@ -115,17 +114,18 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
           :_*).as(flowAuditColName)
 
     // if fields are present, either by default in the folder case or by providing a result type that is not an
-    // array we can remove two calls to columns action
+    // array we can remove two calls to columns action, 632.73ms vs 554.88ms on using 14 chained engines 1 rule each
+    // forceMergeProjection on 200,000 rows
     def withOutputFields(starter: DataFrame, outputFields: Set[String], extraFields: Set[Column] = Set.empty) =
-      // wrapped needed as otherwise an lca will be added to any repetitive expressions
-      // this stops row number plus another of other queries running
+      // cannot be run directly on dataFrame as otherwise an lca will be added to any repetitive expressions
+      // this stops row number plus another of other queries running correctly in all circumstances
       starter.select(Seq(scol(fieldName), scol(flowAuditColName)) ++ extraFields ++
         outputFields.map{n =>
           scol(s"$fieldName.result.$n").as(n)
         } :_*)
 
     // auto add audit
-    val columns = starterColumns :+ group_auditF// :+ functions.size(group_auditF).as(flowAuditColName+"_size")
+    val columns = starterColumns :+ group_auditF
     resultApproach match {
       case AsIs => dataFrame.select(columns :_*)
       case ExpandNested => dataFrame.select(columns ++ children :_*)
