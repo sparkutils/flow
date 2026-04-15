@@ -28,22 +28,22 @@ class StepValidation extends SharedPureConnectTests with Matchers {
       val flow =
         new Flow(Id(1,1), Seq(
           Step("a",Set.empty, Operation(rulesRaw(Seq(
-            )), "engine", "view1E", AsIs),
+            )), "engine", AsIs, "view1E"),
             data = StepData("view1", "view2")),
           Step("b",Set("a"), Operation(rulesRaw(Seq(
-            )).copy(id = Id(2,1)), "engine", "view2E", AsIs),
+            )).copy(id = Id(2,1)), "engine", AsIs, "view2E"),
             data = StepData("view2", "view3")),
           Step("a",Set.empty, Operation(rulesRaw(Seq(
-            )).copy(id = Id(3,1)), "engine", "view3E", StarOnly),
+            )).copy(id = Id(3,1)), "engine", StarOnly, "view3E"),
             data = StepData("view3", "view4")),
           Step("d",Set("c", "b"), Operation(rulesRaw(Seq(
-            )).copy(id = Id(4,1)), "engine", "view4E", OutputFieldOnly),
+            )).copy(id = Id(4,1)), "engine", OutputFieldOnly, "view4E"),
             data = StepData("filteredView4", "view5")),
           Step("c",Set("c", "b"), Operation(rulesRaw(Seq(
-            )).copy(id = Id(4,1)), "engine", "view4E", OutputFieldOnly),
+            )).copy(id = Id(4,1)), "engine", OutputFieldOnly, "view4E"),
             data = StepData("filteredView4", "view5")),
           Step("d",Set("c", "b"), Operation(rulesRaw(Seq(
-            )).copy(id = Id(4,1)), "engine", "view4E", OutputFieldOnly),
+            )).copy(id = Id(4,1)), "engine", OutputFieldOnly, "view4E"),
             data = StepData("filteredView4", "view5"))
         ))
       doSimpleEngine(flow)
@@ -55,11 +55,11 @@ class StepValidation extends SharedPureConnectTests with Matchers {
     val r = intercept[FlowException]{
       val flow =
         new Flow(Id(1,1), Seq(
-          Step("a",Set.empty, Operation(rulesRaw(Seq()), "engine", "view1E", AsIs),
+          Step("a",Set.empty, Operation(rulesRaw(Seq()), "engine", AsIs, "view1E"),
             data = StepData("view1", "view2")),
-          Step("b",Set("a"), Operation(rulesRaw(Seq( )).copy(id = Id(2,1)), "engine", "view2E", AsIs),
+          Step("b",Set("a"), Operation(rulesRaw(Seq( )).copy(id = Id(2,1)), "engine", AsIs, "view2E"),
             data = StepData("view2", "view3")),
-          Step("d",Set("c", "b"), Operation(rulesRaw(Seq()).copy(id = Id(4,1)), "engine", "view4E", OutputFieldOnly),
+          Step("d",Set("c", "b"), Operation(rulesRaw(Seq()).copy(id = Id(4,1)), "engine", OutputFieldOnly, "view4E"),
             data = StepData("filteredView4",  "view5"))
         ))
       doSimpleEngine(flow)
@@ -72,13 +72,13 @@ class StepValidation extends SharedPureConnectTests with Matchers {
       val r = intercept[FlowException] {
         val flow =
           new Flow(Id(1, 1), Seq(
-            Step("a", Set.empty, Operation(rulesRaw(Seq()), "engine", "view1E", AsIs),
+            Step("a", Set.empty, Operation(rulesRaw(Seq()), "engine", AsIs, "view1E"),
               data = StepData("view1", "view2")),
             Step(name, Set("a"), Operation(rulesRaw(Seq(
-              )).copy(id = Id(2, 1)), "engine", "view2E", AsIs),
+              )).copy(id = Id(2, 1)), "engine", AsIs, "view2E"),
               data = StepData( "view2", "view3")),
             Step("d", Set("c", "b"), Operation(rulesRaw(Seq(
-              )).copy(id = Id(4, 1)), "engine", "view4E", OutputFieldOnly),
+              )).copy(id = Id(4, 1)), "engine", OutputFieldOnly, "view4E"),
               data = StepData("filteredView4", "view5"))
           ))
         doSimpleEngine(flow)
@@ -91,16 +91,16 @@ class StepValidation extends SharedPureConnectTests with Matchers {
 
   def testNames(name: String, parents: Set[String] = Set("c"), err: Step => String = InvalidViewNames) = {
     val d = Step("d", parents,
-      Operation(rulesRaw(Seq()).copy(id = Id(4, 1)), "engine", "view3", OutputFieldOnly),
+      Operation(rulesRaw(Seq()).copy(id = Id(4, 1)), "engine", OutputFieldOnly, "view3"),
       data = StepData(name, "view5")
     )
 
     val r = intercept[FlowException] {
       val flow =
         new Flow(Id(1, 1), Seq(
-          Step("a", Set.empty, Operation(rulesRaw(Seq()), "engine", "view1E", AsIs),
+          Step("a", Set.empty, Operation(rulesRaw(Seq()), "engine", AsIs, "view1E"),
             data = StepData("view1", "view2")),
-          Step("b", Set("a"), Operation(rulesRaw(Seq()).copy(id = Id(2, 1)), "engine", "view2E", AsIs),
+          Step("b", Set("a"), Operation(rulesRaw(Seq()).copy(id = Id(2, 1)), "engine", AsIs, "view2E"),
             data = StepData("view2", "view3")),
           d
         ))
@@ -123,13 +123,13 @@ class StepValidation extends SharedPureConnectTests with Matchers {
     val r = intercept[FlowException]{
       val flow =
         new Flow(Id(1,1), Seq(
-          Step("a",Set.empty, Operation(rulesRaw(Seq()), "engine", "view1E", AsIs),
+          Step("a",Set.empty, Operation(rulesRaw(Seq()), "engine", AsIs, "view1E"),
             data = StepData("view1", "view2")),
-          Step("b",Set("a","c"), Operation(rulesRaw(Seq()).copy(id = Id(2,1)), "engine", "view2E", AsIs),
+          Step("b",Set("a","c"), Operation(rulesRaw(Seq()).copy(id = Id(2,1)), "engine", AsIs, "view2E"),
             data = StepData("view2", "view3")),
-          Step("c",Set("c", "b"), Operation(rulesRaw(Seq()).copy(id = Id(4,1)), "engine", "view4E", OutputFieldOnly),
+          Step("c",Set("c", "b"), Operation(rulesRaw(Seq()).copy(id = Id(4,1)), "engine", OutputFieldOnly, "view4E"),
             data = StepData("filteredView4", "view5")),
-          Step("d",Set("c", "b"), Operation(rulesRaw(Seq()).copy(id = Id(4,1)), "engine", "view4E", OutputFieldOnly),
+          Step("d",Set("c", "b"), Operation(rulesRaw(Seq()).copy(id = Id(4,1)), "engine", OutputFieldOnly, "view4E"),
             data = StepData("filteredView4", "view5"))
         ))
       doSimpleEngine(flow)
@@ -140,16 +140,16 @@ class StepValidation extends SharedPureConnectTests with Matchers {
   test("dq with certain processing combinations should fail") { // correct dq is in the "dq mixes in..." test
     def withOutput(resultApproach: ResultApproach) = {
       val step = Step("d", Set("c", "b"),
-        Operation(rulesRaw(Seq()).copy(id = Id(4, 1)), "dq", "view4E", resultApproach),
+        Operation(rulesRaw(Seq()).copy(id = Id(4, 1)), "dq", resultApproach, "view4E"),
         data = StepData("filteredView4", "view5"))
       val r = intercept[FlowException] {
         val flow =
           new Flow(Id(1, 1), Seq(
-            Step("a", Set.empty, Operation(rulesRaw(Seq()), "engine", "view1E", AsIs),
+            Step("a", Set.empty, Operation(rulesRaw(Seq()), "engine", AsIs, "view1E"),
               data = StepData("view1", "view2")),
-            Step("b", Set("a"), Operation(rulesRaw(Seq()).copy(id = Id(2, 1)), "engine", "view2E", AsIs),
+            Step("b", Set("a"), Operation(rulesRaw(Seq()).copy(id = Id(2, 1)), "engine", AsIs, "view2E"),
               data = StepData("view2", "view3")),
-            Step("c", Set(), Operation(rulesRaw(Seq()).copy(id = Id(4, 1)), "engine", "view4E", OutputFieldOnly),
+            Step("c", Set(), Operation(rulesRaw(Seq()).copy(id = Id(4, 1)), "engine", OutputFieldOnly, "view4E"),
               data = StepData("filteredView4", "view5")),
             step
           ))

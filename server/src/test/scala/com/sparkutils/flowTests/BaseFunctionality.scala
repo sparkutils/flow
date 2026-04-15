@@ -47,30 +47,30 @@ object RulesGen {
 
 class BaseFunctionality extends SharedPureConnectTests with Matchers {
 
-  test("multiple roots and paths should work") {
+  test("multiple roots and paths should work, along with default columns and views") {
     // a and c are roots, d joins both c and b
     val flow = new Flow(Id(1,1), Seq(
       Step("a",Set.empty, Operation(rulesRaw(Seq(
         (ExpressionRule("product = 'edt'"), RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("array(account_row('from'), account_row('to', 'other_account1'))")))
-        )), "engine", "view1E", AsIs), data = StepData("view1", "view2")),
+        )), "engine", AsIs)),
       Step("b",Set("a"), Operation(rulesRaw(Seq(
         (ExpressionRule("product like 'fx%'"), RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("array(account_row('from'), account_row('from', 'other_account2'))")))
-        )).copy(id = Id(2,1)), "engine", "view2E", AsIs), data = StepData("view2", "view3")),
+        )).copy(id = Id(2,1)), "engine", AsIs)),
       Step("c",Set.empty, Operation(rulesRaw(Seq(
         (ExpressionRule("product == 'edt'"),  RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("null")))
-        )).copy(id = Id(3,1)), "engine", "view3E", AsIs), data = StepData("view3", "view4")),
+        )).copy(id = Id(3,1)), "engine", AsIs)),
       Step("d",Set("c", "b"), Operation(rulesRaw(Seq(
         (ExpressionRule("true"),  RunOnPassProcessor(1000, Id(1041, 1),
-          OutputExpression("view1E.result")))
-        )).copy(id = Id(4,1)), "engine", "view4E", AsIs, combineAuditWith = Some(Set("view3_audit"))),
+          OutputExpression("a.result")))
+        )).copy(id = Id(4,1)), "engine", AsIs, combineAuditWith = Set("view3_audit")),
         initConfiguration = StepInitConfiguration(viewConfig = Seq(
           ViewRow(ruleSuiteId = 4, ruleSuiteVersion = 1, name = "filteredView4", token = None, filter = None,
-          sql = Some("select v4.*, v3.flow_audit view3_audit, v3.view1E from view4 v4 join view3 v3 on " +
-            "v4.product = v3.product where v4.view3E.salientRule is not null")))),
-        data = StepData("filteredView4",  "view5")
+          sql = Some("select v4.*, v3.flow_audit view3_audit, v3.a from c v4 join b v3 on " +
+            "v4.product = v3.product where v4.c.salientRule is not null")))),
+        data = StepData(inputView = Some("filteredView4"))
         ) // flow_audit here is from v4
     ))//, showInterim = true)
 
@@ -93,21 +93,21 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
     Step("a",Set.empty, Operation(rulesRaw(Seq(
       (ExpressionRule("product = 'edt'"), RunOnPassProcessor(1000, Id(1040, 1),
         OutputExpression("array(account_row('from'), account_row('to', 'other_account1'))")))
-    )), "engine", "view1E", AsIs), data = StepData( "view1", "view2", cacheResults = true)),
+    )), "engine", AsIs, "view1E"), data = StepData( "view1", "view2", cacheResults = true)),
     Step("b",Set("a"), Operation(rulesRaw(Seq(
       (ExpressionRule("product like 'fx%'"), RunOnPassProcessor(1000, Id(1040, 1),
         OutputExpression("array(account_row('from'), account_row('from', 'other_account2'))")))
-    )).copy(id = Id(2,1)), "engine", "view2E", AsIs), data = StepData("view2", "view3")),
+    )).copy(id = Id(2,1)), "engine", AsIs, "view2E"), data = StepData("view2", "view3")),
     Step("c",Set("a", "b"), Operation(rulesRaw(Seq(
       (ExpressionRule("view1E.result is not null"), RunOnPassProcessor(1000, Id(1040, 1),
         OutputExpression("view1E.result"))),
       (ExpressionRule("view2E.result is not null"), RunOnPassProcessor(1000, Id(1041, 1),
         OutputExpression("view2E.result")))
-    )).copy(id = Id(3,1)),"engine", "view3E", StarOnly), data = StepData("view3",  "view4")),
+    )).copy(id = Id(3,1)),"engine", StarOnly, "view3E"), data = StepData("view3",  "view4")),
     Step("d",Set("c"), Operation(rulesRaw(Seq(
       (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1041, 1),
         OutputExpression("result")))
-    )).copy(id = Id(4,1)), "engine", "view4E", OutputFieldOnly),
+    )).copy(id = Id(4,1)), "engine", OutputFieldOnly, "view4E"),
       initConfiguration = StepInitConfiguration(viewConfig = Seq(
         ViewRow(ruleSuiteId = 4, ruleSuiteVersion = 1, name = "filteredView4", token = None, filter = None,
           sql = Some("select * from view4 where salientRule is not null")))),
@@ -164,13 +164,13 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
     Step("a",Set.empty, Operation(rulesRaw(Seq(
       (ExpressionRule("product = 'edt'"), RunOnPassProcessor(1000, Id(1040, 1),
         OutputExpression("set(subcode = 10)")))
-      )), "folder", "view1E", MergeFields), // identity should be added automatically
+      )), "folder", MergeFields, "view1E"), // identity should be added automatically
       data = StepData("view1", "view2")),
     Step("b",Set("a"), Operation(rulesRaw(Seq(
       (ExpressionRule("product like 'fx%'"), RunOnPassProcessor(1000, Id(1040, 1),
         OutputExpression("set(account = 'newacc')")))
       )).copy(defaultProcessor = DefaultProcessor(Id(1041,1), OutputExpression("row -> row")),
-      id = Id(2,0)), "folder", "view2E", MergeFields),
+      id = Id(2,0)), "folder", MergeFields, "view2E"),
       data = StepData("view2", "view3")
     )
   ) ++ extraSteps)
@@ -223,7 +223,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
         Step("a", Set.empty, Operation(rulesRaw(Seq(
           (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1040, 1),
             OutputExpression("struct('a' as a, (c || cast(d as string)) as b)")))
-          )), "engine", "view1E", resultApproach), // identity should be added automatically
+          )), "engine", resultApproach, "view1E"), // identity should be added automatically
           options = map, data = StepData("view1", "view2")
         )
       ))
@@ -274,7 +274,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
       Step(
         "c", Set("b"), Operation(rulesRaw(Seq(
           (ExpressionRule("true"), NoOpRunOnPassProcessor.noOp)
-        )).copy(Id(100,1)), DQRunnerName, "dq", AsIs),
+        )).copy(Id(100,1)), DQRunnerName, AsIs, "dq"),
         data = StepData("view3", "view4")
       )
     ))
@@ -300,7 +300,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
             OutputExpression(s"set(d = (row_number() OVER (ORDER BY ${view}c)) + 1 )"))),
           (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1041, 1),
             OutputExpression(s"set(c = if(${view}d = 2, 'a', 'b'))")))
-          )), "folder", "view1E", resultApproach), // identity should be added automatically
+          )), "folder", resultApproach, "view1E"), // identity should be added automatically
           options = Map(
               //wrapInputFields -> wrap,
               forceMergeProjection -> forceStar.toString

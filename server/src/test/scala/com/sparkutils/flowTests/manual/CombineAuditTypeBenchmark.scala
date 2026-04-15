@@ -66,7 +66,7 @@ object CombineAuditBenchmark extends Bench.OfflineReport with TestUtils {
       Step("0", Set.empty, Operation(rulesRaw(Seq(
         (ExpressionRule("(lower % 2) = 0"), RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("set(higher = lower + 10)")))
-        )), "folder", "view1E", MergeFields),
+        )), "folder", MergeFields, "view1E"),
         options = Map(
           forceMergeProjection -> alternate.toString
         ),
@@ -82,7 +82,7 @@ object CombineAuditBenchmark extends Bench.OfflineReport with TestUtils {
         (ExpressionRule("(higher % 5) = 0"), RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("set(lower = lower - 3)")))
         )).copy(id = Id(i + 1,0)),// Id change to verify combineAuditWith
-        "folder", s"view${i+1}E", MergeFields),
+        "folder", MergeFields, s"view${i+1}E"),
         options = Map(
           forceMergeProjection -> alternate.toString
         ),

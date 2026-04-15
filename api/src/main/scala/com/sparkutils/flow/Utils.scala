@@ -1,7 +1,6 @@
 package com.sparkutils.flow
 
-import org.apache.spark.sql.functions.expr
-import org.apache.spark.sql.{Column, ShimUtils, functions}
+import org.apache.spark.sql.{Column, functions}
 import org.apache.spark.sql.types.{DataType, StructType}
 
 import scala.concurrent.duration.{Duration, NANOSECONDS}
@@ -57,7 +56,4 @@ object Utils {
     (ret, Duration(end - start, NANOSECONDS))
   }
 
-  /* wraps the input to ensure it can be processed in rules */
-  protected[flow] def wrapped(column: Column): Column =
-    ShimUtils.callFunction("processor_input_wrapper", expr("*"), column)
 }

@@ -62,19 +62,27 @@ case object OutputFieldOnly extends ResultApproach
  * Represents an operation on a dataset
  * @param ruleSuite the rulesuite used by the named [[function]]
  * @param function either the quality function collect
- * @param fieldName the expression column name
+ * @param fieldName the optional expression column name, when not provided the [[Step.defaultFieldName]] is used
  * @param resultApproach how should the resulting data be processed
  * @param combineAuditWith provide additional expressions to group_audit e.g. group_audit( operationFieldName, audit expression 1,
  *                         audit expression 2, ... )
  *                         with the operation fieldName automatically provided
  */
 @SerialVersionUID(1L)
-case class Operation(ruleSuite: RuleSuite, function: String, fieldName: String, resultApproach: ResultApproach,
+case class Operation(ruleSuite: RuleSuite, function: String, resultApproach: ResultApproach,
+                     fieldName: Option[String] = None,
                      combineAuditWith: Option[Set[String]] = None)
   extends Serializable
 
-// TODO adding maps requires moving to spark 4
-
+object Operation {
+  def apply(ruleSuite: RuleSuite, function: String, resultApproach: ResultApproach,
+            fieldName: String): Operation = Operation(ruleSuite, function, resultApproach, Option(fieldName))
+  def apply(ruleSuite: RuleSuite, function: String, resultApproach: ResultApproach,
+            fieldName: String, combineAuditWith: Set[String]): Operation =
+    Operation(ruleSuite, function, resultApproach, Option(fieldName), Option(combineAuditWith))
+  def apply(ruleSuite: RuleSuite, function: String, resultApproach: ResultApproach, combineAuditWith: Set[String]): Operation =
+    new Operation(ruleSuite, function, resultApproach, combineAuditWith = Option(combineAuditWith))
+}
 
 /**
  * Represents configuration information for a step, views and maps
@@ -122,4 +130,9 @@ case class Step(name: String, dependencies: Set[String], operation: Operation,
    * @return
    */
   def defaultOutputViewName: String = data.outputView.getOrElse(name)
+
+  /**
+   * The default field name or provided one, when present
+   */
+  def defaultFieldName: String = operation.fieldName.getOrElse(name)
 }

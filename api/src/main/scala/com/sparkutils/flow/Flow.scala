@@ -113,6 +113,8 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
         }.getOrElse(Seq.empty) ++ existingAudit
           :_*).as(flowAuditColName)
 
+    val fieldName = step.defaultFieldName
+
     // if fields are present, either by default in the folder case or by providing a result type that is not an
     // array we can remove two calls to columns action, 632.73ms vs 554.88ms on using 14 chained engines 1 rule each
     // forceMergeProjection on 200,000 rows
@@ -170,6 +172,8 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
   private def process(dataFrame: DataFrame, step: Step): DataFrame = {
     import step.operation._
     import step.options
+
+    val fieldName = step.defaultFieldName
 
     val struct = inputSchema(dataFrame, step)
     val withoutFlowAudit = struct.filterNot(_.name == flowAuditColName).map(_.name)
@@ -314,41 +318,46 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
    */
   def verifySteps(): Unit = {
     def badViewName(name: String): Boolean = {
-      (name eq null) || name.isEmpty
+      name.isEmpty
     }
+    try {
+      if (steps.isEmpty) {
+        throw FlowException(EmptyFlow)
+      }
+      if (steps.exists(s => (s.name eq null) || s.name.isEmpty)) {
+        throw FlowException(EmptyStepName)
+      }
+      steps.find(s => (s.data.inputView.exists(badViewName) || s.data.inputView.isEmpty) && s.dependencies.size > 1).foreach {
+        step =>
+          throw FlowException(DefaultViewNamesMultipleParents(step))
+      }
+      steps.find(s => s.data.inputView.exists(badViewName) || s.data.outputView.exists(badViewName)).foreach {
+        step =>
+          throw FlowException(InvalidViewNames(step))
+      }
+      val dupes = steps.groupBy(_.name).filter(_._2.size > 1)
+      if (dupes.nonEmpty) {
+        throw FlowException(s"$DuplicateNames (${dupes.keys.mkString(",")})")
+      }
+      val cyc = theGraph.findCycle
+      // for info only val paths = roots.map( n => n -> theGraph.get(n).outerNodeTraverser.toSeq )
+      cyc.foreach {
+        cycle =>
+          throw FlowException(s"$CycleDetected $cycle")
+      }
 
-    if (steps.isEmpty) {
-      throw FlowException(EmptyFlow)
-    }
-    if (steps.exists(s => (s.name eq null) || s.name.isEmpty)) {
-      throw FlowException(EmptyStepName)
-    }
-    steps.find(s => (s.data.inputView.exists(badViewName) || s.data.inputView.isEmpty) && s.dependencies.size > 1).foreach{
-      step =>
-        throw FlowException(DefaultViewNamesMultipleParents(step))
-    }
-    steps.find(s => s.data.inputView.exists(badViewName) || s.data.outputView.exists(badViewName)).foreach{
-      step =>
-      throw FlowException(InvalidViewNames(step))
-    }
-    val dupes = steps.groupBy(_.name).filter(_._2.size > 1)
-    if (dupes.nonEmpty) {
-      throw FlowException(s"$DuplicateNames (${dupes.keys.mkString(",")})")
-    }
-    val cyc = theGraph.findCycle
-    // for info only val paths = roots.map( n => n -> theGraph.get(n).outerNodeTraverser.toSeq )
-    cyc.foreach{
-      cycle =>
-        throw FlowException(s"$CycleDetected $cycle")
-    }
-
-    steps.foreach{
-      step =>
-        (step.operation.function, step.operation.resultApproach) match {
-          case (DQRunnerName | "dqrulerunner" | "rulerunner", MergeFields | OutputFieldsOnly) =>
-            throw FlowException(InvalidDQResultApproach(step))
-          case _ => ()
-        }
+      steps.foreach {
+        step =>
+          (step.operation.function, step.operation.resultApproach) match {
+            case (DQRunnerName | "dqrulerunner" | "rulerunner", MergeFields | OutputFieldsOnly) =>
+              throw FlowException(InvalidDQResultApproach(step))
+            case _ => ()
+          }
+      }
+    } catch {
+      case f: FlowException =>
+        logError(f.msg, f)
+        throw f
     }
   }
 
@@ -415,18 +424,18 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
    */
   private def stepViewsLoaded(vl: ViewLoadResults, step: Step) = {
     if (vl.replaced.nonEmpty) {
-      logInfo(s"")
+      logInfo(s"Views in Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} were replaced `${vl.replaced.mkString(",")}`")
     }
 
     if (vl.failedToLoadDueToCycles && step.initConfiguration.viewConfig.nonEmpty) {
       val err = FlowException(s"View Cycle - Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} could not be started due to view cycle detection")
-      logError(err.msg)
+      logError(err.msg, err)
       throw err
     }
     if (vl.notLoadedViews.nonEmpty) {
       if (vl.notLoadedViews.exists(step.data.inputView.contains)) {
         val err = FlowException(s"View Cycle - Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} could not be started as the Steps inputView `${step.data.inputView}` could not be loaded")
-        logError(err.msg)
+        logError(err.msg, err)
         throw err
       } else {
         val msg = s"View Cycle - Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} could not load the following views - "

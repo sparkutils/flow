@@ -7,7 +7,7 @@ import org.apache.spark.sql.{Column, DataFrame, Dataset, Encoder, SparkSession}
 import org.apache.spark.sql.functions.col
 
 @SerialVersionUID(1L)
-case class OperationRow(function: String, fieldName: String, resultApproach: ResultApproach, combineAuditWith: Option[Set[String]] = None)
+case class OperationRow(function: String, fieldName: Option[String], resultApproach: ResultApproach, combineAuditWith: Option[Set[String]] = None)
 
 @SerialVersionUID(1L)
 case class StepRow(flowId: Int, flowVersion: Int, name: String, dependencies: scala.collection.immutable.Set[String], ruleSuiteId: Int,
@@ -90,7 +90,7 @@ trait Serialisation {
       }),
       Some(flow.steps.foldLeft(sparkSession.emptyDataset[OutputExpressionRow]){ case (cur, s) =>
         toOutputExpressionDS(s.operation.ruleSuite) union cur
-      } union defaultOutputRows.toDS),
+      } union defaultOutputRows.toDS()),
       ruleSuites = Some(suites.map(_._1).toDS()),
       viewRows = Some(flow.steps.foldLeft(sparkSession.emptyDataset[ViewRow]){ case (cur, s) =>
          s.initConfiguration.viewConfig.toDS() union cur
@@ -123,7 +123,7 @@ trait Serialisation {
       if (thisFlow.isEmpty) {
         "flow_audit"
       } else {
-        thisFlow.head.flowAuditColName
+        thisFlow.head().flowAuditColName
       }
 
     val thisSteps =
@@ -141,8 +141,8 @@ trait Serialisation {
           }.getOrElse(Seq.empty)
 
           Step(name = step.name, dependencies = step.dependencies, operation =
-            Operation(rs, step.operation.function, step.operation.fieldName,
-              step.operation.resultApproach, step.operation.combineAuditWith),
+            Operation(rs, step.operation.function, step.operation.resultApproach,
+              step.operation.fieldName, step.operation.combineAuditWith),
             initConfiguration = StepInitConfiguration(views, maps),
             data = step.data, step.options)
       }
