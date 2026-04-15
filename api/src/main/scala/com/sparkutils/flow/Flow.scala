@@ -5,7 +5,7 @@ import com.sparkutils.quality.impl.views.ViewLoadResults
 import org.apache.spark.sql.functions.{array, expr, col => scol}
 import org.apache.spark.sql.{Column, DataFrame, ShimUtils, SparkSession, functions}
 import Utils._
-import com.sparkutils.flow.impl.util.FlowExceptionConstants.{CycleDetected, DuplicateNames, EmptyFlow, EmptyStepName, InvalidDQResultApproach, InvalidViewNames, MissingStep}
+import com.sparkutils.flow.impl.util.FlowExceptionConstants.{CycleDetected, DefaultViewNamesMultipleParents, DuplicateNames, EmptyFlow, EmptyStepName, InvalidDQResultApproach, InvalidViewNames, MissingStep}
 import com.sparkutils.quality.functions.{group_audit, group_results}
 import com.sparkutils.quality.impl.Encoders
 import org.apache.spark.internal.Logging
@@ -108,7 +108,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
 
     val group_auditF =
       group_audit( col,
-        step.combineAuditWith.map{ fnames =>
+        step.operation.combineAuditWith.map{ fnames =>
           fnames.map{fname => expr(fname)}.toSeq
         }.getOrElse(Seq.empty) ++ existingAudit
           :_*).as(flowAuditColName)
@@ -183,7 +183,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
     val engine = (
       function.toLowerCase.replaceAll("_","") match {
         case CollectRunnerName | "collectrunner" =>
-          (collectRunner(step.ruleSuite, resultDataType = options.dataType(resultDataType),
+          (collectRunner(step.operation.ruleSuite, resultDataType = options.dataType(resultDataType),
             variablesPerFunc = options.int("variablesPerFunc", 40),
             variableFuncGroup = options.int("variableFuncGroup", 20),
             flatten = options.boolean(collectFlatten, true),
@@ -194,7 +194,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
             dataRefTypeFields
           )
         case EngineRunnerName | "ruleengine" | "ruleenginerunner" =>
-          (ruleEngineRunner(step.ruleSuite,
+          (ruleEngineRunner(step.operation.ruleSuite,
             resultDataType = options.dataType(resultDataType),
             debugMode = options.boolean(debugMode),
             variablesPerFunc = options.int("variablesPerFunc", 40),
@@ -203,12 +203,12 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
           )
         case FolderRunnerName | "folderrunner" =>
           val rs =
-            if (step.ruleSuite.defaultProcessor != NoOpDefaultProcessor.noOp)
+            if (step.operation.ruleSuite.defaultProcessor != NoOpDefaultProcessor.noOp)
               // even if the result is null, it's been chosen as such
-              step.ruleSuite
+              step.operation.ruleSuite
             else
               // identity function - let the row through
-              step.ruleSuite.copy(defaultProcessor = DefaultProcessor(Id(-1,-1), OutputExpression("row -> row")))
+              step.operation.ruleSuite.copy(defaultProcessor = DefaultProcessor(Id(-1,-1), OutputExpression("row -> row")))
 
           (ruleFolderRunner(rs,
             startingStruct = options.expr(startingStruct).getOrElse{
@@ -226,7 +226,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
             }
           )
         case DQRunnerName | "dqrulerunner" | "rulerunner" =>
-          (com.sparkutils.quality.ruleRunner(step.ruleSuite).as(fieldName), Seq(), None)
+          (com.sparkutils.quality.ruleRunner(step.operation.ruleSuite).as(fieldName), Seq(), None)
       } )
 
     processResult(dataFrame, step, engine)
@@ -236,10 +236,10 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
   protected def loadViews(sparkSession: SparkSession, step: Step): ViewLoadResults = {
     import sparkSession.implicits._
     val (config, _) = com.sparkutils.quality.loadViewConfigs(loader = loader,
-      viewDF = step.views.toDF(),
+      viewDF = step.initConfiguration.viewConfig.toDF(),
       ruleSuiteIdColumn = viewColumns.ruleSuiteId,
       ruleSuiteVersionColumn = viewColumns.ruleSuiteVersion,
-      ruleSuiteId = step.ruleSuite.id,
+      ruleSuiteId = step.operation.ruleSuite.id,
       name = viewColumns.name,
       token = viewColumns.token,
       filter = viewColumns.filter,
@@ -247,21 +247,21 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
     com.sparkutils.quality.loadViews(config)
   }
 
-  private def performStep(df: DataFrame, step: Step): DataFrame = {
+  private def performStep(df: DataFrame, step: Step, dependencies: Set[(Step, DataFrame)]): DataFrame = {
     // ensure the same session is used for the df, otherwise the session may fall back to the classic when called
     // from another thread, mostly a testing issue, but would also apply to DBR using connect on a classic cluster
     SparkSession.setActiveSession(df.sparkSession)
     val vl = loadViews(df.sparkSession, step)
     stepViewsLoaded(vl, step)
-    val starter = startStep(df, step)
+    val starter = startStep(df, step, dependencies)
     val res = process(starter, step)
 
-    if (isTraceEnabled || showInterim) {
+    if (isTraceEnabled() || showInterim) {
       infoLogStep(step, "Result Sample")
       res.show()
     }
 
-    stepCompleted(res, step)
+    stepCompleted(res, step, dependencies)
   }
 
   /**
@@ -289,7 +289,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
           )
 
           val newF: Future[(Step, DataFrame)] = f.map { names =>
-            (cur, performStep(names.head._2, cur))
+            (cur, performStep(names.head._2, cur, names))
           }
 
           p.completeWith(newF)
@@ -312,7 +312,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
   /**
    * Base implementation of step verification
    */
-  protected def verifySteps(): Unit = {
+  def verifySteps(): Unit = {
     def badViewName(name: String): Boolean = {
       (name eq null) || name.isEmpty
     }
@@ -323,7 +323,11 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
     if (steps.exists(s => (s.name eq null) || s.name.isEmpty)) {
       throw FlowException(EmptyStepName)
     }
-    steps.find(s => badViewName(s.inputView) || badViewName(s.outputView)).foreach{
+    steps.find(s => (s.data.inputView.exists(badViewName) || s.data.inputView.isEmpty) && s.dependencies.size > 1).foreach{
+      step =>
+        throw FlowException(DefaultViewNamesMultipleParents(step))
+    }
+    steps.find(s => s.data.inputView.exists(badViewName) || s.data.outputView.exists(badViewName)).foreach{
       step =>
       throw FlowException(InvalidViewNames(step))
     }
@@ -371,12 +375,13 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
         val p = rootPromises(root.name)
         try {
           val df = starting(root)
+          val token = rootToken(root)
           val r = (root,
             df.fold(
-              performStep( loadData(sparkSession = sparkSession, token = root.inputView), root)
+              performStep( loadData(sparkSession = sparkSession, token = token), root, Set.empty)
             ) { df =>
-              df.createOrReplaceTempView(root.inputView)
-              performStep(df, root)
+              df.createOrReplaceTempView(token)
+              performStep(df, root, Set.empty)
             }
           )
           p success r
@@ -413,14 +418,14 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
       logInfo(s"")
     }
 
-    if (vl.failedToLoadDueToCycles && step.views.nonEmpty) {
+    if (vl.failedToLoadDueToCycles && step.initConfiguration.viewConfig.nonEmpty) {
       val err = FlowException(s"View Cycle - Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} could not be started due to view cycle detection")
       logError(err.msg)
       throw err
     }
     if (vl.notLoadedViews.nonEmpty) {
-      if (vl.notLoadedViews.contains(step.inputView)) {
-        val err = FlowException(s"View Cycle - Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} could not be started as the Steps inputView `${step.inputView}` could not be loaded")
+      if (vl.notLoadedViews.exists(step.data.inputView.contains)) {
+        val err = FlowException(s"View Cycle - Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} could not be started as the Steps inputView `${step.data.inputView}` could not be loaded")
         logError(err.msg)
         throw err
       } else {
@@ -480,9 +485,17 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
    * @param step
    * @return the actual dataset used as input to the set
    */
-  protected def startStep(input: DataFrame, step: Step): DataFrame = {
+  protected def startStep(input: DataFrame, step: Step, previousSteps: Set[(Step, DataFrame)]): DataFrame = {
     infoLogStep(step, "Started")
-    loadData(input.sparkSession, token = step.inputView)
+
+    val token = step.data.inputView.getOrElse{
+      // multiple are invalid, roots can have default names
+      if (previousSteps.isEmpty)
+        rootToken(step)
+      else
+        previousSteps.head._1.defaultOutputViewName
+    }
+    loadData(input.sparkSession, token = token)
   }
 
   /**
@@ -490,14 +503,14 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
    * @param step
    * @return a, by default, optionally cached dataFrame
    */
-  protected def stepCompleted(result: DataFrame, step: Step): DataFrame = {
+  protected def stepCompleted(result: DataFrame, step: Step, previousSteps: Set[(Step, DataFrame)]): DataFrame = {
     val ndf =
-      if (step.cacheResults)
+      if (step.data.cacheResults)
         result.cache()
       else
         result
 
-    ndf.createOrReplaceTempView(step.outputView)
+    ndf.createOrReplaceTempView(step.defaultOutputViewName)
 
     infoLogStep(step, "Completed")
 

@@ -50,28 +50,28 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
   test("multiple roots and paths should work") {
     // a and c are roots, d joins both c and b
     val flow = new Flow(Id(1,1), Seq(
-      Step("a",Set.empty,rulesRaw(Seq(
-        (ExpressionRule("product = 'edt'"),  RunOnPassProcessor(1000, Id(1040, 1),
+      Step("a",Set.empty, Operation(rulesRaw(Seq(
+        (ExpressionRule("product = 'edt'"), RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("array(account_row('from'), account_row('to', 'other_account1'))")))
-      )), "view1", Seq.empty, Operation("engine", "view1E", AsIs), Map.empty, "view2"),
-      Step("b",Set("a"),rulesRaw(Seq(
-        (ExpressionRule("product like 'fx%'"),  RunOnPassProcessor(1000, Id(1040, 1),
+        )), "engine", "view1E", AsIs), data = StepData("view1", "view2")),
+      Step("b",Set("a"), Operation(rulesRaw(Seq(
+        (ExpressionRule("product like 'fx%'"), RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("array(account_row('from'), account_row('from', 'other_account2'))")))
-      )).copy(id = Id(2,1)), "view2", Seq.empty, Operation("engine", "view2E", AsIs), Map.empty, "view3"//,
-        //combineAuditWith = Some(Set("view1E"))
-      ),
-      Step("c",Set.empty,rulesRaw(Seq(
+        )).copy(id = Id(2,1)), "engine", "view2E", AsIs), data = StepData("view2", "view3")),
+      Step("c",Set.empty, Operation(rulesRaw(Seq(
         (ExpressionRule("product == 'edt'"),  RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("null")))
-      )).copy(id = Id(3,1)), "view3", Seq.empty, Operation("engine", "view3E", AsIs), Map.empty, "view4"),
-      Step("d",Set("c", "b"),rulesRaw(Seq(
+        )).copy(id = Id(3,1)), "engine", "view3E", AsIs), data = StepData("view3", "view4")),
+      Step("d",Set("c", "b"), Operation(rulesRaw(Seq(
         (ExpressionRule("true"),  RunOnPassProcessor(1000, Id(1041, 1),
           OutputExpression("view1E.result")))
-      )).copy(id = Id(4,1)), "filteredView4", Seq(
-        ViewRow(ruleSuiteId = 4, ruleSuiteVersion = 1, name = "filteredView4", token = None, filter = None,
-          sql = Some("select v4.*, v3.flow_audit view3_audit, v3.view1E from view4 v4 join view3 v3 on v4.product = v3.product where v4.view3E.salientRule is not null"))),
-        Operation("engine", "view4E", AsIs), Map.empty, "view5",
-        combineAuditWith = Some(Set("view3_audit"))) // flow_audit here is from v4
+        )).copy(id = Id(4,1)), "engine", "view4E", AsIs, combineAuditWith = Some(Set("view3_audit"))),
+        initConfiguration = StepInitConfiguration(viewConfig = Seq(
+          ViewRow(ruleSuiteId = 4, ruleSuiteVersion = 1, name = "filteredView4", token = None, filter = None,
+          sql = Some("select v4.*, v3.flow_audit view3_audit, v3.view1E from view4 v4 join view3 v3 on " +
+            "v4.product = v3.product where v4.view3E.salientRule is not null")))),
+        data = StepData("filteredView4",  "view5")
+        ) // flow_audit here is from v4
     ))//, showInterim = true)
 
     val s = sparkSession
@@ -90,27 +90,28 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
 
   // c depends on both a and b
   def engineFlow(dataHandling: Boolean = false) = new Flow(Id(1,1), Seq(
-    Step("a",Set.empty,rulesRaw(Seq(
-      (ExpressionRule("product = 'edt'"),  RunOnPassProcessor(1000, Id(1040, 1),
+    Step("a",Set.empty, Operation(rulesRaw(Seq(
+      (ExpressionRule("product = 'edt'"), RunOnPassProcessor(1000, Id(1040, 1),
         OutputExpression("array(account_row('from'), account_row('to', 'other_account1'))")))
-    )), "view1", Seq.empty, Operation("engine", "view1E", AsIs), Map.empty, "view2", cacheResults = true),
-    Step("b",Set("a"),rulesRaw(Seq(
-      (ExpressionRule("product like 'fx%'"),  RunOnPassProcessor(1000, Id(1040, 1),
+    )), "engine", "view1E", AsIs), data = StepData( "view1", "view2", cacheResults = true)),
+    Step("b",Set("a"), Operation(rulesRaw(Seq(
+      (ExpressionRule("product like 'fx%'"), RunOnPassProcessor(1000, Id(1040, 1),
         OutputExpression("array(account_row('from'), account_row('from', 'other_account2'))")))
-    )).copy(id = Id(2,1)), "view2", Seq.empty, Operation("engine", "view2E", AsIs), Map.empty, "view3"),
-    Step("c",Set("a", "b"),rulesRaw(Seq(
-      (ExpressionRule("view1E.result is not null"),  RunOnPassProcessor(1000, Id(1040, 1),
+    )).copy(id = Id(2,1)), "engine", "view2E", AsIs), data = StepData("view2", "view3")),
+    Step("c",Set("a", "b"), Operation(rulesRaw(Seq(
+      (ExpressionRule("view1E.result is not null"), RunOnPassProcessor(1000, Id(1040, 1),
         OutputExpression("view1E.result"))),
-      (ExpressionRule("view2E.result is not null"),  RunOnPassProcessor(1000, Id(1041, 1),
+      (ExpressionRule("view2E.result is not null"), RunOnPassProcessor(1000, Id(1041, 1),
         OutputExpression("view2E.result")))
-    )).copy(id = Id(3,1)), "view3", Seq.empty, Operation("engine", "view3E", StarOnly), Map.empty, "view4"),
-    Step("d",Set("c"),rulesRaw(Seq(
-      (ExpressionRule("true"),  RunOnPassProcessor(1000, Id(1041, 1),
+    )).copy(id = Id(3,1)),"engine", "view3E", StarOnly), data = StepData("view3",  "view4")),
+    Step("d",Set("c"), Operation(rulesRaw(Seq(
+      (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1041, 1),
         OutputExpression("result")))
-    )).copy(id = Id(4,1)), "filteredView4", Seq(
-      ViewRow(ruleSuiteId = 4, ruleSuiteVersion = 1, name = "filteredView4", token = None, filter = None,
-        sql = Some("select * from view4 where salientRule is not null"))),
-      Operation("engine", "view4E", OutputFieldOnly), Map.empty, "view5")
+    )).copy(id = Id(4,1)), "engine", "view4E", OutputFieldOnly),
+      initConfiguration = StepInitConfiguration(viewConfig = Seq(
+        ViewRow(ruleSuiteId = 4, ruleSuiteVersion = 1, name = "filteredView4", token = None, filter = None,
+          sql = Some("select * from view4 where salientRule is not null")))),
+      data = StepData("filteredView4", "view5"))
   )) with FlowDataHandling {
     override protected def loadData(sparkSession: SparkSession, token: String): DataFrame = {
       if (dataHandling)
@@ -160,18 +161,17 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
   }
 
   def folderFlow(extraSteps: Seq[Step] = Seq.empty) = new Flow(Id(1,1), Seq(
-    Step("a",Set.empty,rulesRaw(Seq(
-      (ExpressionRule("product = 'edt'"),  RunOnPassProcessor(1000, Id(1040, 1),
+    Step("a",Set.empty, Operation(rulesRaw(Seq(
+      (ExpressionRule("product = 'edt'"), RunOnPassProcessor(1000, Id(1040, 1),
         OutputExpression("set(subcode = 10)")))
-    )), // identity should be added automatically
-      "view1", Seq.empty, Operation("folder", "view1E", MergeFields), Map.empty, "view2"),
-    Step("b",Set("a"),rulesRaw(Seq(
-      (ExpressionRule("product like 'fx%'"),  RunOnPassProcessor(1000, Id(1040, 1),
+      )), "folder", "view1E", MergeFields), // identity should be added automatically
+      data = StepData("view1", "view2")),
+    Step("b",Set("a"), Operation(rulesRaw(Seq(
+      (ExpressionRule("product like 'fx%'"), RunOnPassProcessor(1000, Id(1040, 1),
         OutputExpression("set(account = 'newacc')")))
-    )).copy(defaultProcessor = DefaultProcessor(Id(1041,1), OutputExpression("row -> row")),
-      id = Id(2,0)), // force an identity default and Id change to verify combineAuditWith
-      "view2", Seq.empty, Operation("folder", "view2E", MergeFields), Map.empty, "view3",
-    //  combineAuditWith = Some(Set("view1E"))
+      )).copy(defaultProcessor = DefaultProcessor(Id(1041,1), OutputExpression("row -> row")),
+      id = Id(2,0)), "folder", "view2E", MergeFields),
+      data = StepData("view2", "view3")
     )
   ) ++ extraSteps)
 
@@ -220,11 +220,12 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
 
     def flow(map: Map[String, String], resultApproach: ResultApproach = MergeFields) = {
       val flow = new Flow(Id(1, 1), Seq(
-        Step("a", Set.empty, rulesRaw(Seq(
+        Step("a", Set.empty, Operation(rulesRaw(Seq(
           (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1040, 1),
             OutputExpression("struct('a' as a, (c || cast(d as string)) as b)")))
-        )), // identity should be added automatically
-          "view1", Seq.empty, Operation("engine", "view1E", resultApproach), map, "view2")
+          )), "engine", "view1E", resultApproach), // identity should be added automatically
+          options = map, data = StepData("view1", "view2")
+        )
       ))
 
       val s = sparkSession
@@ -271,9 +272,11 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
   test("dq mixes in") {
     val flow = folderFlow(Seq(
       Step(
-        "c", Set("b"), rulesRaw(Seq(
+        "c", Set("b"), Operation(rulesRaw(Seq(
           (ExpressionRule("true"), NoOpRunOnPassProcessor.noOp)
-        )).copy(Id(100,1)), "view3", Seq.empty, Operation(DQRunnerName, "dq", AsIs), Map.empty, "view4")
+        )).copy(Id(100,1)), DQRunnerName, "dq", AsIs),
+        data = StepData("view3", "view4")
+      )
     ))
 
     val s = sparkSession
@@ -292,16 +295,18 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
 
     def rca(view: String = "", resultApproach: ResultApproach = OutputFieldsOnly, forceStar: Boolean = false) = {
       val flow = new Flow(Id(1, 1), Seq(
-        Step("a", Set.empty, rulesRaw(Seq(
+        Step("a", Set.empty, Operation(rulesRaw(Seq(
           (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1040, 1),
             OutputExpression(s"set(d = (row_number() OVER (ORDER BY ${view}c)) + 1 )"))),
           (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1041, 1),
             OutputExpression(s"set(c = if(${view}d = 2, 'a', 'b'))")))
-        )), // identity should be added automatically
-          "view1", Seq.empty, Operation("folder", "view1E", resultApproach), Map(
-            //wrapInputFields -> wrap,
-            forceMergeProjection -> forceStar.toString
-          ), "view2")
+          )), "folder", "view1E", resultApproach), // identity should be added automatically
+          options = Map(
+              //wrapInputFields -> wrap,
+              forceMergeProjection -> forceStar.toString
+          ),
+          data = StepData("view1", "view2")
+        )
       ))
 
       val s = sparkSession

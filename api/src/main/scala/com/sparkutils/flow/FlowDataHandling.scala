@@ -58,19 +58,28 @@ trait FlowDataHandling extends Serializable with Logging { this: Flow =>
     }
 
   /**
+   * For a root step derive the token to use when loading data
+   * @param step only called for root tokens
+   * @return
+   */
+  protected def rootToken(step: Step): String = step.data.inputView.getOrElse(step.name + "_rootToken")
+
+  /**
    * By default, logs and returns input a dataframe using loadData with the token Step.inputViewName
    *
    * @param input either an empty dataset or the previous steps dataframe
-   * @param step
+   * @param step the current Step
+   * @param previousSteps previous Steps, can be empty if this is a root step
    * @return the actual dataset used as input to the set
    */
-  protected def startStep(input: DataFrame, step: Step): DataFrame
+  protected def startStep(input: DataFrame, step: Step, previousSteps: Set[(Step, DataFrame)]): DataFrame
 
   /**
    * The default implementation optionally caches (cacheStepResults) and uses the outputViewName to register a temp view
-   * @param step
+   * @param step the current Step
+   * @param previousSteps previous Steps, can be empty if this is a root step
    * @return a, by default, optionally cached dataFrame
    */
-  protected def stepCompleted(result: DataFrame, step: Step): DataFrame
+  protected def stepCompleted(result: DataFrame, step: Step, previousSteps: Set[(Step, DataFrame)]): DataFrame
 
 }
