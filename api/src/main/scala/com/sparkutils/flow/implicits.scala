@@ -14,4 +14,8 @@ object implicits {
     case "OutputFieldOnly" => OutputFieldOnly
   })
 
+  implicit val typedStep = TypedExpressionEncoder[StepRow]
+  implicit val typedFlow = TypedExpressionEncoder[FlowRow]
+  implicit val fullFlow = TypedExpressionEncoder[FullFlow]
+
 }

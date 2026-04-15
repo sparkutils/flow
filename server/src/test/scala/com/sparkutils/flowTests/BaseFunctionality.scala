@@ -4,7 +4,7 @@ import com.sparkutils.flow._
 import com.sparkutils.flowTests.RulesGen.{rulesRaw, testData}
 import com.sparkutils.flowTests.utils.SharedPureConnectTests
 import com.sparkutils.quality._
-import org.apache.spark.sql.{AnalysisException, DataFrame, SparkSession}
+import org.apache.spark.sql.{AnalysisException, DataFrame, SaveMode, SparkSession}
 import org.scalatest.Matchers
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -47,9 +47,9 @@ object RulesGen {
 
 class BaseFunctionality extends SharedPureConnectTests with Matchers {
 
-  test("multiple roots and paths should work, along with default columns and views") {
+  test("multiple roots and paths should work, along with default columns, views and json serialisation") {
     // a and c are roots, d joins both c and b
-    val flow = new Flow(Id(1,1), Seq(
+    val flowOG = new Flow(Id(1,1), Seq(
       Step("a",Set.empty, Operation(rulesRaw(Seq(
         (ExpressionRule("product = 'edt'"), RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("array(account_row('from'), account_row('to', 'other_account1'))")))
@@ -73,8 +73,16 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
         data = StepData(inputView = Some("filteredView4"))
         ) // flow_audit here is from v4
     ))//, showInterim = true)
-
     val s = sparkSession
+
+    import com.sparkutils.flow.implicits._
+    // write out to the full version and read back again
+    val ds = toFullFlow(s, flowOG)
+    ds.write.mode(SaveMode.Overwrite).json(outputDir + "/multipleRoots.json")
+    val rds = s.read.schema(fullFlow.schema).json(outputDir + "/multipleRoots.json").as[FullFlow]
+    val (steps, audit) = fromFullFlow(rds, flowOG.flowId)
+    val flow = new Flow(flowOG.flowId, steps, audit)
+
     import s.implicits._
     val ires = flow.run(sparkSession, _ => Some(testData.toDF()))
     ires.size shouldBe 4
