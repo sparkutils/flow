@@ -1,6 +1,6 @@
 package com.sparkutils.flow
 
-import com.sparkutils.quality.{DataFrameLoader, DefaultProcessor, Id, NoOpDefaultProcessor, OutputExpression, VersionedId, ViewConfigColumns, collectRunner, ruleEngineRunner, ruleFolderRunner, typedExpressionRunner}
+import com.sparkutils.quality.{DataFrameLoader, DefaultProcessor, Id, MapConfigColumns, NoOpDefaultProcessor, OutputExpression, VersionedId, ViewConfigColumns, collectRunner, ruleEngineRunner, ruleFolderRunner, typedExpressionRunner}
 import com.sparkutils.quality.impl.views.ViewLoadResults
 import org.apache.spark.sql.functions.{array, expr, col => scol}
 import org.apache.spark.sql.{Column, DataFrame, ShimUtils, SparkSession, functions}
@@ -8,6 +8,7 @@ import Utils._
 import com.sparkutils.flow.impl.util.FlowExceptionConstants.{CycleDetected, DefaultViewNamesMultipleParents, DuplicateNames, EmptyFlow, EmptyStepName, InvalidDQResultApproach, InvalidViewNames, MissingStep}
 import com.sparkutils.quality.functions.{group_audit, group_results}
 import com.sparkutils.quality.impl.Encoders
+import com.sparkutils.quality.impl.mapLookup.MapTypes.MapLookups
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.types.{DataType, StructType}
 import scalax.collection.edges.{DiEdge, DiEdgeImplicits}
@@ -37,7 +38,8 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
            val loader: DataFrameLoader = new DataFrameLoader {
               override def load(token: String): DataFrame = ???
             },
-           showInterim: Boolean = false, viewColumns: ViewConfigColumns = ViewConfigColumns())(
+           showInterim: Boolean = false, viewColumns: ViewConfigColumns = ViewConfigColumns(),
+           mapColumns: MapConfigColumns = MapConfigColumns())(
              implicit ec: ExecutionContext
            ) extends Serializable with FlowDataHandling with Logging {
 
@@ -241,14 +243,23 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
     import sparkSession.implicits._
     val (config, _) = com.sparkutils.quality.loadViewConfigs(loader = loader,
       viewDF = step.initConfiguration.viewConfig.toDF(),
-      ruleSuiteIdColumn = viewColumns.ruleSuiteId,
-      ruleSuiteVersionColumn = viewColumns.ruleSuiteVersion,
       ruleSuiteId = step.operation.ruleSuite.id,
-      name = viewColumns.name,
-      token = viewColumns.token,
-      filter = viewColumns.filter,
-      sql = viewColumns.sql)
+      viewColumns = viewColumns)
     com.sparkutils.quality.loadViews(config)
+  }
+
+  protected def loadMaps(sparkSession: SparkSession, step: Step): MapLookups = {
+    import sparkSession.implicits._
+    val (config, _) = com.sparkutils.quality.loadMapConfigs(loader = loader,
+      viewDF = step.initConfiguration.mapConfig.toDF(),
+      ruleSuiteId = step.operation.ruleSuite.id,
+      mapConfig = mapColumns
+    )
+    step.initConfiguration.mapName.fold(
+      com.sparkutils.quality.impl.mapLookup.MapLookupFunctions.loadMaps(config  )
+    ){ name =>
+      com.sparkutils.quality.impl.mapLookup.MapLookupFunctions.loadMaps(config, name)
+    }
   }
 
   private def performStep(df: DataFrame, step: Step, dependencies: Set[(Step, DataFrame)]): DataFrame = {
@@ -256,6 +267,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
     // from another thread, mostly a testing issue, but would also apply to DBR using connect on a classic cluster
     SparkSession.setActiveSession(df.sparkSession)
     val vl = loadViews(df.sparkSession, step)
+    loadMaps(df.sparkSession, step)
     stepViewsLoaded(vl, step)
     val starter = startStep(df, step, dependencies)
     val res = process(starter, step)

@@ -85,12 +85,18 @@ object Operation {
 }
 
 /**
- * Represents configuration information for a step, views and maps
+ * Represents configuration information for a step, views and maps.  If a map is defined a mapName must also be provided
  * @param viewConfig
  * @param mapConfig
+ * @param mapName
  */
 @SerialVersionUID(1L)
-case class StepInitConfiguration(viewConfig: Seq[ViewRow] = Seq.empty, mapConfig: Seq[MapRow] = Seq.empty) extends Serializable
+case class StepInitConfiguration(viewConfig: Seq[ViewRow] = Seq.empty, mapConfig: Seq[MapRow] = Seq.empty,
+                                 mapName: Option[String] = None) extends Serializable {
+  if (mapConfig.nonEmpty) {
+    require(mapName.isDefined, "mapName is required when MapConfig is provided")
+  }
+}
 
 /**
  * Input and output data usage for a step
