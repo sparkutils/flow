@@ -259,7 +259,7 @@
                 <dbrCompatVersion>4.0.0.oss_</dbrCompatVersion>
                 <scalaVersion>2.13.16</scalaVersion>
                 <scalaCompatVersion>2.13</scalaCompatVersion>
-                <sparkVersion>4.0.1</sparkVersion>
+                <sparkVersion>4.0.2</sparkVersion>
                 <sparkCompatVersion>4.0</sparkCompatVersion>
                 <profileDir>4.0.0</profileDir>
                 <jacksonVersion>2.15.2</jacksonVersion> <!-- scalameter dependency is 2.9.10 so perf tests runs need to change it -->
@@ -302,7 +302,7 @@
                 <dbrCompatVersion>4.1.0.oss_</dbrCompatVersion>
                 <scalaVersion>2.13.18</scalaVersion>
                 <scalaCompatVersion>2.13</scalaCompatVersion>
-                <sparkVersion>4.1.0</sparkVersion>
+                <sparkVersion>4.1.1</sparkVersion>
                 <sparkCompatVersion>4.1</sparkCompatVersion>
                 <profileDir>4.0.0</profileDir>
                 <jacksonVersion>2.15.2</jacksonVersion> <!-- scalameter dependency is 2.9.10 so perf tests runs need to change it -->
@@ -558,7 +558,7 @@
         <javaLangVersion>9</javaLangVersion>
         <skip.scala.docs>false</skip.scala.docs>
 
-        <qualityVersion>0.2.0-RC2</qualityVersion>
+        <qualityVersion>0.2.0-RC4</qualityVersion>
         <graphVersion>2.0.3</graphVersion>
     </properties>
 

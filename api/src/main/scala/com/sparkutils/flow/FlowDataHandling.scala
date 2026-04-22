@@ -62,7 +62,7 @@ trait FlowDataHandling extends Serializable with Logging { this: Flow =>
    * @param step only called for root tokens
    * @return
    */
-  protected def rootToken(step: Step): String = step.data.inputView.getOrElse(step.name + "_rootToken")
+  protected def rootToken(step: Step): String = step.data.inputView.getOrElse(step.name + "_root_input")
 
   /**
    * By default, logs and returns input a dataframe using loadData with the token Step.inputViewName

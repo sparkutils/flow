@@ -122,4 +122,32 @@ trait Constants {
    */
   val DQRunnerName = "dq"
 
+  /**
+   * The column name which must be returned by [[flowEarlyExitSQL]] and evaluate to either an empty dataset
+   * or to a *true* boolean value on the first row to indicate the flow should continue.
+   * Otherwise, if the first row with a *false* value is returned the Flow will exit with exception per
+   * [[flowEarlyExitException]]
+   */
+  val flowEarlyExitColumn = "flowEarlyExitColumn"
+
+  /**
+   * Optional [[Step.options]] to specify the Name for a step to run an SQL to decide if the flow should be exited.
+   *
+   * The SQL is evaluated after the Steps result view is created, by default the [[Step.name]].
+   *
+   * When present the SQL will be evaluated after a step is completed, it should return [[flowEarlyExitColumn]]
+   * with it's associated semantics.
+   */
+  val flowEarlyExitSQL = "flowEarlyExitSQL"
+
+  /**
+   * Optional [[Step.options]] to specify a user Exception text if [[flowEarlyExitSQL]] returns a false
+   * [[flowEarlyExitColumn]] result.
+   *
+   * When not present a default text is used:
+   * {{{
+   * Step ${step.name} had flowEarlyExitSQL configured which returned false - the Flow will be stopped
+   * }}}
+   */
+  val flowEarlyExitException = "flowEarlyExitException"
 }

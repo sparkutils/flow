@@ -301,7 +301,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
 
   test("lca works - row_number") {
 
-    def rca(view: String = "", resultApproach: ResultApproach = OutputFieldsOnly, forceStar: Boolean = false) = {
+    def lca(view: String = "", resultApproach: ResultApproach = OutputFieldsOnly, forceStar: Boolean = false) = {
       val flow = new Flow(Id(1, 1), Seq(
         Step("a", Set.empty, Operation(rulesRaw(Seq(
           (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1040, 1),
@@ -335,20 +335,78 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
       ir.head._2._2
     }
 
-    rca()
-    rca(resultApproach = MergeFields)
+    lca()
+    lca(resultApproach = MergeFields)
     // force star adds a projection so it's always present
-    rca(forceStar = true)
-    rca(resultApproach = MergeFields, forceStar = true)
+    lca(forceStar = true)
+    lca(resultApproach = MergeFields, forceStar = true)
 
     val view1 = "view1."
 
     // The alias is c, so although it's the expression for d AND both c + d are required, only c actually needs it
-    val r = rca(view1)
+    val r = lca(view1)
     //r.show
-    rca(view1, MergeFields)
+    lca(view1, MergeFields)
     // for completeness, but don't really add any functional testing
-    rca(view1, forceStar = true)
-    rca(view1, MergeFields, forceStar = true)
+    lca(view1, forceStar = true)
+    lca(view1, MergeFields, forceStar = true)
+  }
+
+  test("configured flowEarlyExitSQL should appropriately run and fail") {
+
+    def earlyExit(options: Map[String, String]) = {
+      val flow = new Flow(Id(1, 1), Seq(
+        Step("a", Set.empty, Operation(rulesRaw(Seq(
+          (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1041, 1),
+              OutputExpression(s"set(c = if(d = 2, 'a', 'b'))")))
+          )), "folder", MergeFields),
+          options = options
+        ),
+        Step("b", Set("a"), Operation(rulesRaw(Seq(
+          (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1041, 1),
+              OutputExpression(s"set(c = if(d = 2, 'a', 'b'))")))
+          )), "folder", MergeFields)
+        )
+      )) {
+        // wierd view bug with connect, could be due to local views on connect not being visible to name resolution, needs adding to test in
+        override protected def startStep(input: DataFrame, step: Step, previousSteps: Set[(Step, DataFrame)]): DataFrame = {
+          input.write.mode(SaveMode.Overwrite).parquet(outputDir+s"/flowearly${step.name}")
+          input.sparkSession.read.parquet(outputDir+s"/flowearly${step.name}")
+        }
+      }
+
+      val s = sparkSession
+      import s.implicits._
+
+      val data = Seq(
+        Tuple2("c", 1),
+        Tuple2("c", 1),
+        Tuple2("c", 1),
+        Tuple2("c", 1),
+        Tuple2("c", 1),
+        Tuple2("c", 1),
+        Tuple2("c", 1)
+      ).toDF("c", "d")
+
+      val ir = flow.run(s, _ => Some(data))
+
+      val d = ir("b")._2.selectExpr("c", "d").as[(String, Option[Int])]
+
+      val r = d.collect()
+
+    }
+
+    // no flow, same case as all the other tests but control for the ones below
+    earlyExit(Map.empty)
+    // sql should run but as it returns true it's fine
+    earlyExit(Map(flowEarlyExitSQL -> s"select first(true) $flowEarlyExitColumn from a"))
+    // no rows == fine
+    earlyExit(Map(flowEarlyExitSQL -> s"select true $flowEarlyExitColumn from a where d = 1000"))
+    // false so should exit
+    earlyExit(Map(flowEarlyExitSQL -> s"select false $flowEarlyExitColumn from a"))
+    // bad column name so should exit
+    earlyExit(Map(flowEarlyExitSQL -> s"select false not$flowEarlyExitColumn from a"))
+    // bad sql so should exit
+    earlyExit(Map(flowEarlyExitSQL -> s"iIzBad"))
   }
 }
