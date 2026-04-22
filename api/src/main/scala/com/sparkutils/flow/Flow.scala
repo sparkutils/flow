@@ -89,7 +89,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
       }.map( _ - flowAuditColName)
 
     val struct = inputSchema(dataFrame, step)
-    //val withoutFlowAudit = struct.filterNot(_.name == flowAuditColName).map(_.name)
+    val withoutFlowAudit = struct.filterNot(_.name == flowAuditColName).map(_.name)
 
     val dataRefTypeFields =
       options.dataType(resultDataType) match {
@@ -141,7 +141,13 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
     // auto add audit
     val columns = starterColumns
     resultApproach match {
-      case AsIs => dataFrame.select(columns :_*).select(expr("*"), group_auditF)
+      case AsIs =>
+        dataFrame.select(columns :_*).select(
+        hasAudit(
+          withoutFlowAudit.map(scol) ++ Seq(scol(fieldName), group_auditF)
+        )(
+          Seq(expr("*"), group_auditF)
+        ) :_*)
       case ExpandNested => dataFrame.select(columns :_*).select(Seq(expr("*"), group_auditF) ++ children :_*)
       case MergeFields => // dq probably doesn't work
 
@@ -154,7 +160,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
 
         }{ outputFields =>
 
-          val fields = struct.map(_.name).toSet -- outputFields
+          val fields = struct.map(_.name).toSet -- outputFields - flowAuditColName
           withOutputFields(starter, outputFields, extraFields = fields.map(scol))
 
         }
