@@ -301,7 +301,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
 
   test("lca works - row_number") {
 
-    def rca(view: String = "", resultApproach: ResultApproach = OutputFieldsOnly, forceStar: Boolean = false) = {
+    def lca(view: String = "", resultApproach: ResultApproach = OutputFieldsOnly, forceStar: Boolean = false) = {
       val flow = new Flow(Id(1, 1), Seq(
         Step("a", Set.empty, Operation(rulesRaw(Seq(
           (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1040, 1),
@@ -335,21 +335,21 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
       ir.head._2._2
     }
 
-    rca()
-    rca(resultApproach = MergeFields)
+    lca()
+    lca(resultApproach = MergeFields)
     // force star adds a projection so it's always present
-    rca(forceStar = true)
-    rca(resultApproach = MergeFields, forceStar = true)
+    lca(forceStar = true)
+    lca(resultApproach = MergeFields, forceStar = true)
 
     val view1 = "view1."
 
     // The alias is c, so although it's the expression for d AND both c + d are required, only c actually needs it
-    val r = rca(view1)
+    val r = lca(view1)
     //r.show
-    rca(view1, MergeFields)
+    lca(view1, MergeFields)
     // for completeness, but don't really add any functional testing
-    rca(view1, forceStar = true)
-    rca(view1, MergeFields, forceStar = true)
+    lca(view1, forceStar = true)
+    lca(view1, MergeFields, forceStar = true)
   }
 
   test("configured flowEarlyExitSQL should appropriately run and fail") {
@@ -369,8 +369,10 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
         )
       )) {
         // wierd view bug with connect, could be due to local views on connect not being visible to name resolution, needs adding to test in
-        override protected def startStep(input: DataFrame, step: Step, previousSteps: Set[(Step, DataFrame)]): DataFrame =
-          input
+        override protected def startStep(input: DataFrame, step: Step, previousSteps: Set[(Step, DataFrame)]): DataFrame = {
+          input.write.mode(SaveMode.Overwrite).parquet(outputDir+s"/flowearly${step.name}")
+          input.sparkSession.read.parquet(outputDir+s"/flowearly${step.name}")
+        }
       }
 
       val s = sparkSession
