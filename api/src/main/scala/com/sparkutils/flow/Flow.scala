@@ -86,10 +86,10 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
           None
         else
           Some(s)
-      }
+      }.map( _ - flowAuditColName)
 
     val struct = inputSchema(dataFrame, step)
-    val withoutFlowAudit = struct.filterNot(_.name == flowAuditColName).map(_.name)
+    //val withoutFlowAudit = struct.filterNot(_.name == flowAuditColName).map(_.name)
 
     val dataRefTypeFields =
       options.dataType(resultDataType) match {
@@ -97,25 +97,33 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
         case _ => None
       }
 
-    val children = childrenRaw.map(n => col.getField(n).as(n))
+    def hasAudit[T](auditF: => T)(noAudit: => T): T =
+      if (struct.exists(s => s.name == flowAuditColName && s.dataType == Encoders.ruleSuiteGroupResultsTypedEnc.catalystRepr))
+        auditF
+      else
+        noAudit
 
     val (starterColumns, existingAudit) =
       // if flowAuditColName is present and the correct type, select all the others, assuming via having a parent step
       // isn't enough if StarOnly or OutputFieldOnly is provided
       //
-      if (struct.exists(s => s.name == flowAuditColName && s.dataType == Encoders.ruleSuiteGroupResultsTypedEnc.catalystRepr))
-        (withoutFlowAudit.map(scol) :+ col, Seq(scol(flowAuditColName)))
-      else
-        (Seq(expr("*"), col), Seq.empty)
+      ( Seq(expr("*"), col),
+      hasAudit(
+        Seq(scol(flowAuditColName))
+      )(
+        Seq.empty
+      ))
+
+    val fieldName = step.defaultFieldName
+
+    val children = childrenRaw.map(n => scol(fieldName).getField(n).as(n))
 
     val group_auditF =
-      group_audit( col,
+      group_audit( scol(fieldName),
         step.operation.combineAuditWith.map{ fnames =>
           fnames.map{fname => expr(fname)}.toSeq
         }.getOrElse(Seq.empty) ++ existingAudit
           :_*).as(flowAuditColName)
-
-    val fieldName = step.defaultFieldName
 
     // if fields are present, either by default in the folder case or by providing a result type that is not an
     // array we can remove two calls to columns action, 632.73ms vs 554.88ms on using 14 chained engines 1 rule each
@@ -123,16 +131,18 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
     def withOutputFields(starter: DataFrame, outputFields: Set[String], extraFields: Set[Column] = Set.empty) =
       // cannot be run directly on dataFrame as otherwise an lca will be added to any repetitive expressions
       // this stops row number plus another of other queries running correctly in all circumstances
-      starter.select(Seq(scol(fieldName), scol(flowAuditColName)) ++ extraFields ++
+      starter.select(
+        Seq(scol(fieldName), group_auditF)
+         ++ extraFields ++
         outputFields.map{n =>
           scol(s"$fieldName.result.$n").as(n)
         } :_*)
 
     // auto add audit
-    val columns = starterColumns :+ group_auditF
+    val columns = starterColumns
     resultApproach match {
-      case AsIs => dataFrame.select(columns :_*)
-      case ExpandNested => dataFrame.select(columns ++ children :_*)
+      case AsIs => dataFrame.select(columns :_*).select(expr("*"), group_auditF)
+      case ExpandNested => dataFrame.select(columns :_*).select(Seq(expr("*"), group_auditF) ++ children :_*)
       case MergeFields => // dq probably doesn't work
 
         val starter = dataFrame.select(columns: _*)
@@ -140,12 +150,12 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
 
           val og = starter.columns.toSet
           val nested = starter.selectExpr(s"$fieldName.result.*").columns
-          starter.select((og -- nested).map(scol).toSeq ++ Seq(expr(s"$fieldName.result.*")): _*)
+          starter.select((og -- nested).map(scol).toSeq ++ Seq(expr(s"$fieldName.result.*"), group_auditF): _*)
 
         }{ outputFields =>
 
-          val fields = withoutFlowAudit.toSet -- outputFields
-          withOutputFields(dataFrame.select(columns: _*), outputFields, extraFields = fields.map(scol))
+          val fields = struct.map(_.name).toSet -- outputFields
+          withOutputFields(starter, outputFields, extraFields = fields.map(scol))
 
         }
 
@@ -158,13 +168,13 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
           val og = dataFrame.columns.toSet
           val startCols = starter.columns.toSet
           starter.select((og -- startCols).map(scol).toSeq ++
-            Seq(scol(fieldName), scol(flowAuditColName), expr(s"$fieldName.result.*")): _*)
+            Seq(scol(fieldName), group_auditF, expr(s"$fieldName.result.*")): _*)
 
         }{ o =>
           withOutputFields(starter, outputFields = o)
         }
 
-      case StarOnly => dataFrame.select(children: _*)
+      case StarOnly => dataFrame.select(col).select(children: _*)
       case OutputFieldOnly => dataFrame.select(col)
     }
 
@@ -262,22 +272,33 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
     }
   }
 
-  private def performStep(df: DataFrame, step: Step, dependencies: Set[(Step, DataFrame)]): DataFrame = {
+  private def performStep(df: DataFrame, step: Step, dependencies: Set[(Step, DataFrame)]): (Step, DataFrame) = {
     // ensure the same session is used for the df, otherwise the session may fall back to the classic when called
     // from another thread, mostly a testing issue, but would also apply to DBR using connect on a classic cluster
     SparkSession.setActiveSession(df.sparkSession)
-    val vl = loadViews(df.sparkSession, step)
-    loadMaps(df.sparkSession, step)
-    stepViewsLoaded(vl, step)
-    val starter = startStep(df, step, dependencies)
-    val res = process(starter, step)
+    try {
+      val actualStep = modifyStep(df, step, dependencies)
 
-    if (isTraceEnabled() || showInterim) {
-      infoLogStep(step, "Result Sample")
-      res.show()
+      val vl = loadViews(df.sparkSession, actualStep)
+      loadMaps(df.sparkSession, actualStep)
+      stepViewsLoaded(vl, actualStep)
+      val starter = startStep(df, actualStep, dependencies)
+      val res = process(starter, actualStep)
+
+      val finalDF = stepCompleted(res, actualStep, dependencies)
+
+      if (isTraceEnabled() || showInterim) {
+        infoLogStep(actualStep, "Result Sample")
+        finalDF.show()
+      }
+
+      (actualStep, finalDF)
+    } catch {
+      case t: Throwable =>
+        val info = "An unexpected error occurred during processing the Step"
+        errorLogStep(step, info)
+        throw FlowException(flowInfo(step, info), t)
     }
-
-    stepCompleted(res, step, dependencies)
   }
 
   /**
@@ -305,7 +326,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
           )
 
           val newF: Future[(Step, DataFrame)] = f.map { names =>
-            (cur, performStep(names.head._2, cur, names))
+            performStep(names.head._2, cur, names)
           }
 
           p.completeWith(newF)
@@ -382,7 +403,8 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
    * @param starting a function called for each Root Step (a Step having no dependencies), when a DataFrame is provided
    *                 it is registered as a temporary view with the name of the inputView.  When None is returned and the
    *                 inputView is not present an error is thrown, this is delegated to the FlowDataHandling.loadData function
-   * @return
+   * @return a map of step name to Step and DataFrame pairs, note although the Step returned may have been replaced by modifyStep
+   *         the name key will be the original [[Step.name]]
    */
   def run(sparkSession: SparkSession, starting: Step => Option[DataFrame]): Map[String, (Step, DataFrame)] = {
     verifySteps()
@@ -397,14 +419,14 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
         try {
           val df = starting(root)
           val token = rootToken(root)
-          val r = (root,
+          val r =
             df.fold(
               performStep( loadData(sparkSession = sparkSession, token = token), root, Set.empty)
             ) { df =>
               df.createOrReplaceTempView(token)
               performStep(df, root, Set.empty)
             }
-          )
+
           p success r
         } catch {
           case t: Throwable => p failure t
@@ -458,13 +480,16 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
     }
   }
 
+  final def flowInfo(step: Step, info: String): String =
+    s"Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} $info"
+
   /**
    * Logs at info level the step
    * @param step
    * @param info extra logging information
    */
   final def infoLogStep(step: Step, info: String): Unit = {
-    logInfo(s"Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} $info")
+    logInfo(flowInfo(step,info))
   }
   /**
    * Logs at info level the step
@@ -472,7 +497,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
    * @param info extra logging information
    */
   final def debugLogStep(step: Step, info: String): Unit = {
-    logInfo(s"Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} $info")
+    logDebug(flowInfo(step,info))
   }
   /**
    * Logs at info level the step
@@ -480,7 +505,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
    * @param info extra logging information
    */
   final def traceLogStep(step: Step, info: String): Unit = {
-    logTrace(s"Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} $info")
+    logTrace(flowInfo(step,info))
   }
   /**
    * Logs at info level the step
@@ -488,7 +513,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
    * @param info extra logging information
    */
   final def warnLogStep(step: Step, info: String): Unit = {
-    logWarning(s"Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} $info")
+    logWarning(flowInfo(step,info))
   }
   /**
    * Logs at info level the step
@@ -496,8 +521,23 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
    * @param info extra logging information
    */
   final protected def errorLogStep(step: Step, info: String): Unit = {
-    logError(s"Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} $info")
+    logError(flowInfo(step,info))
   }
+
+  /**
+   * Called before performStep, by default just returns the step, customised Flow's can override behaviour, such as
+   * generating new rules based on previous steps, or taking other actions before view loading based on either the
+   * dataframe or configuration items.
+   *
+   * Original names will be used in the run result key but the result of this call is used in the [[run]] result pair.
+   *
+   * @param input
+   * @param step
+   * @param previousSteps
+   * @return
+   */
+  protected def modifyStep(input: DataFrame, step: Step, previousSteps: Set[(Step, DataFrame)]): Step =
+    step
 
   /**
    * By default, logs and returns input a dataframe via FlowDataHandling.loadData using Step.inputViewName as the token

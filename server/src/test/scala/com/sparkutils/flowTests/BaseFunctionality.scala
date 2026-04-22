@@ -351,4 +351,60 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
     rca(view1, forceStar = true)
     rca(view1, MergeFields, forceStar = true)
   }
+
+  test("configured flowEarlyExitSQL should appropriately run and fail") {
+
+    def earlyExit(options: Map[String, String]) = {
+      val flow = new Flow(Id(1, 1), Seq(
+        Step("a", Set.empty, Operation(rulesRaw(Seq(
+          (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1041, 1),
+              OutputExpression(s"set(c = if(d = 2, 'a', 'b'))")))
+          )), "folder", MergeFields),
+          options = options
+        ),
+        Step("b", Set("a"), Operation(rulesRaw(Seq(
+          (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1041, 1),
+              OutputExpression(s"set(c = if(d = 2, 'a', 'b'))")))
+          )), "folder", MergeFields)
+        )
+      )) {
+        // wierd view bug with connect, could be due to local views on connect not being visible to name resolution, needs adding to test in
+        override protected def startStep(input: DataFrame, step: Step, previousSteps: Set[(Step, DataFrame)]): DataFrame =
+          input
+      }
+
+      val s = sparkSession
+      import s.implicits._
+
+      val data = Seq(
+        Tuple2("c", 1),
+        Tuple2("c", 1),
+        Tuple2("c", 1),
+        Tuple2("c", 1),
+        Tuple2("c", 1),
+        Tuple2("c", 1),
+        Tuple2("c", 1)
+      ).toDF("c", "d")
+
+      val ir = flow.run(s, _ => Some(data))
+
+      val d = ir("b")._2.selectExpr("c", "d").as[(String, Option[Int])]
+
+      val r = d.collect()
+
+    }
+
+    // no flow, same case as all the other tests but control for the ones below
+    earlyExit(Map.empty)
+    // sql should run but as it returns true it's fine
+    earlyExit(Map(flowEarlyExitSQL -> s"select first(true) $flowEarlyExitColumn from a"))
+    // no rows == fine
+    earlyExit(Map(flowEarlyExitSQL -> s"select true $flowEarlyExitColumn from a where d = 1000"))
+    // false so should exit
+    earlyExit(Map(flowEarlyExitSQL -> s"select false $flowEarlyExitColumn from a"))
+    // bad column name so should exit
+    earlyExit(Map(flowEarlyExitSQL -> s"select false not$flowEarlyExitColumn from a"))
+    // bad sql so should exit
+    earlyExit(Map(flowEarlyExitSQL -> s"iIzBad"))
+  }
 }
