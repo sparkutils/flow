@@ -16,7 +16,9 @@ object FlowExceptionConstants {
     s"Step ${step.name} has an undefined inputView name but has multiple parents `(${step.dependencies.mkString(",")})`"
   def InvalidDQResultApproach(step: Step) =
     s"Step ${step.name} has an invalid resultApproach for DQ Steps `${step.operation.resultApproach}` provided, (MergeFields, OutputFieldsOnly) are not permitted"
-  def FlowEarlyExitException(step: Step) =
-    s"Step ${step.name} had flowEarlyExitSQL configured which returned false - the Flow will be stopped"
+  def FlowEarlyExitException(step: Step): String =
+    FlowEarlyExitException(step.name)
+  def FlowEarlyExitException(stepName: String): String =
+    s"Step stepName had flowEarlyExitSQL configured which returned false - the Flow will be stopped"
 
 }

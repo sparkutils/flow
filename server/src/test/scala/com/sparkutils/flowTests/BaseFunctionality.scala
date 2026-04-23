@@ -1,6 +1,7 @@
 package com.sparkutils.flowTests
 
 import com.sparkutils.flow._
+import com.sparkutils.flow.impl.util.FlowExceptionConstants.FlowEarlyExitException
 import com.sparkutils.flowTests.RulesGen.{rulesRaw, testData}
 import com.sparkutils.flowTests.utils.SharedPureConnectTests
 import com.sparkutils.quality._
@@ -397,16 +398,30 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
     }
 
     // no flow, same case as all the other tests but control for the ones below
-    earlyExit(Map.empty)
+    /*earlyExit(Map.empty)
     // sql should run but as it returns true it's fine
     earlyExit(Map(flowEarlyExitSQL -> s"select first(true) $flowEarlyExitColumn from a"))
     // no rows == fine
     earlyExit(Map(flowEarlyExitSQL -> s"select true $flowEarlyExitColumn from a where d = 1000"))
-    // false so should exit
-    earlyExit(Map(flowEarlyExitSQL -> s"select false $flowEarlyExitColumn from a"))
-    // bad column name so should exit
+    // bad column name so should not exit
     earlyExit(Map(flowEarlyExitSQL -> s"select false not$flowEarlyExitColumn from a"))
+*/
+    def shouldExit(sql: String, stepName: String = "", msg: Option[String] = None) = {
+      val thrown = intercept[FlowException] {
+        earlyExit(Map(flowEarlyExitSQL -> sql) ++ msg.fold(Map.empty[String,String])(
+          m => Map( flowEarlyExitException -> m )
+        ))
+      }
+      val expected = msg.getOrElse(FlowEarlyExitException(stepName))
+      thrown.msg shouldBe expected
+    }
+
+    // false so should exit
+    //shouldExit(s"select false $flowEarlyExitColumn from a")
     // bad sql so should exit
-    earlyExit(Map(flowEarlyExitSQL -> s"iIzBad"))
+    shouldExit(s"iIzBad")
+    // bad sql so should exit, with this message
+    shouldExit(s"iIzBad", msg = Some("I WAS BAD"))
+
   }
 }

@@ -1,7 +1,8 @@
 package com.sparkutils.flow
 
 import com.sparkutils.flow
-import com.sparkutils.flow.Utils.MapOps
+import com.sparkutils.flow.impl.util.Utils
+import com.sparkutils.flow.impl.util.Utils.MapOps
 import com.sparkutils.quality.{DataFrameLoader, VersionedId}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{DataFrame, SparkSession}
@@ -82,4 +83,15 @@ trait FlowDataHandling extends Serializable with Logging { this: Flow =>
    */
   protected def stepCompleted(result: DataFrame, step: Step, previousSteps: Set[(Step, DataFrame)]): DataFrame
 
+  /**
+   * Called after stepCompleted, by default [[Constants.flowEarlyExitSQL]] logic is run, any [[Step.defaultOutputViewName]]
+   * are run and available for use within the [[Step.options]] SQL configuration.
+   *
+   * It's results are not used by the Flow
+   *
+   * @param result
+   * @param step
+   * @param previousSteps
+   */
+  protected def earlyExitCheck(result: DataFrame, step: Step, previousSteps: Set[(Step, DataFrame)]): Unit
 }

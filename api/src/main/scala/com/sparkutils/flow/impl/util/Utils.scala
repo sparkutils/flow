@@ -1,7 +1,8 @@
-package com.sparkutils.flow
+package com.sparkutils.flow.impl.util
 
-import org.apache.spark.sql.{Column, functions}
+import com.sparkutils.flow.FlowException
 import org.apache.spark.sql.types.{DataType, StructType}
+import org.apache.spark.sql.{Column, functions}
 
 import scala.concurrent.duration.{Duration, NANOSECONDS}
 import scala.reflect.ClassTag

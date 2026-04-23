@@ -4,8 +4,8 @@ import com.sparkutils.quality.{DataFrameLoader, DefaultProcessor, Id, MapConfigC
 import com.sparkutils.quality.impl.views.ViewLoadResults
 import org.apache.spark.sql.functions.{array, expr, col => scol}
 import org.apache.spark.sql.{Column, DataFrame, ShimUtils, SparkSession, functions}
-import Utils._
-import com.sparkutils.flow.impl.util.FlowExceptionConstants.{CycleDetected, DefaultViewNamesMultipleParents, DuplicateNames, EmptyFlow, EmptyStepName, InvalidDQResultApproach, InvalidViewNames, MissingStep}
+import com.sparkutils.flow.impl.util.Utils._
+import com.sparkutils.flow.impl.util.FlowExceptionConstants.{CycleDetected, DefaultViewNamesMultipleParents, DuplicateNames, EmptyFlow, EmptyStepName, FlowEarlyExitException, InvalidDQResultApproach, InvalidViewNames, MissingStep}
 import com.sparkutils.quality.functions.{group_audit, group_results}
 import com.sparkutils.quality.impl.Encoders
 import com.sparkutils.quality.impl.mapLookup.MapTypes.MapLookups
@@ -292,6 +292,8 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
       val res = process(starter, actualStep)
 
       val finalDF = stepCompleted(res, actualStep, dependencies)
+      // allow early exit
+      earlyExitCheck(finalDF, step, dependencies)
 
       if (isTraceEnabled() || showInterim) {
         infoLogStep(actualStep, "Result Sample")
@@ -300,6 +302,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
 
       (actualStep, finalDF)
     } catch {
+      case f: FlowException => throw f
       case t: Throwable =>
         val info = "An unexpected error occurred during processing the Step"
         errorLogStep(step, info)
@@ -546,11 +549,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
     step
 
   /**
-   * By default, logs and returns input a dataframe via FlowDataHandling.loadData using Step.inputViewName as the token
-   *
-   * @param input either an empty dataset or the previous steps dataframe, by default this is ignored
-   * @param step
-   * @return the actual dataset used as input to the set
+   * @inheritdoc
    */
   protected def startStep(input: DataFrame, step: Step, previousSteps: Set[(Step, DataFrame)]): DataFrame = {
     infoLogStep(step, "Started")
@@ -566,9 +565,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
   }
 
   /**
-   * The default implementation optionally caches (cacheStepResults) and uses the outputViewName to register a temp view
-   * @param step
-   * @return a, by default, optionally cached dataFrame
+   * @inheritdoc
    */
   protected def stepCompleted(result: DataFrame, step: Step, previousSteps: Set[(Step, DataFrame)]): DataFrame = {
     val ndf =
@@ -584,4 +581,23 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
     ndf
   }
 
+  /**
+   * @inheritdoc
+   */
+  protected def earlyExitCheck(result: DataFrame, step: Step, previousSteps: Set[(Step, DataFrame)]): Unit =
+    step.options.get(flowEarlyExitSQL).foreach {
+      sql =>
+        val msg = step.options.getOrElse(flowEarlyExitException, FlowEarlyExitException(step))
+        try {
+          val s = result.sparkSession
+          import s.implicits._
+          val df = s.sql(sql).select(flowEarlyExitColumn).as[Boolean]
+          if (!(df.isEmpty || df.head())) {
+            throw FlowException(msg)
+          }
+        } catch {
+          case f: FlowException => throw f
+          case t: Throwable => throw FlowException(msg,t)
+        }
+    }
 }

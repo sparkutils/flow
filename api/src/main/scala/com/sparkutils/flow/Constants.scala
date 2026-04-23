@@ -137,6 +137,9 @@ trait Constants {
    *
    * When present the SQL will be evaluated after a step is completed, it should return [[flowEarlyExitColumn]]
    * with it's associated semantics.
+   *
+   * NOTE - The graph runs in parallel, if any Steps must perform "safe" actions such as saving a data frame these checks
+   * are recommended to be done as dependencies of those Steps
    */
   val flowEarlyExitSQL = "flowEarlyExitSQL"
 
