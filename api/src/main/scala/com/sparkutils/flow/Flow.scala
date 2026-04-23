@@ -1,16 +1,17 @@
 package com.sparkutils.flow
 
-import com.sparkutils.quality.{DataFrameLoader, DefaultProcessor, Id, MapConfigColumns, NoOpDefaultProcessor, OutputExpression, VersionedId, ViewConfigColumns, collectRunner, ruleEngineRunner, ruleFolderRunner, typedExpressionRunner}
+import com.sparkutils.flow.StepUtils.withOutputFields
+import com.sparkutils.quality.{DataFrameLoader, DefaultProcessor, Id, MapConfigColumns, NoOpDefaultProcessor, OutputExpression, VersionedId, ViewConfigColumns, collectRunner, ruleEngineRunner, ruleFolderRunner}
 import com.sparkutils.quality.impl.views.ViewLoadResults
-import org.apache.spark.sql.functions.{array, expr, col => scol}
-import org.apache.spark.sql.{Column, DataFrame, ShimUtils, SparkSession, functions}
+import org.apache.spark.sql.functions.{expr, col => scol}
+import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 import com.sparkutils.flow.impl.util.Utils._
 import com.sparkutils.flow.impl.util.FlowExceptionConstants.{CycleDetected, DefaultViewNamesMultipleParents, DuplicateNames, EmptyFlow, EmptyStepName, FlowEarlyExitException, InvalidDQResultApproach, InvalidViewNames, MissingStep}
-import com.sparkutils.quality.functions.{group_audit, group_results}
+import com.sparkutils.quality.functions.group_audit
 import com.sparkutils.quality.impl.Encoders
 import com.sparkutils.quality.impl.mapLookup.MapTypes.MapLookups
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.types.{DataType, StructType}
+import org.apache.spark.sql.types.StructType
 import scalax.collection.edges.{DiEdge, DiEdgeImplicits}
 import scalax.collection.immutable.Graph
 
@@ -74,76 +75,23 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
   private val (roots, rest) = steps.partition(_.dependencies.isEmpty)
 
   private def processResult(dataFrame: DataFrame, step: Step,
-                            engine: (Column, Seq[String], Option[Set[String]])): DataFrame = {
+                            engine: RunnerOutput): DataFrame = {
     import step.operation._
     import step.options
 
-    val (col, childrenRaw, outputFieldsI) = engine
+    val RunnerOutput(col, childrenRaw, outputFieldsI) = engine
 
-    val outputFields: Option[Set[String]] =
-      outputFieldsI.flatMap{s =>
-        if (options.boolean(forceMergeProjection))
-          None
-        else
-          Some(s)
-      }.map( _ - flowAuditColName)
+    val ei @ EngineInputs(struct, withoutFlowAudit, _) = engineInputs(options, dataFrame, step)
 
-    val struct = inputSchema(dataFrame, step)
-    val withoutFlowAudit = struct.filterNot(_.name == flowAuditColName).map(_.name)
-
-    val dataRefTypeFields =
-      options.dataType(resultDataType) match {
-        case Some(s: StructType) => Some(s.fields.map(_.name).filterNot(_ == flowAuditColName).toSet)
-        case _ => None
-      }
-
-    def hasAudit[T](auditF: => T)(noAudit: => T): T =
-      if (struct.exists(s => s.name == flowAuditColName && s.dataType == Encoders.ruleSuiteGroupResultsTypedEnc.catalystRepr))
-        auditF
-      else
-        noAudit
-
-    val (starterColumns, existingAudit) =
-      // if flowAuditColName is present and the correct type, select all the others, assuming via having a parent step
-      // isn't enough if StarOnly or OutputFieldOnly is provided
-      //
-      ( Seq(expr("*"), col),
-      hasAudit(
-        Seq(scol(flowAuditColName))
-      )(
-        Seq.empty
-      ))
-
-    val fieldName = step.defaultFieldName
-
-    val children = childrenRaw.map(n => scol(fieldName).getField(n).as(n))
-
-    val group_auditF =
-      group_audit( scol(fieldName),
-        step.operation.combineAuditWith.map{ fnames =>
-          fnames.map{fname => expr(fname)}.toSeq
-        }.getOrElse(Seq.empty) ++ existingAudit
-          :_*).as(flowAuditColName)
-
-    // if fields are present, either by default in the folder case or by providing a result type that is not an
-    // array we can remove two calls to columns action, 632.73ms vs 554.88ms on using 14 chained engines 1 rule each
-    // forceMergeProjection on 200,000 rows
-    def withOutputFields(starter: DataFrame, outputFields: Set[String], extraFields: Set[Column] = Set.empty) =
-      // cannot be run directly on dataFrame as otherwise an lca will be added to any repetitive expressions
-      // this stops row number plus another of other queries running correctly in all circumstances
-      starter.select(
-        Seq(scol(fieldName), group_auditF)
-         ++ extraFields ++
-        outputFields.map{n =>
-          scol(s"$fieldName.result.$n").as(n)
-        } :_*)
+    val ri @ ResultProcessInputs(outputFields, starterColumns, fieldName, children, group_auditF) =
+      resultProcessInputs(step, col, childrenRaw, outputFieldsI, ei)
 
     // auto add audit
     val columns = starterColumns
     resultApproach match {
       case AsIs =>
         dataFrame.select(columns :_*).select(
-        hasAudit(
+        ei.hasAudit(flowAuditColName)(
           withoutFlowAudit.map(scol) ++ Seq(scol(fieldName), group_auditF)
         )(
           Seq(expr("*"), group_auditF)
@@ -161,7 +109,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
         }{ outputFields =>
 
           val fields = struct.map(_.name).toSet -- outputFields - flowAuditColName
-          withOutputFields(starter, outputFields, extraFields = fields.map(scol))
+          withOutputFields(fieldName, col, group_auditF, starter, outputFields, extraFields = fields.map(scol))
 
         }
 
@@ -177,13 +125,49 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
             Seq(scol(fieldName), group_auditF, expr(s"$fieldName.result.*")): _*)
 
         }{ o =>
-          withOutputFields(starter, outputFields = o)
+          withOutputFields(fieldName, col, group_auditF, starter, outputFields = o)
         }
 
       case StarOnly => dataFrame.select(col).select(children: _*)
       case OutputFieldOnly => dataFrame.select(col)
+      case c: CustomApproach => c.customResultApproach(dataFrame, col, ei, ri, step)
     }
 
+  }
+
+  private def resultProcessInputs(step: Step, col: Column, childrenRaw: Seq[String],
+                                  outputFieldsI: Option[Set[String]], ei: EngineInputs): ResultProcessInputs = {
+    val outputFields: Option[Set[String]] =
+      outputFieldsI.flatMap { s =>
+        if (step.options.boolean(forceMergeProjection))
+          None
+        else
+          Some(s)
+      }.map(_ - flowAuditColName)
+
+    val (starterColumns, existingAudit) =
+      // if flowAuditColName is present and the correct type, select all the others, assuming via having a parent step
+      // isn't enough if StarOnly or OutputFieldOnly is provided
+      //
+      (Seq(expr("*"), col),
+        ei.hasAudit(flowAuditColName)(
+          Seq(scol(flowAuditColName))
+        )(
+          Seq.empty
+        ))
+
+    val fieldName = step.defaultFieldName
+
+    val children = childrenRaw.map(n => scol(fieldName).getField(n).as(n))
+
+    val group_auditF =
+      group_audit(scol(fieldName),
+        step.operation.combineAuditWith.map { fnames =>
+          fnames.map { fname => expr(fname) }.toSeq
+        }.getOrElse(Seq.empty) ++ existingAudit
+          : _*).as(flowAuditColName)
+
+    ResultProcessInputs(outputFields, starterColumns, fieldName, children, group_auditF)
   }
 
   // TODO move this to the server?, allowing upgrades for all jobs on shared cluster
@@ -193,19 +177,12 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
 
     val fieldName = step.defaultFieldName
 
-    val struct = inputSchema(dataFrame, step)
-    val withoutFlowAudit = struct.filterNot(_.name == flowAuditColName).map(_.name)
+    val ei @ EngineInputs(struct, withoutFlowAudit, dataRefTypeFields) = engineInputs(options, dataFrame, step)
 
-    val dataRefTypeFields =
-      options.dataType(resultDataType) match {
-        case Some(s: StructType) => Some(s.fields.map(_.name).filterNot(_ == flowAuditColName).toSet)
-        case _ => None
-      }
-
-    val engine = (
-      function.toLowerCase.replaceAll("_","") match {
-        case CollectRunnerName | "collectrunner" =>
-          (collectRunner(step.operation.ruleSuite, resultDataType = options.dataType(resultDataType),
+    val engine =
+      function match {
+        case Collect =>
+          RunnerOutput(collectRunner(step.operation.ruleSuite, resultDataType = options.dataType(resultDataType),
             variablesPerFunc = options.int("variablesPerFunc", 40),
             variableFuncGroup = options.int("variableFuncGroup", 20),
             flatten = options.boolean(collectFlatten, true),
@@ -215,15 +192,15 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
             unrollOutputArraySize = options.int(collectUnrollOutputArraySize, 1)).as(fieldName), Seq("ruleSuiteResults", "result"),
             dataRefTypeFields
           )
-        case EngineRunnerName | "ruleengine" | "ruleenginerunner" =>
-          (ruleEngineRunner(step.operation.ruleSuite,
+        case Engine =>
+          RunnerOutput(ruleEngineRunner(step.operation.ruleSuite,
             resultDataType = options.dataType(resultDataType),
             debugMode = options.boolean(debugMode),
             variablesPerFunc = options.int("variablesPerFunc", 40),
             variableFuncGroup = options.int("variableFuncGroup", 20)).as(fieldName), Seq("ruleSuiteResults", "salientRule", "result"),
             dataRefTypeFields
           )
-        case FolderRunnerName | "folderrunner" =>
+        case Folder =>
           val rs =
             if (step.operation.ruleSuite.defaultProcessor != NoOpDefaultProcessor.noOp)
               // even if the result is null, it's been chosen as such
@@ -232,7 +209,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
               // identity function - let the row through
               step.operation.ruleSuite.copy(defaultProcessor = DefaultProcessor(Id(-1,-1), OutputExpression("row -> row")))
 
-          (ruleFolderRunner(rs,
+          RunnerOutput(ruleFolderRunner(rs,
             startingStruct = options.expr(startingStruct).getOrElse{
               // default to the current row - flow_audit otherwise MergeFields will have dupes
               expr(s"struct(${withoutFlowAudit.mkString(",")})")
@@ -247,12 +224,26 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
               }
             }
           )
-        case DQRunnerName | "dqrulerunner" | "rulerunner" =>
-          (com.sparkutils.quality.ruleRunner(step.operation.ruleSuite).as(fieldName), Seq(), None)
-      } )
+        case DQ =>
+          RunnerOutput(com.sparkutils.quality.ruleRunner(step.operation.ruleSuite).as(fieldName), Seq(), None)
+        case c: CustomRunnerEngine =>
+          c.customRunner(dataFrame, ei, step)
+      }
 
     processResult(dataFrame, step, engine)
 
+  }
+
+  private def engineInputs(options: Map[String, String], dataFrame: DataFrame, step: Step): EngineInputs = {
+    val struct = inputSchema(dataFrame, step)
+    val withoutFlowAudit = struct.filterNot(_.name == flowAuditColName).map(_.name)
+
+    val dataRefTypeFields =
+      options.dataType(resultDataType) match {
+        case Some(s: StructType) => Some(s.fields.map(_.name).filterNot(_ == flowAuditColName).toSet)
+        case _ => None
+      }
+    EngineInputs(struct, withoutFlowAudit, dataRefTypeFields)
   }
 
   protected def loadViews(sparkSession: SparkSession, step: Step): ViewLoadResults = {
@@ -272,7 +263,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
       mapConfig = mapColumns
     )
     step.initConfiguration.mapName.fold(
-      com.sparkutils.quality.impl.mapLookup.MapLookupFunctions.loadMaps(config  )
+      com.sparkutils.quality.impl.mapLookup.MapLookupFunctions.loadMaps(config)
     ){ name =>
       com.sparkutils.quality.impl.mapLookup.MapLookupFunctions.loadMaps(config, name)
     }
@@ -296,16 +287,20 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
       earlyExitCheck(finalDF, step, dependencies)
 
       if (isTraceEnabled() || showInterim) {
+        // $COVERAGE-OFF$
         infoLogStep(actualStep, "Result Sample")
         finalDF.show()
+        // $COVERAGE-ON$
       }
 
       (actualStep, finalDF)
     } catch {
       case f: FlowException => throw f
       case t: Throwable =>
+        // $COVERAGE-OFF$
         val info = "An unexpected error occurred during processing the Step"
         errorLogStep(step, info)
+        // $COVERAGE-ON$
         throw FlowException(flowInfo(step, info), t)
     }
   }
@@ -391,7 +386,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
       steps.foreach {
         step =>
           (step.operation.function, step.operation.resultApproach) match {
-            case (DQRunnerName | "dqrulerunner" | "rulerunner", MergeFields | OutputFieldsOnly) =>
+            case (DQ, MergeFields | OutputFieldsOnly) =>
               throw FlowException(InvalidDQResultApproach(step))
             case _ => ()
           }
@@ -460,6 +455,8 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
       _ => None
     })
 
+  // this logic is tested via Quality itself
+  // $COVERAGE-OFF$
   /**
    * By default, throws errors with failedToLoadDutToCycles or if the step inputView could not be loaded
    * @param vl
@@ -488,6 +485,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
       infoLogStep(step, "Views Loaded")
     }
   }
+  // $COVERAGE-ON$
 
   final def flowInfo(step: Step, info: String): String =
     s"Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} $info"
@@ -499,22 +497,6 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
    */
   final def infoLogStep(step: Step, info: String): Unit = {
     logInfo(flowInfo(step,info))
-  }
-  /**
-   * Logs at info level the step
-   * @param step
-   * @param info extra logging information
-   */
-  final def debugLogStep(step: Step, info: String): Unit = {
-    logDebug(flowInfo(step,info))
-  }
-  /**
-   * Logs at info level the step
-   * @param step
-   * @param info extra logging information
-   */
-  final def traceLogStep(step: Step, info: String): Unit = {
-    logTrace(flowInfo(step,info))
   }
   /**
    * Logs at info level the step

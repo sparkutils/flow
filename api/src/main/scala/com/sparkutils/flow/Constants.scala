@@ -153,4 +153,9 @@ trait Constants {
    * }}}
    */
   val flowEarlyExitException = "flowEarlyExitException"
+
+  /**
+   * The suffix used for root Steps if, as is default, no inputViewName is defined
+   */
+  val rootInputSuffix = "_root_input"
 }

@@ -1,62 +1,14 @@
 package com.sparkutils.flow
 
+import com.sparkutils.quality.impl.Encoders
 import com.sparkutils.quality.{DataFrameLoader, MapRow, RuleSuite, ViewRow}
 import org.apache.spark.sql.types.{DataType, StructType}
-import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 
 import scala.util.Try
 
 @SerialVersionUID(1L)
 case class FlowException(msg: String, cause: Throwable = null) extends Exception(msg, cause) with Serializable
-
-/**
- * How should the result be used
- */
-sealed trait ResultApproach extends Serializable
-// todo should the interim being kept be result
-/**
- * Keeps the configured processor field as a nested type e.g. selectExpr("*"), this can be changed by a ResultProcessor
- */
-@SerialVersionUID(1L)
-case object AsIs extends ResultApproach
-
-/**
- * Expands nested result field via selectExpr("*", "fieldName.*"), but does not manage duplicates
- */
-@SerialVersionUID(1L)
-case object ExpandNested extends ResultApproach
-
-/**
- * Merges fields within selectExpr("*", "fieldName.result.*").
- *
- * This __keeps__ fields from the input dataset which are not present in the engine/folder result.
- *
- * As columns are used it may invoke scans, prefer using delta over parquet, or specify the startingStruct ddl in the [[Step.options]].
- */
-@SerialVersionUID(1L)
-case object MergeFields extends ResultApproach
-
-/**
- * Equivalent to selectExpr("fieldName.result.*")
- *
- * This __discards__ fields from the input dataset, excluding flow_audit, which are not present in the engine/folder result.
- *
- * As columns are used it may invoke scans, prefer using delta over parquet, or specify the startingStruct ddl in the [[Step.options]].
- */
-@SerialVersionUID(1L)
-case object OutputFieldsOnly extends ResultApproach
-
-/**
- * Treats the result as the new row by selectExpr("fieldName.*")
- */
-@SerialVersionUID(1L)
-case object StarOnly extends ResultApproach
-
-/**
- * Treats the result as the new row by selectExpr("fieldName")
- */
-@SerialVersionUID(1L)
-case object OutputFieldOnly extends ResultApproach
 
 /**
  * Represents an operation on a dataset
@@ -69,19 +21,22 @@ case object OutputFieldOnly extends ResultApproach
  *                         with the operation fieldName automatically provided
  */
 @SerialVersionUID(1L)
-case class Operation(ruleSuite: RuleSuite, function: String, resultApproach: ResultApproach,
+case class Operation(ruleSuite: RuleSuite, function: Runner, resultApproach: ResultApproach,
                      fieldName: Option[String] = None,
-                     combineAuditWith: Option[Set[String]] = None)
-  extends Serializable
+                     combineAuditWith: Option[Set[String]] = None) extends Serializable
 
 object Operation {
-  def apply(ruleSuite: RuleSuite, function: String, resultApproach: ResultApproach,
+
+  def apply(ruleSuite: RuleSuite, function: Runner, resultApproach: ResultApproach,
             fieldName: String): Operation = Operation(ruleSuite, function, resultApproach, Option(fieldName))
-  def apply(ruleSuite: RuleSuite, function: String, resultApproach: ResultApproach,
+
+  def apply(ruleSuite: RuleSuite, function: Runner, resultApproach: ResultApproach,
             fieldName: String, combineAuditWith: Set[String]): Operation =
     Operation(ruleSuite, function, resultApproach, Option(fieldName), Option(combineAuditWith))
-  def apply(ruleSuite: RuleSuite, function: String, resultApproach: ResultApproach, combineAuditWith: Set[String]): Operation =
+
+  def apply(ruleSuite: RuleSuite, function: Runner, resultApproach: ResultApproach, combineAuditWith: Set[String]): Operation =
     new Operation(ruleSuite, function, resultApproach, combineAuditWith = Option(combineAuditWith))
+
 }
 
 /**
@@ -141,4 +96,5 @@ case class Step(name: String, dependencies: Set[String], operation: Operation,
    * The default field name or provided one, when present
    */
   def defaultFieldName: String = operation.fieldName.getOrElse(name)
+
 }

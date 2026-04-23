@@ -7,7 +7,7 @@ import org.apache.spark.sql.{Column, DataFrame, Dataset, Encoder, SparkSession}
 import org.apache.spark.sql.functions.col
 
 @SerialVersionUID(1L)
-case class OperationRow(function: String, fieldName: Option[String], resultApproach: ResultApproach,
+case class OperationRow(function: Runner, fieldName: Option[String], resultApproach: ResultApproach,
                         combineAuditWith: Option[Set[String]] = None) extends Serializable
 
 @SerialVersionUID(1L)
@@ -41,7 +41,7 @@ trait Serialisation {
                 ruleSuiteId: Column, ruleSuiteVersion: Column, operation: Column,
                 options: Column, data: Column): Dataset[StepRow] = {
     import frameless._
-    import implicits._
+    import com.sparkutils.flow.impl.util.implicits._
     import com.sparkutils.quality.implicits._
 
     dataFrame.select(
@@ -66,7 +66,7 @@ trait Serialisation {
    */
   def toFullFlow(sparkSession: SparkSession, flow: Flow): Dataset[FullFlow] = {
     import frameless._
-    import implicits._
+    import com.sparkutils.flow.impl.util.implicits._
 
     import com.sparkutils.quality.implicits._
 
@@ -127,7 +127,7 @@ trait Serialisation {
   def toDatasets(sparkSession: SparkSession, flow: Flow): FlowDataSets = {
 
     import frameless._
-    import implicits._
+    import com.sparkutils.flow.impl.util.implicits._
 
     import com.sparkutils.quality.implicits._
 
