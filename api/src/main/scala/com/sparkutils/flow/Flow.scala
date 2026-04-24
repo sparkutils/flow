@@ -1,6 +1,7 @@
 package com.sparkutils.flow
 
 import com.sparkutils.flow.StepUtils.withOutputFields
+import com.sparkutils.flow.Timer.DurationOps
 import com.sparkutils.quality.{DataFrameLoader, DefaultProcessor, Id, MapConfigColumns, NoOpDefaultProcessor, OutputExpression, VersionedId, ViewConfigColumns, collectRunner, ruleEngineRunner, ruleFolderRunner}
 import com.sparkutils.quality.impl.views.ViewLoadResults
 import org.apache.spark.sql.functions.{expr, col => scol}
@@ -75,7 +76,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
   private val (roots, rest) = steps.partition(_.dependencies.isEmpty)
 
   private def processResult(dataFrame: DataFrame, step: Step,
-                            engine: RunnerOutput): DataFrame = {
+                            engine: RunnerOutput): (DataFrame, Duration) = Timer{
     import step.operation._
     import step.options
 
@@ -171,7 +172,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
   }
 
   // TODO move this to the server?, allowing upgrades for all jobs on shared cluster
-  private def process(dataFrame: DataFrame, step: Step): DataFrame = {
+  private def process(dataFrame: DataFrame, step: Step): ((DataFrame, Duration), Duration) = Timer{
     import step.operation._
     import step.options
 
@@ -280,7 +281,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
       loadMaps(df.sparkSession, actualStep)
       stepViewsLoaded(vl, actualStep)
       val starter = startStep(df, actualStep, dependencies)
-      val res = process(starter, actualStep)
+      val ((res, processed), runner) = process(starter, actualStep)
 
       val finalDF = stepCompleted(res, actualStep, dependencies)
       // allow early exit
@@ -293,9 +294,14 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
         // $COVERAGE-ON$
       }
 
-      StepResult(actualStep, finalDF)
+      val timings = StepTimings(runner - processed, processed)
+
+      infoLogStep(step, s"runner took ${timings.runner.pretty} with result processing taking ${timings.result.pretty}")
+      StepResult(actualStep, finalDF, timings)
     } catch {
-      case f: FlowException => throw f
+      case f: FlowException =>
+        errorLogStep(step, f.msg)
+        throw f
       case t: Throwable =>
         // $COVERAGE-OFF$
         val info = "An unexpected error occurred during processing the Step"
@@ -411,47 +417,52 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
    *         note although the Step returned may have been replaced by modifyStep
    *         the name key will be the original [[Step.name]]
    */
-  def run(sparkSession: SparkSession, starting: Step => Option[DataFrame]): Map[String, StepResult] = {
-    verifySteps()
-    logInfo(s"Starting Flow id: ${flowId.id}, version: ${flowId.version}")
+  def run(sparkSession: SparkSession, starting: Step => Option[DataFrame]): FlowResult = {
+    val timed = Timer {
+      verifySteps()
+      logInfo(s"Starting Flow id: ${flowId.id}, version: ${flowId.version}")
 
-    val (rootPromises, promises) = buildPromises()
+      val (rootPromises, promises) = buildPromises()
 
-    // processing th roots sets of the rest
-    roots.par.map {
-      root =>
-        val p = rootPromises(root.name)
-        try {
-          val df = starting(root)
-          val token = rootToken(root)
-          val r =
-            df.fold(
-              performStep( loadData(sparkSession = sparkSession, token = token), root, Set.empty)
-            ) { df =>
-              df.createOrReplaceTempView(token)
-              performStep(df, root, Set.empty)
-            }
+      // processing th roots sets of the rest
+      roots.par.map {
+        root =>
+          val p = rootPromises(root.name)
+          try {
+            val df = starting(root)
+            val token = rootToken(root)
+            val r =
+              df.fold(
+                performStep(loadData(sparkSession = sparkSession, token = token), root, Set.empty)
+              ) { df =>
+                df.createOrReplaceTempView(token)
+                performStep(df, root, Set.empty)
+              }
 
-          p success r
-        } catch {
-          case t: Throwable => p failure t
-        }
+            p success r
+          } catch {
+            case t: Throwable => p failure t
+          }
+      }
+
+      val all = Future.sequence((rootPromises ++ promises).map(_._2.future))
+      val r = Await.result(all, duration)
+
+      r.map(p => p.step.name -> p).toMap
     }
+    logInfo(s"Finished Flow id: ${flowId.id}, version: ${flowId.version} in ${timed._2.pretty}")
 
-    val all = Future.sequence((rootPromises ++ promises).map(_._2.future))
-    val r = Await.result(all, duration)
-
-    logInfo(s"Finished Flow id: ${flowId.id}, version: ${flowId.version}")
-    r.map(p => p.step.name -> p).toMap
+    FlowResult(timed._1, timed._2)
   }
 
   /**
    * Process using the registered views using registered views as the roots
+   *
    * @param sparkSession
    * @param starting
    * @return Tuples of end Steps with their resulting DataFrames and run statistics
    */
-  def run(sparkSession: SparkSession): Map[String, StepResult] =
+  def run(sparkSession: SparkSession): FlowResult =
     run(sparkSession, {
       _ => None
     })

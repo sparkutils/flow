@@ -86,14 +86,14 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
 
     import s.implicits._
     val ires = flow.run(sparkSession, _ => Some(testData.toDF()))
-    ires.size shouldBe 4
-    ires.keys.toSet shouldBe Set("a", "b", "c", "d")
+    ires.stepResults.size shouldBe 4
+    ires.stepResults.keys.toSet shouldBe Set("a", "b", "c", "d")
 
     // completion with the full set of responses is main test, 2nd is to ensure combineAuditWith works across
     // multiple parents
 
     import com.sparkutils.quality.implicits._
-    val rgs = ires("d").output.selectExpr("flow_audit.*").as[RuleSuiteGroupResults].collect()
+    val rgs = ires.stepResults("d").output.selectExpr("flow_audit.*").as[RuleSuiteGroupResults].collect()
     verifyRuleSuites(rgs, Set(Id(1,1), Id(2,1), Id(3,1), Id(4,1)))(identity)
   }
 
@@ -153,10 +153,10 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
     val s = sparkSession
     import s.implicits._
     val ires = if (sessionOnly) flow.run(sparkSession) else flow.run(sparkSession, _ => Some(testData.toDF()))
-    ires.size shouldBe 4
-    ires.keys.toSeq shouldBe Seq("a", "b", "c", "d")
+    ires.stepResults.size shouldBe 4
+    ires.stepResults.keys.toSeq shouldBe Seq("a", "b", "c", "d")
 
-    val res = ires("d").output
+    val res = ires.stepResults("d").output
     // after removing the nulls in step 4's filter
     res.count() shouldBe expectedCount
 
@@ -199,7 +199,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
   def doFolderTest(flow: Flow): Unit = {
     val s = sparkSession
     import s.implicits._
-    val res = flow.run(sparkSession, _ => Some(testData.toDF()))("b").output
+    val res = flow.run(sparkSession, _ => Some(testData.toDF())).stepResults("b").output
     val rows = res.drop("view1E", "view2E", "flow_audit").as[TestOn].collect()
     rows shouldBe Seq(
       TestOn("edt", "4201", 10),
@@ -258,8 +258,8 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
         }
       )
 
-      ir.head._2.output.schema.map(_.name).toSet shouldBe cols
-      ir.head._2.output.collect().length shouldBe 1
+      ir.stepResults.head._2.output.schema.map(_.name).toSet shouldBe cols
+      ir.stepResults.head._2.output.collect().length shouldBe 1
     }
 
     val resultType = Map(
@@ -297,7 +297,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
     val s = sparkSession
     import com.sparkutils.quality.implicits._
     import s.implicits._
-    val res = flow.run(sparkSession, _ => Some(testData.toDF()))("c").output
+    val res = flow.run(sparkSession, _ => Some(testData.toDF())).stepResults("c").output
 
     val cols = Set("view1E","view2E","product","account","subcode","dq","flow_audit")
     res.schema.map(_.name).toSet shouldBe cols
@@ -333,13 +333,13 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
 
       val ir = flow.run(s, _ => Some(data))
 
-      ir.head._2.output.columns.toSet shouldBe Set("view1E", "flow_audit", "c", "d")
-      val d = ir.head._2.output.selectExpr("c", "d").as[(String,Option[Int])]
+      ir.stepResults.head._2.output.columns.toSet shouldBe Set("view1E", "flow_audit", "c", "d")
+      val d = ir.stepResults.head._2.output.selectExpr("c", "d").as[(String,Option[Int])]
 
       val r = d.collect()
       r.length shouldBe 1
       r.head shouldBe ("b",Some(2))
-      ir.head._2.output
+      ir.stepResults.head._2.output
     }
 
     lca()
@@ -393,7 +393,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
 
     val ir = flow.run(s, _ => Some(data.toDF("c", "d")))
 
-    val d = ir("b").output.selectExpr("c", "d").as[(String, Option[Int])]
+    val d = ir.stepResults("b").output.selectExpr("c", "d").as[(String, Option[Int])]
 
     val r = d.collect()
     // the test is simply does the map lookup work.
@@ -437,7 +437,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
 
       val ir = flow.run(s, _ => Some(data))
 
-      val d = ir("b").output.selectExpr("c", "d").as[(String, Option[Int])]
+      val d = ir.stepResults("b").output.selectExpr("c", "d").as[(String, Option[Int])]
 
       val r = d.collect()
 

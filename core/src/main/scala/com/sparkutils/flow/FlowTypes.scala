@@ -5,6 +5,7 @@ import com.sparkutils.quality.{DataFrameLoader, MapRow, RuleSuite, ViewRow}
 import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 
+import scala.concurrent.duration.Duration
 import scala.util.Try
 
 @SerialVersionUID(1L)
@@ -99,5 +100,28 @@ case class Step(name: String, dependencies: Set[String], operation: Operation,
 
 }
 
+/**
+ * Timings associated with Step processing
+ * @param runner the preparation time take by the runner processing
+ * @param result the preparation time take by the result processing
+ */
 @SerialVersionUID(1L)
-case class StepResult(step: Step, output: DataFrame) extends Serializable
+case class StepTimings(runner: Duration, result: Duration) extends Serializable
+
+/**
+ * The result of a step
+ * @param step this may be a modified Step if modifyStep was overridden
+ * @param output the resulting datafrome from this step
+ * @param timings the time taken to prepare the output
+ */
+@SerialVersionUID(1L)
+case class StepResult(step: Step, output: DataFrame, timings: StepTimings) extends Serializable
+
+/**
+ * The result of a successful Flow
+ * @param stepResults the original Step name mapped to it's result
+ * @param duration the time taken by the entire flow
+ */
+@SerialVersionUID(1L)
+case class FlowResult(stepResults: Map[String, StepResult], duration: Duration) extends Serializable
+

@@ -33,7 +33,7 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
       Tuple2("c", 1)
     ).toDF("c", "d")
 
-    val ir = process(flow.run(s, _ => Some(data)).head._2.output).as[Int]
+    val ir = process(flow.run(s, _ => Some(data)).stepResults.head._2.output).as[Int]
     ir.head() shouldBe answer
   }
 

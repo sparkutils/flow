@@ -88,7 +88,7 @@ trait Serialisation {
         flow.steps.map{ step =>
           FullStep(
             stepRow(flow, step),
-            quality.combined_rows(step.operation.ruleSuite).collect.head,
+            quality.combined_rows(step.operation.ruleSuite).collect().head,
             step.initConfiguration
           )
         })
