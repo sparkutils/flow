@@ -10,15 +10,17 @@ import org.apache.spark.sql.{AnalysisException, Column, DataFrame, Dataset, Save
 import org.scalatest.Matchers
 
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.util.Try
 
 class CustomExtensions extends SharedPureConnectTests with Matchers {
 
-  def buildFlow(resultApproach: ResultApproach = StarOnly, runner: Runner = Engine): Flow =
+  def buildFlow(resultApproach: ResultApproach = StarOnly, runner: Runner = Engine,
+                options: Map[String,String] = Map.empty): Flow =
     new Flow(Id(1, 1), Seq(
       Step("a", Set.empty, Operation(rulesRaw(Seq(
         (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("2")))
-      )), runner, resultApproach)
+      )), runner, resultApproach), options = options
       )
     ))
 
@@ -31,7 +33,7 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
       Tuple2("c", 1)
     ).toDF("c", "d")
 
-    val ir = process(flow.run(s, _ => Some(data)).head._2._2).as[Int]
+    val ir = process(flow.run(s, _ => Some(data)).head._2.output).as[Int]
     ir.head() shouldBe answer
   }
 
@@ -52,20 +54,27 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
       answer = 1, process = identity)
   }
 
+  test("custom runner throws are re-thrown") {
+    val t = intercept[FlowException] {
+      doFlowTest(buildFlow(runner = CustomRunnerEngine(classOf[IRun].getName), options = Map("throw" -> "true")))
+    }
+    t.msg shouldBe "I AM THROWING"
+  }
+
   test("custom result approach serialisation works") {
     val flow = buildFlow(CustomApproach(classOf[IStar].getName))
     val dses = toDatasets(sparkSession, flow)
 
-    val (steps, _) = fromDatasets(sparkSession, dses, flow.flowId)
-    steps shouldBe flow.steps
+    val flowData = fromDatasets(sparkSession, dses, flow.flowId)
+    flowData.steps shouldBe flow.steps
   }
 
   test("custom runner serialisation works") {
     val flow = buildFlow(runner = CustomRunnerEngine(classOf[IRun].getName))
     val dses = toDatasets(sparkSession, flow)
 
-    val (steps, _) = fromDatasets(sparkSession, dses, flow.flowId)
-    steps shouldBe flow.steps
+    val flowData = fromDatasets(sparkSession, dses, flow.flowId)
+    flowData.steps shouldBe flow.steps
   }
 }
 
@@ -79,6 +88,14 @@ class IStar() extends CustomResultApproach {
 class IRun() extends CustomRunner {
 
   override def apply(dataFrame: DataFrame, engineInputs: EngineInputs, step: Step): RunnerOutput =
-    RunnerOutput(expr("named_struct('result',2)").as(step.defaultFieldName), Seq("result"), engineInputs.dataRefTypeFields)
+    if (step.options.get("throw").fold(
+      false
+    ) { s =>
+      val b = Try(s.toBoolean).getOrElse(true)
+      b
+    })
+      throw FlowException("I AM THROWING")
+    else
+      RunnerOutput(expr("named_struct('result',2)").as(step.defaultFieldName), Seq("result"), engineInputs.dataRefTypeFields)
 
 }

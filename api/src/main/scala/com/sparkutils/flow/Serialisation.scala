@@ -6,6 +6,8 @@ import com.sparkutils.quality.{CombinedRuleSuiteRows, Id, LambdaFunctionRow, Map
 import org.apache.spark.sql.{Column, DataFrame, Dataset, Encoder, SparkSession}
 import org.apache.spark.sql.functions.col
 
+import scala.concurrent.duration.Duration
+
 @SerialVersionUID(1L)
 case class OperationRow(function: Runner, fieldName: Option[String], resultApproach: ResultApproach,
                         combineAuditWith: Option[Set[String]] = None) extends Serializable
@@ -16,7 +18,7 @@ case class StepRow(flowId: Int, flowVersion: Int, name: String, dependencies: sc
                    operation: OperationRow, options: Map[String, String], data: StepData) extends Serializable
 
 @SerialVersionUID(1L)
-case class FlowRow(flowId: Int, flowVersion: Int, flowAuditColName: String) extends Serializable
+case class FlowRow(flowId: Int, flowVersion: Int, flowAuditColName: String, duration: Duration) extends Serializable
 
 @SerialVersionUID(1L)
 case class FlowDataSets(steps: Dataset[StepRow], flows: Dataset[FlowRow], ruleRows: Dataset[RuleRow],
@@ -34,6 +36,14 @@ case class FullStep(step: StepRow, ruleSuite: CombinedRuleSuiteRows, initConfigu
 
 @SerialVersionUID(1L)
 case class FullFlow(flowRow: FlowRow, steps: Seq[FullStep]) extends Serializable
+
+/**
+ * Represents the data needed to create a Flow
+ * @param flowRow parameters used to create a flow
+ * @param steps the steps for this flow
+ */
+@SerialVersionUID(1L)
+case class FlowData(flowRow: FlowRow, steps: Seq[Step]) extends Serializable
 
 trait Serialisation {
 
@@ -74,16 +84,10 @@ trait Serialisation {
 
     Seq(
       FullFlow(FlowRow(flowId = flow.flowId.id, flowVersion = flow.flowId.version,
-        flowAuditColName = flow.flowAuditColName),
+        flowAuditColName = flow.flowAuditColName, duration = flow.duration),
         flow.steps.map{ step =>
           FullStep(
-            StepRow(flowId = flow.flowId.id, flowVersion = flow.flowId.version, name = step.name,
-              dependencies = step.dependencies,
-              ruleSuiteId = step.operation.ruleSuite.id.id, ruleSuiteVersion = step.operation.ruleSuite.id.version,
-              data = step.data,
-              operation = OperationRow(step.operation.function, step.operation.fieldName,
-                step.operation.resultApproach, step.operation.combineAuditWith),
-              options = step.options),
+            stepRow(flow, step),
             quality.combined_rows(step.operation.ruleSuite).collect.head,
             step.initConfiguration
           )
@@ -100,24 +104,26 @@ trait Serialisation {
    * @param flowId
    * @return
    */
-  def fromFullFlow(dataset: Dataset[FullFlow], flowId: VersionedId): (Seq[Step], String) = {
+  def fromFullFlow(dataset: Dataset[FullFlow], flowId: VersionedId): FlowData = {
     val r = dataset.filter(flowFilter(flowId, "flowRow.")).collect()
     if (r.isEmpty) {
       throw FlowException(s"Flow $flowId could not be loaded fromFullFlow does not contain that flow")
     }
     val full = r.head
-    (full.steps.map{
-      fullStep =>
-        import fullStep._
-        val rid = Id(step.ruleSuiteId, step.ruleSuiteVersion)
-        val rs = rule_suite(ruleSuite)
+    FlowData(full.flowRow,
+      full.steps.map{
+        fullStep =>
+          import fullStep._
+          val rid = Id(step.ruleSuiteId, step.ruleSuiteVersion)
+          val rs = rule_suite(ruleSuite)
 
-        Step(name = step.name, dependencies = step.dependencies, operation =
-          Operation(rs, step.operation.function, step.operation.resultApproach,
-            step.operation.fieldName, step.operation.combineAuditWith),
-          initConfiguration = initConfiguration,
-          data = step.data, step.options)
-    }, full.flowRow.flowAuditColName)
+          Step(name = step.name, dependencies = step.dependencies, operation =
+            Operation(rs, step.operation.function, step.operation.resultApproach,
+              step.operation.fieldName, step.operation.combineAuditWith),
+            initConfiguration = initConfiguration,
+            data = step.data, step.options)
+      }
+    )
   }
 
   /**
@@ -138,15 +144,9 @@ trait Serialisation {
 
     FlowDataSets(
       flow.steps.map{ step =>
-        StepRow(flowId = flow.flowId.id, flowVersion = flow.flowId.version, name = step.name,
-          dependencies = step.dependencies,
-          ruleSuiteId = step.operation.ruleSuite.id.id, ruleSuiteVersion = step.operation.ruleSuite.id.version,
-          data = step.data,
-          operation = OperationRow(step.operation.function, step.operation.fieldName,
-            step.operation.resultApproach, step.operation.combineAuditWith),
-          options = step.options)}.toDS(),
+        stepRow(flow, step)}.toDS(),
       Seq(FlowRow(flowId = flow.flowId.id, flowVersion = flow.flowId.version,
-        flowAuditColName = flow.flowAuditColName)).toDS(),
+        flowAuditColName = flow.flowAuditColName, duration = flow.duration)).toDS(),
       flow.steps.foldLeft(sparkSession.emptyDataset[RuleRow]){ case (cur, s) =>
         toDS(s.operation.ruleSuite) union cur
       },
@@ -166,7 +166,17 @@ trait Serialisation {
     )
   }
 
-  def fromDatasets(sparkSession: SparkSession, flowDataSets: FlowDataSets, flowId: VersionedId): (Seq[Step], String) = {
+  def stepRow(flow: Flow, step: Step) = {
+    StepRow(flowId = flow.flowId.id, flowVersion = flow.flowId.version, name = step.name,
+      dependencies = step.dependencies,
+      ruleSuiteId = step.operation.ruleSuite.id.id, ruleSuiteVersion = step.operation.ruleSuite.id.version,
+      data = step.data,
+      operation = OperationRow(step.operation.function, step.operation.fieldName,
+        step.operation.resultApproach, step.operation.combineAuditWith),
+      options = step.options)
+  }
+
+  def fromDatasets(sparkSession: SparkSession, flowDataSets: FlowDataSets, flowId: VersionedId): FlowData = {
     import flowDataSets._
 
     // TODO - if this cannot be just 4.x then the og serialisation functions need to be used
@@ -182,12 +192,11 @@ trait Serialisation {
       throw FlowException(s"Flow $flowId could not be loaded as the Step's dataset does not contain that flow")
     }
     val thisFlow = flows.filter(flowFilter(flowId))
-    val flowAuditColumn =
-      if (thisFlow.isEmpty) {
-        "flow_audit"
-      } else {
-        thisFlow.head().flowAuditColName
-      }
+    val flowRow =
+      if (thisFlow.isEmpty)
+        FlowRow(flowId.id, flowId.version, flowAuditDefault, defaultFlowDuration)
+      else
+        thisFlow.head()
 
     val thisSteps =
       flowSteps.collect().map{
@@ -210,6 +219,6 @@ trait Serialisation {
             data = step.data, step.options)
       }
 
-    (thisSteps, flowAuditColumn)
+    FlowData(flowRow, thisSteps)
   }
 }

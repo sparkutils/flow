@@ -73,7 +73,7 @@ trait FlowDataHandling extends Serializable with Logging { this: Flow =>
    * @param previousSteps previous Steps, can be empty if this is a root step
    * @return the actual dataset used as input to the set
    */
-  protected def startStep(input: DataFrame, step: Step, previousSteps: Set[(Step, DataFrame)]): DataFrame
+  protected def startStep(input: DataFrame, step: Step, previousSteps: Set[StepResult]): DataFrame
 
   /**
    * The default implementation optionally caches (cacheStepResults) and uses the outputViewName to register a temp view
@@ -81,7 +81,7 @@ trait FlowDataHandling extends Serializable with Logging { this: Flow =>
    * @param previousSteps previous Steps, can be empty if this is a root step
    * @return a, by default, optionally cached dataFrame
    */
-  protected def stepCompleted(result: DataFrame, step: Step, previousSteps: Set[(Step, DataFrame)]): DataFrame
+  protected def stepCompleted(result: DataFrame, step: Step, previousSteps: Set[StepResult]): DataFrame
 
   /**
    * Called after stepCompleted, by default [[Constants.flowEarlyExitSQL]] logic is run, any [[Step.defaultOutputViewName]]
@@ -93,5 +93,5 @@ trait FlowDataHandling extends Serializable with Logging { this: Flow =>
    * @param step
    * @param previousSteps
    */
-  protected def earlyExitCheck(result: DataFrame, step: Step, previousSteps: Set[(Step, DataFrame)]): Unit
+  protected def earlyExitCheck(result: DataFrame, step: Step, previousSteps: Set[StepResult]): Unit
 }

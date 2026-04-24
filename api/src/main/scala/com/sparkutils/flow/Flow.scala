@@ -35,7 +35,7 @@ import scala.concurrent.{Await, ExecutionContext, Future, Promise}
  */
 @SerialVersionUID(1L)
 class Flow(val flowId: VersionedId, val steps: Seq[Step],
-           val flowAuditColName: String = flowAuditDefault, val duration: Duration = Duration(1L, HOURS),
+           val flowAuditColName: String = flowAuditDefault, val duration: Duration = defaultFlowDuration,
            val loader: DataFrameLoader = new DataFrameLoader {
               override def load(token: String): DataFrame = ???
             },
@@ -269,7 +269,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
     }
   }
 
-  private def performStep(df: DataFrame, step: Step, dependencies: Set[(Step, DataFrame)]): (Step, DataFrame) = {
+  private def performStep(df: DataFrame, step: Step, dependencies: Set[StepResult]): StepResult = {
     // ensure the same session is used for the df, otherwise the session may fall back to the classic when called
     // from another thread, mostly a testing issue, but would also apply to DBR using connect on a classic cluster
     SparkSession.setActiveSession(df.sparkSession)
@@ -293,7 +293,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
         // $COVERAGE-ON$
       }
 
-      (actualStep, finalDF)
+      StepResult(actualStep, finalDF)
     } catch {
       case f: FlowException => throw f
       case t: Throwable =>
@@ -309,16 +309,16 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
    * Builds the chain of Promises from roots, completing roots triggers processing of the rest of the DAG
    * @return (roots, full) promises
    */
-  private def buildPromises(): (Map[String, Promise[(Step, DataFrame)]], Map[String, Promise[(Step, DataFrame)]]) = {
-    val rootPromises = roots.map(s => s.name -> Promise[(Step, DataFrame)]()).toMap
+  private def buildPromises(): (Map[String, Promise[StepResult]], Map[String, Promise[StepResult]]) = {
+    val rootPromises = roots.map(s => s.name -> Promise[StepResult]()).toMap
     val promises = scala.collection.mutable.Map.empty ++ rootPromises
 
-    def chaseDown(elem: theGraph.NodeT): Future[(Step, DataFrame)] = {
+    def chaseDown(elem: theGraph.NodeT): Future[StepResult] = {
       val cur = elem.source
 
       val r =
         promises.get(cur.name).map(_.future).getOrElse {
-          val p = Promise[(Step, DataFrame)]()
+          val p = Promise[StepResult]()
           promises.put(cur.name, p)
 
           // do their roots
@@ -329,8 +329,8 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
             }
           )
 
-          val newF: Future[(Step, DataFrame)] = f.map { names =>
-            performStep(names.head._2, cur, names)
+          val newF: Future[StepResult] = f.map { names =>
+            performStep(names.head.output, cur, names)
           }
 
           p.completeWith(newF)
@@ -407,10 +407,11 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
    * @param starting a function called for each Root Step (a Step having no dependencies), when a DataFrame is provided
    *                 it is registered as a temporary view with the name of the inputView.  When None is returned and the
    *                 inputView is not present an error is thrown, this is delegated to the FlowDataHandling.loadData function
-   * @return a map of step name to Step and DataFrame pairs, note although the Step returned may have been replaced by modifyStep
+   * @return a map of step name to tuples of end Steps with their resulting DataFrames and run statistics,
+   *         note although the Step returned may have been replaced by modifyStep
    *         the name key will be the original [[Step.name]]
    */
-  def run(sparkSession: SparkSession, starting: Step => Option[DataFrame]): Map[String, (Step, DataFrame)] = {
+  def run(sparkSession: SparkSession, starting: Step => Option[DataFrame]): Map[String, StepResult] = {
     verifySteps()
     logInfo(s"Starting Flow id: ${flowId.id}, version: ${flowId.version}")
 
@@ -437,20 +438,20 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
         }
     }
 
-    val all = Future.sequence(promises.map(_._2.future))
+    val all = Future.sequence((rootPromises ++ promises).map(_._2.future))
     val r = Await.result(all, duration)
 
     logInfo(s"Finished Flow id: ${flowId.id}, version: ${flowId.version}")
-    r.map(p => p._1.name -> p).toMap
+    r.map(p => p.step.name -> p).toMap
   }
 
   /**
    * Process using the registered views using registered views as the roots
    * @param sparkSession
    * @param starting
-   * @return Pairs of end Steps with their resulting DataFrames
+   * @return Tuples of end Steps with their resulting DataFrames and run statistics
    */
-  def run(sparkSession: SparkSession): Map[String, (Step, DataFrame)] =
+  def run(sparkSession: SparkSession): Map[String, StepResult] =
     run(sparkSession, {
       _ => None
     })
@@ -527,13 +528,13 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
    * @param previousSteps
    * @return
    */
-  protected def modifyStep(input: DataFrame, step: Step, previousSteps: Set[(Step, DataFrame)]): Step =
+  protected def modifyStep(input: DataFrame, step: Step, previousSteps: Set[StepResult]): Step =
     step
 
   /**
    * @inheritdoc
    */
-  protected def startStep(input: DataFrame, step: Step, previousSteps: Set[(Step, DataFrame)]): DataFrame = {
+  protected def startStep(input: DataFrame, step: Step, previousSteps: Set[StepResult]): DataFrame = {
     infoLogStep(step, "Started")
 
     val token = step.data.inputView.getOrElse{
@@ -541,7 +542,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
       if (previousSteps.isEmpty)
         rootToken(step)
       else
-        previousSteps.head._1.defaultOutputViewName
+        previousSteps.head.step.defaultOutputViewName
     }
     loadData(input.sparkSession, token = token)
   }
@@ -549,7 +550,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
   /**
    * @inheritdoc
    */
-  protected def stepCompleted(result: DataFrame, step: Step, previousSteps: Set[(Step, DataFrame)]): DataFrame = {
+  protected def stepCompleted(result: DataFrame, step: Step, previousSteps: Set[StepResult]): DataFrame = {
     val ndf =
       if (step.data.cacheResults)
         result.cache()
@@ -566,7 +567,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
   /**
    * @inheritdoc
    */
-  protected def earlyExitCheck(result: DataFrame, step: Step, previousSteps: Set[(Step, DataFrame)]): Unit =
+  protected def earlyExitCheck(result: DataFrame, step: Step, previousSteps: Set[StepResult]): Unit =
     step.options.get(flowEarlyExitSQL).foreach {
       sql =>
         val msg = step.options.getOrElse(flowEarlyExitException, FlowEarlyExitException(step))

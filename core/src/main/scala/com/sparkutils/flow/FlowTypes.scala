@@ -98,3 +98,6 @@ case class Step(name: String, dependencies: Set[String], operation: Operation,
   def defaultFieldName: String = operation.fieldName.getOrElse(name)
 
 }
+
+@SerialVersionUID(1L)
+case class StepResult(step: Step, output: DataFrame) extends Serializable

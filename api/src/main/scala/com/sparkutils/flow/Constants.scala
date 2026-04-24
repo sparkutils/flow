@@ -1,7 +1,7 @@
 package com.sparkutils.flow
 
 
-import scala.concurrent.duration.{Duration, MINUTES}
+import scala.concurrent.duration.{Duration, HOURS, MINUTES}
 
 trait Constants {
 
@@ -158,4 +158,6 @@ trait Constants {
    * The suffix used for root Steps if, as is default, no inputViewName is defined
    */
   val rootInputSuffix = "_root_input"
+
+  val defaultFlowDuration = Duration(1L, HOURS)
 }

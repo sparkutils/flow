@@ -3,6 +3,8 @@ package com.sparkutils.flow.impl.util
 import com.sparkutils.flow.{AsIs, Collect, CollectRunnerName, CustomApproach, CustomRunnerEngine, DQ, DQRunnerName, Engine, EngineRunnerName, ExpandNested, FlowRow, Folder, FolderRunnerName, FullFlow, MergeFields, OperationRow, OutputFieldOnly, OutputFieldsOnly, ResultApproach, Runner, StarOnly, StepRow}
 import frameless._
 
+import scala.concurrent.duration.Duration
+
 object implicits {
 
   implicit val resultApproachEnc = Injection[ResultApproach, String](
@@ -34,6 +36,9 @@ object implicits {
         case _ => CustomRunnerEngine(s)
       }
   )
+
+  implicit val durationEnc =
+    Injection[Duration, String]( _.toString , s => Duration(s) )
 
   implicit val typedOperation = TypedExpressionEncoder[OperationRow]
   implicit val typedStep = TypedExpressionEncoder[StepRow]

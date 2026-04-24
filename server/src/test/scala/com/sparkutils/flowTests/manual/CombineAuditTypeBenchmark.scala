@@ -69,7 +69,7 @@ object CombineAuditBenchmark extends Bench.OfflineReport with TestUtils {
         data = StepData("view1", "view2"))) ++
       stepsGen(params._1, alternate)).
       run(sparkSession, _ => Some(df(params._2))).
-      head._2._2.write.format("noop").mode(Overwrite).save()
+      head._2.output.write.format("noop").mode(Overwrite).save()
   }
 
   def stepsGen(size: Int, alternate: Boolean) =
