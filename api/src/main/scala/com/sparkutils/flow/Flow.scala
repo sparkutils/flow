@@ -37,6 +37,7 @@ import scala.concurrent.{Await, ExecutionContext, Future, Promise}
 @SerialVersionUID(1L)
 class Flow(val flowId: VersionedId, val steps: Seq[Step],
            val flowAuditColName: String = flowAuditDefault, val duration: Duration = defaultFlowDuration,
+           val flowRuleGroup: Option[FlowRuleGroup] = None,
            val loader: DataFrameLoader = new DataFrameLoader {
               override def load(token: String): DataFrame = ???
             },
@@ -97,7 +98,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
         )(
           Seq(expr("*"), group_auditF)
         ) :_*)
-      case ExpandNested => dataFrame.select(columns :_*).select(Seq(expr("*"), group_auditF) ++ children :_*)
+
       case MergeFields => // dq probably doesn't work
 
         val starter = dataFrame.select(columns: _*)
@@ -193,6 +194,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
             unrollOutputArraySize = options.int(collectUnrollOutputArraySize, 1)).as(fieldName), Seq("ruleSuiteResults", "result"),
             dataRefTypeFields
           )
+
         case Engine =>
           RunnerOutput(ruleEngineRunner(step.operation.ruleSuite,
             resultDataType = options.dataType(resultDataType),
@@ -201,6 +203,7 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
             variableFuncGroup = options.int("variableFuncGroup", 20)).as(fieldName), Seq("ruleSuiteResults", "salientRule", "result"),
             dataRefTypeFields
           )
+
         case Folder =>
           val rs =
             if (step.operation.ruleSuite.defaultProcessor != NoOpDefaultProcessor.noOp)
@@ -225,8 +228,13 @@ class Flow(val flowId: VersionedId, val steps: Seq[Step],
               }
             }
           )
+
         case DQ =>
           RunnerOutput(com.sparkutils.quality.ruleRunner(step.operation.ruleSuite).as(fieldName), Seq(), None)
+
+        case NoOp =>
+          RunnerOutput(expr("*"), Seq(), None)
+
         case c: CustomRunnerEngine =>
           c.customRunner(dataFrame, ei, step)
       }

@@ -6,18 +6,12 @@ import org.apache.spark.sql.{Column, DataFrame}
  * How should the result be used
  */
 sealed trait ResultApproach extends Serializable
-// todo should the interim being kept be result
+
 /**
  * Keeps the configured processor field as a nested type e.g. selectExpr("*"), this can be changed by a ResultProcessor
  */
 @SerialVersionUID(1L)
 case object AsIs extends ResultApproach
-
-/**
- * Expands nested result field via selectExpr("*", "fieldName.*"), but does not manage duplicates
- */
-@SerialVersionUID(1L)
-case object ExpandNested extends ResultApproach
 
 /**
  * Merges fields within selectExpr("*", "fieldName.result.*").

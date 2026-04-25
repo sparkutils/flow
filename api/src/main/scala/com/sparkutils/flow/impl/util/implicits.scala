@@ -1,6 +1,6 @@
 package com.sparkutils.flow.impl.util
 
-import com.sparkutils.flow.{AsIs, Collect, CollectRunnerName, CustomApproach, CustomRunnerEngine, DQ, DQRunnerName, Engine, EngineRunnerName, ExpandNested, FlowRow, Folder, FolderRunnerName, FullFlow, MergeFields, OperationRow, OutputFieldOnly, OutputFieldsOnly, ResultApproach, Runner, StarOnly, StepRow}
+import com.sparkutils.flow.{AsIs, Collect, CollectRunnerName, CustomApproach, CustomRunnerEngine, DQ, DQRunnerName, Engine, EngineRunnerName, FlowRow, FlowRuleGroup, Folder, FolderRunnerName, FullFlow, MergeFields, OperationRow, OutputFieldOnly, OutputFieldsOnly, ResultApproach, Runner, StarOnly, StepRow}
 import frameless._
 
 import scala.concurrent.duration.Duration
@@ -14,7 +14,6 @@ object implicits {
     },
     s => s.toLowerCase match {
       case "asis" => AsIs
-      case "expandnested" => ExpandNested
       case "mergefields" => MergeFields
       case "staronly" => StarOnly
       case "outputfieldonly" => OutputFieldOnly

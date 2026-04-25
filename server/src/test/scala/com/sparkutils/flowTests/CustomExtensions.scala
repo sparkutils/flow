@@ -15,14 +15,14 @@ import scala.util.Try
 class CustomExtensions extends SharedPureConnectTests with Matchers {
 
   def buildFlow(resultApproach: ResultApproach = StarOnly, runner: Runner = Engine,
-                options: Map[String,String] = Map.empty): Flow =
+                options: Map[String,String] = Map.empty, flowRuleGroup: Option[FlowRuleGroup] = None): Flow =
     new Flow(Id(1, 1), Seq(
       Step("a", Set.empty, Operation(rulesRaw(Seq(
         (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("2")))
       )), runner, resultApproach), options = options
       )
-    ))
+    ), flowRuleGroup = flowRuleGroup)
 
   def doFlowTest(flow: Flow, answer: Int = 2, process: DataFrame => DataFrame = _.select("result")): Unit = {
 
@@ -75,6 +75,26 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
 
     val flowData = fromDatasets(sparkSession, dses, flow.flowId)
     flowData.steps shouldBe flow.steps
+  }
+
+  test("NoOp runner and var rule group loading works") {
+    val flow = buildFlow(runner = NoOp, flowRuleGroup = Some(FlowRuleGroup("noOpFlow", Seq(Id(200,1)))))
+    val odses = toDatasets(sparkSession, flow)
+    // add the test suite...
+    val rs = rulesRaw(Seq(
+      (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1040, 1),
+        OutputExpression("4")))
+    )).copy(id = Id(200,1))
+
+    val dses = odses.copy(
+      ruleRows = odses.ruleRows union toDS(rs),
+      outputExpressionRows = Some(
+        odses.outputExpressionRows.fold(toOutputExpressionDS(rs))(_ union toOutputExpressionDS(rs))
+      )
+    )
+
+    val flowData = fromDatasets(sparkSession, dses, flow.flowId)
+
   }
 }
 

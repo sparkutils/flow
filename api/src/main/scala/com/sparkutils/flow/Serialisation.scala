@@ -3,8 +3,8 @@ package com.sparkutils.flow
 import com.sparkutils.quality
 import com.sparkutils.quality.implicits.combinedRuleSuiteRowTypedExpEnc
 import com.sparkutils.quality.{CombinedRuleSuiteRows, Id, LambdaFunctionRow, MapRow, OutputExpressionRow, RuleRow, RuleSuiteRow, VersionedId, ViewRow, register_rule_suite_group_variable, rule_suite, rule_suite_from, toDS, toLambdaDS, toOutputExpressionDS, toRuleSuiteRow}
-import org.apache.spark.sql.{Column, DataFrame, Dataset, Encoder, SparkSession}
-import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.{Column, DataFrame, Dataset, Encoder, ShimUtils, SparkSession}
+import org.apache.spark.sql.functions.{col, lit, struct}
 
 import scala.concurrent.duration.Duration
 
@@ -18,7 +18,10 @@ case class StepRow(flowId: Int, flowVersion: Int, name: String, dependencies: sc
                    operation: OperationRow, options: Map[String, String], data: StepData) extends Serializable
 
 @SerialVersionUID(1L)
-case class FlowRow(flowId: Int, flowVersion: Int, flowAuditColName: String, duration: Duration) extends Serializable
+case class FlowRuleGroup(ruleGroupName: String, ruleGroup: Seq[Id]) extends Serializable
+
+@SerialVersionUID(1L)
+case class FlowRow(flowId: Int, flowVersion: Int, flowAuditColName: String, duration: Duration, flowRuleGroup: Option[FlowRuleGroup]) extends Serializable
 
 @SerialVersionUID(1L)
 case class FlowDataSets(steps: Dataset[StepRow], flows: Dataset[FlowRow], ruleRows: Dataset[RuleRow],
@@ -83,8 +86,7 @@ trait Serialisation {
     import sparkSession.implicits._
 
     Seq(
-      FullFlow(FlowRow(flowId = flow.flowId.id, flowVersion = flow.flowId.version,
-        flowAuditColName = flow.flowAuditColName, duration = flow.duration),
+      FullFlow(toFlowRow(flow),
         flow.steps.map{ step =>
           FullStep(
             stepRow(flow, step),
@@ -93,6 +95,11 @@ trait Serialisation {
           )
         })
     ).toDS()
+  }
+
+  protected def toFlowRow(flow: Flow) = {
+    FlowRow(flowId = flow.flowId.id, flowVersion = flow.flowId.version,
+      flowAuditColName = flow.flowAuditColName, duration = flow.duration, flowRuleGroup = flow.flowRuleGroup)
   }
 
   protected def flowFilter(flowId: VersionedId, prefix: String = ""): String =
@@ -145,8 +152,7 @@ trait Serialisation {
     FlowDataSets(
       flow.steps.map{ step =>
         stepRow(flow, step)}.toDS(),
-      Seq(FlowRow(flowId = flow.flowId.id, flowVersion = flow.flowId.version,
-        flowAuditColName = flow.flowAuditColName, duration = flow.duration)).toDS(),
+      Seq(toFlowRow(flow)).toDS(),
       flow.steps.foldLeft(sparkSession.emptyDataset[RuleRow]){ case (cur, s) =>
         toDS(s.operation.ruleSuite) union cur
       },
@@ -194,9 +200,26 @@ trait Serialisation {
     val thisFlow = flows.filter(flowFilter(flowId))
     val flowRow =
       if (thisFlow.isEmpty)
-        FlowRow(flowId.id, flowId.version, flowAuditDefault, defaultFlowDuration)
-      else
-        thisFlow.head()
+        FlowRow(flowId.id, flowId.version, flowAuditDefault, defaultFlowDuration, None)
+      else {
+        val f = thisFlow.head()
+        // register all the relevant groups
+        f.flowRuleGroup.foreach{
+          g =>
+            val filtered =
+              if (g.ruleGroup.isEmpty)
+                rsRows
+              else
+                rsRows.filter(
+                  ShimUtils.callFunction("in", Seq( struct(col("ruleSuiteId"), col("ruleSuiteVersion")) ) ++
+                    g.ruleGroup.map(id => struct(lit(id.id), lit(id.version))) :_*
+                  )
+                )
+
+            register_rule_suite_group_variable(filtered, g.ruleGroupName)
+        }
+        f
+      }
 
     val thisSteps =
       flowSteps.collect().map{

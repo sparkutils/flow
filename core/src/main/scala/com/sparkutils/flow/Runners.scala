@@ -32,6 +32,12 @@ case object Engine extends Runner
 case object Folder extends Runner
 
 /**
+ * Provides a col("*"), suitable for implementing custom saving ResultApproaches
+ */
+@SerialVersionUID(1L)
+case object NoOp extends Runner
+
+/**
  * Custom implementation of runners
  */
 trait CustomRunner extends Serializable {
