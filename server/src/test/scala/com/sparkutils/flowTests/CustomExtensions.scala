@@ -80,30 +80,26 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
   }
 //(
 //    implicit ffenc: Encoder[FullFlow[T]], fgenc: Encoder[FlowRuleGroup[T]])
-  def doNoOpRunnerGroup[T: TypedEncoder: FlowRuleGroupProcessing](grp: FlowRuleGroup[T]): Unit={
+  def doNoOpRunnerGroup[T: TypedEncoder: FlowRuleGroupProcessing](
+      grpF: RuleSuite => FlowRuleGroup[T])( flowF: (FlowDataSets[T], RuleSuite) => FlowDataSets[T]): Unit={
     import com.sparkutils.flow.implicits._
 
-    val flow = buildFlow(runner = NoOp, flowRuleGroup = Some(grp))
-    val odses = toDatasets(sparkSession, flow)
     // add the test suite...
     val rs = rulesRaw(Seq(
       (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1040, 1),
         OutputExpression("4")))
     )).copy(id = Id(200,1))
 
+    val grp = grpF(rs)
+
+    val flow = buildFlow(runner = NoOp, flowRuleGroup = Some(grp))
+    val odses = toDatasets(sparkSession, flow)
+
     val s = sparkSession
     import s.implicits._
 
     // TODO Cache needed to stop Spark optimiser bug - make a simpler test case and raise
-    val dses = odses.copy(
-      ruleRows = odses.ruleRows union toDS(rs),
-      outputExpressionRows = Some(
-        odses.outputExpressionRows.fold(toOutputExpressionDS(rs))(d => (d union toOutputExpressionDS(rs)).cache())
-      ),
-      ruleSuites = Some(
-        odses.ruleSuites.fold(Seq(toRuleSuiteRow(rs)._1).toDS)(d => (d union Seq(toRuleSuiteRow(rs)._1).toDS()).cache())
-      )
-    )
+    val dses = flowF(odses, rs)
 
     val flowData = fromDatasets(sparkSession, dses, flow.flowId)
     toFullFlow(sparkSession, new FlowT[T](Id(flowData.flowRow.flowId, flowData.flowRow.flowVersion), flowData.steps,
@@ -124,9 +120,32 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
   }
 
   test("NoOp runner and var rule group loading works id's") {
-    doNoOpRunnerGroup(FlowRuleGroup("noOpFlowId", Seq(Id(200,1))))
+    doNoOpRunnerGroup(_ => FlowRuleGroup("noOpFlowId", Seq(Id(200,1)))){
+      (odses, rs) =>
+
+        val s = sparkSession
+        import s.implicits._
+
+        odses.copy(
+          ruleRows = odses.ruleRows union toDS(rs),
+          outputExpressionRows = Some(
+            odses.outputExpressionRows.fold(toOutputExpressionDS(rs))(d => (d union toOutputExpressionDS(rs)).cache())
+          ),
+          ruleSuites = Some(
+            odses.ruleSuites.fold(Seq(toRuleSuiteRow(rs)._1).toDS)(d => (d union Seq(toRuleSuiteRow(rs)._1).toDS()).cache())
+          )
+        )
+      }
   }
 
+  test("NoOp runner and var rule group loading works with combined") {
+    doNoOpRunnerGroup{rs =>
+      val s = sparkSession
+      import s.implicits._
+
+      FlowRuleGroup("noOpFlowCombined", combined_rows(rs).collect().toSeq )
+    }((odses, _) => odses)
+  }
 }
 
 class IStar() extends CustomResultApproach {
