@@ -31,20 +31,20 @@ import scala.concurrent.{Await, ExecutionContext, Future, Promise}
  * @param loader The DataFrameLoader used to handle view token loading, by default throws on any token
  * @param showInterim calls show on interim results
  * @param viewColumns columns used to process a Step's ViewRows, by default the names are those of the ViewRow columns
- * @param
- *
+ * @param flowRuleGroup top level RuleSuites to be registered
+ * @tparam FG Either a simple list of Id's, or CombinedRuleSuites for flowRuleGroup usage
  */
 @SerialVersionUID(1L)
-class Flow(val flowId: VersionedId, val steps: Seq[Step],
+class FlowT[FG](val flowId: VersionedId, val steps: Seq[Step],
            val flowAuditColName: String = flowAuditDefault, val duration: Duration = defaultFlowDuration,
-           val flowRuleGroup: Option[FlowRuleGroup] = None,
+           val flowRuleGroup: Option[FlowRuleGroup[FG]] = None,
            val loader: DataFrameLoader = new DataFrameLoader {
               override def load(token: String): DataFrame = ???
             },
            showInterim: Boolean = false, viewColumns: ViewConfigColumns = ViewConfigColumns(),
            mapColumns: MapConfigColumns = MapConfigColumns())(
              implicit ec: ExecutionContext
-           ) extends Serializable with FlowDataHandling with Logging {
+           ) extends Serializable with FlowDataHandling[FG] with Logging {
 
   @transient
   lazy val theGraph: Graph[Step, DiEdge[Step]] = {

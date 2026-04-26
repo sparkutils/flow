@@ -6,17 +6,19 @@ import com.sparkutils.flowTests.RulesGen.{rulesRaw, testData}
 import com.sparkutils.flowTests.utils.SharedPureConnectTests
 import com.sparkutils.quality._
 import org.apache.spark.sql.functions.expr
-import org.apache.spark.sql.{AnalysisException, Column, DataFrame, Dataset, SaveMode, SparkSession}
+import org.apache.spark.sql.{AnalysisException, Column, DataFrame, Dataset, Encoder, SaveMode, SparkSession}
 import org.scalatest.Matchers
+import com.sparkutils.flow.implicits._
+import frameless.TypedEncoder
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.Try
 
 class CustomExtensions extends SharedPureConnectTests with Matchers {
 
-  def buildFlow(resultApproach: ResultApproach = StarOnly, runner: Runner = Engine,
-                options: Map[String,String] = Map.empty, flowRuleGroup: Option[FlowRuleGroup] = None): Flow =
-    new Flow(Id(1, 1), Seq(
+  def buildFlow[FG](resultApproach: ResultApproach = StarOnly, runner: Runner = Engine,
+                options: Map[String,String] = Map.empty, flowRuleGroup: Option[FlowRuleGroup[FG]] = None): FlowT[FG] =
+    new FlowT[FG](Id(1, 1), Seq(
       Step("a", Set.empty, Operation(rulesRaw(Seq(
         (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("2")))
@@ -62,7 +64,7 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
   }
 
   test("custom result approach serialisation works") {
-    val flow = buildFlow(CustomApproach(classOf[IStar].getName))
+    val flow = buildFlow[CombinedRuleSuiteRows](CustomApproach(classOf[IStar].getName))
     val dses = toDatasets(sparkSession, flow)
 
     val flowData = fromDatasets(sparkSession, dses, flow.flowId)
@@ -70,15 +72,18 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
   }
 
   test("custom runner serialisation works") {
-    val flow = buildFlow(runner = CustomRunnerEngine(classOf[IRun].getName))
+    val flow = buildFlow[CombinedRuleSuiteRows](runner = CustomRunnerEngine(classOf[IRun].getName))
     val dses = toDatasets(sparkSession, flow)
 
     val flowData = fromDatasets(sparkSession, dses, flow.flowId)
     flowData.steps shouldBe flow.steps
   }
+//(
+//    implicit ffenc: Encoder[FullFlow[T]], fgenc: Encoder[FlowRuleGroup[T]])
+  def doNoOpRunnerGroup[T: TypedEncoder: FlowRuleGroupProcessing](grp: FlowRuleGroup[T]): Unit={
+    import com.sparkutils.flow.implicits._
 
-  test("NoOp runner and var rule group loading works") {
-    val flow = buildFlow(runner = NoOp, flowRuleGroup = Some(FlowRuleGroup("noOpFlow", Seq(Id(200,1)))))
+    val flow = buildFlow(runner = NoOp, flowRuleGroup = Some(grp))
     val odses = toDatasets(sparkSession, flow)
     // add the test suite...
     val rs = rulesRaw(Seq(
@@ -86,16 +91,42 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
         OutputExpression("4")))
     )).copy(id = Id(200,1))
 
+    val s = sparkSession
+    import s.implicits._
+
+    // TODO Cache needed to stop Spark optimiser bug - make a simpler test case and raise
     val dses = odses.copy(
       ruleRows = odses.ruleRows union toDS(rs),
       outputExpressionRows = Some(
-        odses.outputExpressionRows.fold(toOutputExpressionDS(rs))(_ union toOutputExpressionDS(rs))
+        odses.outputExpressionRows.fold(toOutputExpressionDS(rs))(d => (d union toOutputExpressionDS(rs)).cache())
+      ),
+      ruleSuites = Some(
+        odses.ruleSuites.fold(Seq(toRuleSuiteRow(rs)._1).toDS)(d => (d union Seq(toRuleSuiteRow(rs)._1).toDS()).cache())
       )
     )
 
     val flowData = fromDatasets(sparkSession, dses, flow.flowId)
+    toFullFlow(sparkSession, new FlowT[T](Id(flowData.flowRow.flowId, flowData.flowRow.flowVersion), flowData.steps,
+      flowRuleGroup = flowData.flowRow.flowRuleGroup)).write.mode(SaveMode.Overwrite).json(outputDir + "/" + grp.ruleGroupName)
+    val readBack =
+      s.read.schema(typedFullFlowExpEnc[T].schema).json(outputDir + "/" + grp.ruleGroupName).as[FullFlow[T]].head()
+    // do the rule group id serde
+    readBack.flowRow.flowRuleGroup.toSet shouldBe flowData.flowRow.flowRuleGroup.toSet
 
+    val data = Seq(
+      Tuple2("c", 1)
+    ).toDF("c", "d")
+
+    // use the data which should have been registered
+    val r = data.withColumn("runner",expr(s"rule_engine_runner(rule_suite_from(${grp.ruleGroupName}, 200))")).
+      selectExpr("runner.result").as[Int].head()
+    r shouldBe 4
   }
+
+  test("NoOp runner and var rule group loading works id's") {
+    doNoOpRunnerGroup(FlowRuleGroup("noOpFlowId", Seq(Id(200,1))))
+  }
+
 }
 
 class IStar() extends CustomResultApproach {

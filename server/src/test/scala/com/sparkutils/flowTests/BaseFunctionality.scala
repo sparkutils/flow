@@ -5,8 +5,11 @@ import com.sparkutils.flow.impl.util.FlowExceptionConstants.FlowEarlyExitExcepti
 import com.sparkutils.flowTests.RulesGen.{rulesRaw, testData}
 import com.sparkutils.flowTests.utils.SharedPureConnectTests
 import com.sparkutils.quality._
-import org.apache.spark.sql.{AnalysisException, DataFrame, SaveMode, SparkSession}
+import frameless.TypedExpressionEncoder
+import org.apache.spark.sql.{AnalysisException, DataFrame, Encoder, SaveMode, SparkSession}
 import org.scalatest.Matchers
+import com.sparkutils.quality.implicits._
+import com.sparkutils.flow.implicits._
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -50,7 +53,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
 
   test("multiple roots and paths should work, along with default columns, views and json serialisation") {
     // a and c are roots, d joins both c and b
-    val flowOG = new Flow(Id(1,1), Seq(
+    val flowOG = new FlowT[Id](Id(1,1), Seq(
       Step("a",Set.empty, Operation(rulesRaw(Seq(
         (ExpressionRule("product = 'edt'"), RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("array(account_row('from'), account_row('to', 'other_account1'))")))
@@ -76,11 +79,10 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
     ))//, showInterim = true)
     val s = sparkSession
 
-    import com.sparkutils.flow.impl.util.implicits._
     // write out to the full version and read back again
     val ds = toFullFlow(s, flowOG)
     ds.write.mode(SaveMode.Overwrite).json(outputDir + "/multipleRoots.json")
-    val rds = s.read.schema(fullFlow.schema).json(outputDir + "/multipleRoots.json").as[FullFlow]
+    val rds = s.read.schema(typedFullFlowExpEnc[Id].schema).json(outputDir + "/multipleRoots.json").as[FullFlow[Id]]
     val flowData = fromFullFlow(rds, flowOG.flowId)
     val flow = new Flow(flowOG.flowId, flowData.steps, flowData.flowRow.flowAuditColName)
 
@@ -121,7 +123,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
         ViewRow(ruleSuiteId = 4, ruleSuiteVersion = 1, name = "filteredView4", token = None, filter = None,
           sql = Some(s"select * from view4 where $nullFieldCheck is not null")))),
       data = StepData("filteredView4", "view5"))
-  )) with FlowDataHandling {
+  )) with FlowDataHandling[CombinedRuleSuiteRows] {
     override protected def loadData(sparkSession: SparkSession, token: String): DataFrame = {
       if (dataHandling)
         // same as the real code, just forces the default to work

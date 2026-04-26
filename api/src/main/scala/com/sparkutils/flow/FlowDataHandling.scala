@@ -15,7 +15,7 @@ import scala.util.Try
  *
  * Derive and mix in with Flow creation to allow writing to catalog's or custom storage layers
  */
-trait FlowDataHandling extends Serializable with Logging { this: Flow =>
+trait FlowDataHandling[FG] extends Serializable with Logging { this: FlowT[FG] =>
 
   def flowId: VersionedId
 
