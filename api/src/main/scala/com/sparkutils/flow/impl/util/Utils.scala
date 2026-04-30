@@ -1,12 +1,11 @@
 package com.sparkutils.flow.impl.util
 
-import com.sparkutils.flow.{FlowException, Folder, RuleSuiteTypeParam, Step, StepLike, StepRow, doNotAddFolderDefault}
+import com.sparkutils.flow.{FlowException, Folder, RuleSuiteTypeParam, StepLike, StepRow, doNotAddFolderDefault}
 import com.sparkutils.quality.{CombinedRuleSuiteRows, DefaultProcessor, Id, NoOpDefaultProcessor, OutputExpression, OutputExpressionRow, RuleSuite}
 import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.sql.{Column, functions}
 
 import scala.concurrent.duration.{Duration, NANOSECONDS}
-import scala.reflect.ClassTag
 import scala.util.Try
 
 object Utils {
@@ -16,10 +15,6 @@ object Utils {
 
   def getX[T](keyName: String, config: Map[String, String], default: T)(f: String => T): T =
     config.get(keyName).map(s => Try{f(s)}.getOrElse(default)).getOrElse(default)
-
-  def setX[T: ClassTag](keyName: String, config: Map[String, String])(f: String => T): Set[T] =
-    config.get(keyName).map(s => Try{s.split(",").map(s => f(s)).toSet}.
-      getOrElse(Set.empty[T])).getOrElse(Set.empty[T])
 
   implicit class MapOps(val config: Map[String, String]) {
     def boolean(keyName: String, default: Boolean = false): Boolean =
@@ -32,8 +27,6 @@ object Utils {
       getX(keyName, config, default)(Duration(_))
 
     def dataType(keyName: String): Option[DataType] = getDataType(keyName, config)
-
-    def strings(keyName: String): Set[String] = setX[String](keyName, config)(identity)
 
     def structType(keyName: String): Option[StructType] = dataType(keyName).map{
       case structType1: StructType => structType1

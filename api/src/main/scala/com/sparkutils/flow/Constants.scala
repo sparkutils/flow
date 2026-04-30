@@ -189,4 +189,9 @@ trait Constants {
    * defaultProcessor when [[Operation.function]] is [[FolderRunnerName]] to introduce a default {{row -> row}}.
    */
   val doNotAddFolderDefault = "doNotAddFolderDefault"
+
+  /**
+   * The defaultGroup value is used when calling [[convertToIds]] should there be no flowRuleGroup present
+   */
+  val defaultConvertGroupName = "defaultGroup"
 }

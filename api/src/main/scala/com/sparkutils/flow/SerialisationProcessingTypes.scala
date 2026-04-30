@@ -129,13 +129,17 @@ sealed trait FlowGroupAndOperationType[F, O <: OperationProcessing] {
                   s: O#StorageType): O#ResType
 
   def toCombinedRows(rs: O#StorageType): Option[CombinedRuleSuiteRows] = None
+
+  def toRuleSuite(flow: FlowT[F, O#ResType], rs: O#ResType): Option[ RuleSuite ]
+
 }
 
 object FlowGroupAndOperationType {
-  trait WritableRuleSuite {
-    def writableRuleSuite(rs: RuleSuite): CombinedRuleSuiteRows = combined_rows(rs).head
+  trait WritableRuleSuite[F] {
+    def writableRuleSuite(rs: RuleSuite): CombinedRuleSuiteRows = combined_rows(rs).head()
 
-    def toRuleSuite(rs: RuleSuite): RuleSuite = rs
+    //def toRuleSuite(rs: RuleSuite): RuleSuite = rs
+    def toRuleSuite(flow: FlowT[F, RuleSuite], rs: RuleSuite): Option[RuleSuite] = Some(rs)
   }
 
   trait WritableId {
@@ -146,8 +150,8 @@ object FlowGroupAndOperationType {
     override def toCombinedRows(rs: CombinedRuleSuiteRows): Option[CombinedRuleSuiteRows] = Some(rs)
   }
 
-  implicit val idsAndRuleSuite: FlowGroupAndOperationType[Id, RuleSuiteFromDataset.type] with WritableRuleSuite  =
-    new HasCombinedRows[Id, RuleSuiteFromDataset.type] with WritableRuleSuite {
+  implicit val idsAndRuleSuite: FlowGroupAndOperationType[Id, RuleSuiteFromDataset.type] with WritableRuleSuite[Id]  =
+    new HasCombinedRows[Id, RuleSuiteFromDataset.type] with WritableRuleSuite[Id] {
 
       override def apply(flowId: VersionedId, rsName: String, rsRows: Dataset[CombinedRuleSuiteRows],
                          rid: Id, flowRow: FlowRow[Id], step: StepRow): RuleSuite =
@@ -161,7 +165,6 @@ object FlowGroupAndOperationType {
 
     }
 
-  // use a global name for all lookups
   implicit val idsAndId: FlowGroupAndOperationType[Id, IdFromDatasets.type] =
     new FlowGroupAndOperationType[Id, IdFromDatasets.type] with WritableId {
 
@@ -173,15 +176,20 @@ object FlowGroupAndOperationType {
                                flowRow: FlowRow[Id], fullStep: FullStep[Id], rid: Id, s: Id): GroupRuleId =
         GroupRuleId(variableName, s)
 
+      override def toRuleSuite(flow: FlowT[Id, GroupRuleId], rs: GroupRuleId): Option[RuleSuite] = None
     }
 
-  implicit val rowsAndFullSuites: FlowGroupAndOperationType[CombinedRuleSuiteRows, RuleSuiteFromDataset.type] with WritableRuleSuite  =
-    new HasCombinedRows[CombinedRuleSuiteRows, RuleSuiteFromDataset.type] with WritableRuleSuite {
+  implicit val rowsAndFullSuites: FlowGroupAndOperationType[CombinedRuleSuiteRows, RuleSuiteFromDataset.type] with
+    WritableRuleSuite[CombinedRuleSuiteRows] =
+    new HasCombinedRows[CombinedRuleSuiteRows, RuleSuiteFromDataset.type] with WritableRuleSuite[CombinedRuleSuiteRows] {
 
       override def apply(flowId: VersionedId, rsName: String, rsRows: Dataset[CombinedRuleSuiteRows],
                          rid: Id, flowRow: FlowRow[CombinedRuleSuiteRows], step: StepRow): RuleSuite =
         rule_suite(rsRows, rid).getOrElse(
-          throw FlowException(s"Flow $flowId could not be loaded as a Step's RuleSuite $rid is missing")
+          flowRow.flowRuleGroup.flatMap(g =>
+            g.ruleGroup.find(r => Id(r.ruleSuiteId, r.ruleSuiteVersion) == rid).map(rule_suite)).getOrElse(
+            throw FlowException(s"Flow $flowId could not be loaded as a Step's RuleSuite $rid is missing")
+          )
         )
 
       override def fromFullRow(rules: Seq[CombinedRuleSuiteRows], variableName: String,
@@ -191,8 +199,9 @@ object FlowGroupAndOperationType {
 
     }
 
-  implicit val rowsAndFullSuitesFromFlows: FlowGroupAndOperationType[CombinedRuleSuiteRows, RuleSuiteFromFlows.type] with WritableRuleSuite  =
-    new HasCombinedRows[CombinedRuleSuiteRows, RuleSuiteFromFlows.type] with WritableRuleSuite {
+  implicit val rowsAndFullSuitesFromFlows: FlowGroupAndOperationType[CombinedRuleSuiteRows, RuleSuiteFromFlows.type] with
+    WritableRuleSuite[CombinedRuleSuiteRows]  =
+    new HasCombinedRows[CombinedRuleSuiteRows, RuleSuiteFromFlows.type] with WritableRuleSuite[CombinedRuleSuiteRows] {
 
       override def apply(flowId: VersionedId, rsName: String, rsRows: Dataset[CombinedRuleSuiteRows],
                          rid: Id, flowRow: FlowRow[CombinedRuleSuiteRows], step: StepRow): RuleSuite = {
@@ -209,8 +218,17 @@ object FlowGroupAndOperationType {
 
     }
 
+  trait RuleSuiteFromGroup {
+
+    def toRuleSuite(flow: FlowT[CombinedRuleSuiteRows, GroupRuleId], rs: GroupRuleId): Option[RuleSuite] =
+      flow.flowRuleGroup.flatMap(g =>
+        g.ruleGroup.find(r => Id(r.ruleSuiteId, r.ruleSuiteVersion) == rs.id).map(rule_suite)
+      )
+  }
+
+
   implicit val rowsAndIdsFromDatasets: FlowGroupAndOperationType[CombinedRuleSuiteRows, IdFromDatasets.type] =
-    new FlowGroupAndOperationType[CombinedRuleSuiteRows, IdFromDatasets.type] with WritableId {
+    new FlowGroupAndOperationType[CombinedRuleSuiteRows, IdFromDatasets.type] with WritableId with RuleSuiteFromGroup {
 
       override def apply(flowId: VersionedId, rsName: String, rsRows: Dataset[CombinedRuleSuiteRows],
                          rid: Id, flowRow: FlowRow[CombinedRuleSuiteRows], step: StepRow): GroupRuleId =
@@ -223,7 +241,7 @@ object FlowGroupAndOperationType {
     }
 
   implicit val rowsAndIdsFromFlows: FlowGroupAndOperationType[CombinedRuleSuiteRows, IdFromFlows.type] =
-    new FlowGroupAndOperationType[CombinedRuleSuiteRows, IdFromFlows.type] with WritableId {
+    new FlowGroupAndOperationType[CombinedRuleSuiteRows, IdFromFlows.type] with WritableId with RuleSuiteFromGroup  {
 
       override def apply(flowId: VersionedId, rsName: String, rsRows: Dataset[CombinedRuleSuiteRows],
                          rid: Id, flowRow: FlowRow[CombinedRuleSuiteRows], step: StepRow): GroupRuleId = {

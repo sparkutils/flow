@@ -1,13 +1,9 @@
 package com.sparkutils.flow
 
-import com.sparkutils.quality.impl.{Encoders, RuleSuiteHelpers}
-import com.sparkutils.quality.{DataFrameLoader, GroupRuleId, Id, MapRow, RuleSuite, RuleSuiteParam, ViewRow, rule_suite_from}
-import org.apache.spark.sql.functions.{col, lit}
-import org.apache.spark.sql.types.{DataType, StructType}
-import org.apache.spark.sql.{Column, DataFrame, SparkSession}
+import com.sparkutils.quality.{GroupRuleId, Id, MapRow, RuleSuite, ViewRow}
+import org.apache.spark.sql.DataFrame
 
 import scala.concurrent.duration.Duration
-import scala.util.Try
 
 @SerialVersionUID(1L)
 case class FlowException(msg: String, cause: Throwable = null) extends Exception(msg, cause) with Serializable
@@ -127,7 +123,6 @@ case class Step[T: RuleSuiteTypeParam](name: String, dependencies: Set[String], 
 
   def function: Runner = operation.function
 
-  val rsType: RuleSuiteTypeParam[T] = implicitly[RuleSuiteTypeParam[T]]
 }
 
 /**

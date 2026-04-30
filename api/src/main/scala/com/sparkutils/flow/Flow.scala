@@ -253,7 +253,7 @@ class FlowT[FG, RP: RuleSuiteParam: RuleSuiteTypeParam](val flowId: VersionedId,
     import sparkSession.implicits._
     val (config, _) = com.sparkutils.quality.loadViewConfigs(loader = loader,
       viewDF = step.initConfiguration.viewConfig.toDF(),
-      ruleSuiteId = step.rsType.id( step.operation.ruleSuite ),
+      ruleSuiteId = implicitly[RuleSuiteTypeParam[RP]].id( step.operation.ruleSuite ),
       viewColumns = viewColumns)
     com.sparkutils.quality.loadViews(config)
   }
@@ -262,7 +262,7 @@ class FlowT[FG, RP: RuleSuiteParam: RuleSuiteTypeParam](val flowId: VersionedId,
     import sparkSession.implicits._
     val (config, _) = com.sparkutils.quality.loadMapConfigs(loader = loader,
       viewDF = step.initConfiguration.mapConfig.toDF(),
-      ruleSuiteId = step.rsType.id( step.operation.ruleSuite ),
+      ruleSuiteId = implicitly[RuleSuiteTypeParam[RP]].id( step.operation.ruleSuite ),
       mapConfig = mapColumns
     )
     step.initConfiguration.mapName.fold(

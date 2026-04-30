@@ -57,6 +57,24 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
       answer = 1, process = identity)
   }
 
+  test("bad class name custom result approach should throw") {
+    val clzz = "classOf[IStar].getName"
+    // the custom should reply 1
+    val e = intercept[FlowException] {
+      doFlowTest(buildFlow(CustomApproach(clzz)), answer = 1, process = identity)
+    }
+    e.msg should include(clzz)
+  }
+
+  test("bad custom runner name should throw") {
+    val clzz = "classOf[IRun].getName"
+    // custom runner only
+    val e = intercept[FlowException] {
+      doFlowTest(buildFlow(runner = CustomRunnerEngine(clzz)))
+    }
+    e.msg should include(clzz)
+  }
+
   test("custom runner throws are re-thrown") {
     val t = intercept[FlowException] {
       doFlowTest(buildFlow(runner = CustomRunnerEngine(classOf[IRun].getName), options = Map("throw" -> "true")))
@@ -84,7 +102,7 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
   def doNoOpRunnerGroup[T: TypedEncoder: FlowRuleGroupProcessing, OP <: OperationProcessing](process: OP)(
       grpF: RuleSuite => FlowRuleGroup[T])( flowF: (FlowDataSets[T], RuleSuite) => FlowDataSets[T])(op: OP)(
       implicit rtp: RuleSuiteTypeParam[OP#ResType], rp : RuleSuiteParam[OP#ResType],
-      operation: FlowGroupAndOperationType[T, OP], toDSImplFG: FlowGroupAndOperationType[T,RuleSuiteFromDataset.type] with WritableRuleSuite,
+      operation: FlowGroupAndOperationType[T, OP], toDSImplFG: FlowGroupAndOperationType[T,RuleSuiteFromDataset.type],
       toDSImplEnc: Encoder[FullFlow[T,CombinedRuleSuiteRows]], toFlowEnc: Encoder[FullFlow[T,OP#StorageType]],
       storageParam: RuleSuiteStorageType[OP#StorageType], storageTypedEnc: TypedEncoder[OP#StorageType]
     ): Unit = {

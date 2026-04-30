@@ -1,11 +1,11 @@
 package com.sparkutils.flowTests
 
-import com.sparkutils.flow._
+import com.sparkutils.flow.{OperationProcessing, _}
 import com.sparkutils.flow.impl.util.FlowExceptionConstants.FlowEarlyExitException
 import com.sparkutils.flowTests.RulesGen.{rulesRaw, testData}
 import com.sparkutils.flowTests.utils.SharedPureConnectTests
 import com.sparkutils.quality._
-import frameless.TypedExpressionEncoder
+import frameless.{TypedEncoder, TypedExpressionEncoder}
 import org.apache.spark.sql.{AnalysisException, DataFrame, Encoder, SaveMode, SparkSession}
 import org.scalatest.Matchers
 import com.sparkutils.quality.implicits._
@@ -200,7 +200,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
     doFolderTest(flow)
   }
 
-  def doFolderTest(flow: Flow): Unit = {
+  def doFolderTest[T,P](flow: FlowT[T,P]): Unit = {
     val s = sparkSession
     import s.implicits._
     val res = flow.run(sparkSession, _ => Some(testData.toDF())).stepResults("b").output
@@ -232,7 +232,27 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
     val dses = toDatasets(sparkSession, flow)
 
     val flowData = fromDatasets(sparkSession, dses, flow.flowId)
-    doFolderTest(new Flow(flow.flowId, flowData.steps, flowData.flowRow.flowAuditColName))
+    doFolderTest(new Flow(flow.flowId, flowData.steps, flowData.flowRow.flowAuditColName, flowRuleGroup = flowData.flowRow.flowRuleGroup))
+  }
+
+  test("Serialising for folder full id example") {
+    val flow = folderFlow()
+    val full = toFullFlow(sparkSession, flow)
+    val s = sparkSession
+    import s.implicits._
+
+    val ids = full.map(convertToIds)
+
+    val flowData = fromFullFlow(IdFromFlows)(ids, flow.flowId)
+    val idf = new FlowT[CombinedRuleSuiteRows, GroupRuleId](flow.flowId, flowData.steps, flowData.flowRow.flowAuditColName,
+      flowRuleGroup = flowData.flowRow.flowRuleGroup)
+    doFolderTest(idf)
+
+    // use converted with datasets
+    val dses = toDatasets(IdFromFlows)(sparkSession, idf)
+    val flowData2 = fromDatasets(sparkSession, dses, flow.flowId)
+    doFolderTest(new Flow(flow.flowId, flowData2.steps, flowData.flowRow.flowAuditColName,
+      flowRuleGroup = flowData2.flowRow.flowRuleGroup))
   }
 
   test("merge fields with rules using fields which are not in the output") {

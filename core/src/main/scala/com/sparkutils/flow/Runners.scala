@@ -6,6 +6,7 @@ import org.apache.spark.sql.DataFrame
 /**
  * Runners that can be used by Flow Step operations
  */
+@SerialVersionUID(1L)
 sealed trait Runner extends Serializable
 
 /**

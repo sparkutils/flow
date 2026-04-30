@@ -1,7 +1,6 @@
 package com.sparkutils.flow
 
-import com.sparkutils.flow.FlowGroupAndOperationType.WritableRuleSuite
-import com.sparkutils.flow.impl.util.Utils.{defaultCombinedFolder, defaultFolder}
+import com.sparkutils.flow.impl.util.Utils.defaultCombinedFolder
 import com.sparkutils.quality
 import com.sparkutils.quality.implicits.combinedRuleSuiteRowTypedExpEnc
 import com.sparkutils.quality.{CombinedRuleSuiteRows, GroupRuleId, Id, LambdaFunctionRow, MapRow, OutputExpressionRow, RuleRow, RuleSuite, RuleSuiteParam, RuleSuiteRow, VersionedId, ViewRow, register_rule_suite_group_variable, rule_suite, rule_suite_from, toDS, toLambdaDS, toOutputExpressionDS, toRuleSuiteRow}
@@ -168,14 +167,26 @@ trait Serialisation {
     }
 
     val full = r.head
+    // map of id's to default the folder
+    val stepIds =
+      full.steps.map{
+        fullStep =>
+          import fullStep._
+          Id(step.ruleSuiteId, step.ruleSuiteVersion) -> step }.toMap
 
-    val rules =
-      full.flowRow.flowRuleGroup.map(implicitly[FlowRuleGroupProcessing[FG]].combinedRuleSuiteRows)
-        .getOrElse(Seq.empty) ++
-      full.steps.flatMap(s => operation.toCombinedRows(s.ruleSuite))
+    val rules = (
+        full.flowRow.flowRuleGroup.map(implicitly[FlowRuleGroupProcessing[FG]].combinedRuleSuiteRows)
+          .getOrElse(Seq.empty) ++
+        full.steps.flatMap(s => operation.toCombinedRows(s.ruleSuite))
+      ).map(defaultCombinedFolder(stepIds))
 
     import dataset.sparkSession.implicits._
-    val variableName = register_rule_suite_group_variable(rules.toDS)
+    val variableName =
+      full.flowRow.flowRuleGroup.fold(
+        register_rule_suite_group_variable(rules.toDS())
+      )( g =>
+        register_rule_suite_group_variable(rules.toDS(), g.ruleGroupName)
+      )
 
     FlowData(full.flowRow,
       full.steps.map{
@@ -199,21 +210,20 @@ trait Serialisation {
   def toDatasets[FG: FlowRuleGroupProcessing](
     sparkSession: SparkSession, flow: FlowT[FG, RuleSuite])(
       implicit ffenc: Encoder[FullFlow[FG, CombinedRuleSuiteRows]], fgenc: Encoder[FlowRuleGroup[FG]], frenc: Encoder[FlowRow[FG]],
-      rstp: RuleSuiteTypeParam[RuleSuite], operation: FlowGroupAndOperationType[FG, RuleSuiteFromDataset.type] with WritableRuleSuite
+      rstp: RuleSuiteTypeParam[RuleSuite], operation: FlowGroupAndOperationType[FG, RuleSuiteFromDataset.type]
     ): FlowDataSets[FG] =
     toDatasets(RuleSuiteFromDataset)(sparkSession, flow)
 
   /**
    * Converts a Flow built with RuleSuites to it's underlying datasets, global output and lambdas are not supported
    * (they are treated as part of the ds directly).
-   * TODO is this actually going to work?
-   * If FlowDataSets is needed from Id based Steps then convert via FullFlow with an appropriate OperationProcessing
+   *
+   * Use the [[convertToIds]] function with a FullFlow to convert if Id based Flows are desired
    */
   def toDatasets[FG: FlowRuleGroupProcessing, RP <: OperationProcessing](processing: RP)(
     sparkSession: SparkSession, flow: FlowT[FG, RP#ResType])(
       implicit ffenc: Encoder[FullFlow[FG, RP#StorageType]], fgenc: Encoder[FlowRuleGroup[FG]], frenc: Encoder[FlowRow[FG]],
-      rstp: RuleSuiteTypeParam[RP#ResType], operation: FlowGroupAndOperationType[FG, RP] with WritableRuleSuite,
-      evidence: RP#ResType =:= RuleSuite
+      rstp: RuleSuiteTypeParam[RP#ResType], operation: FlowGroupAndOperationType[FG, RP]
     ): FlowDataSets[FG] = {
 
     import frameless._
@@ -223,7 +233,7 @@ trait Serialisation {
 
     import sparkSession.implicits._
 
-    val ruleSuites = flow.steps.map(s => operation.toRuleSuite( s.operation.ruleSuite ))
+    val ruleSuites = flow.steps.flatMap(s => operation.toRuleSuite(flow, s.operation.ruleSuite ))
 
     val suiteRows = ruleSuites.map(s => toRuleSuiteRow(s))
     val defaultOutputRows = suiteRows.flatMap(_._2)
@@ -349,4 +359,25 @@ trait Serialisation {
 
     FlowData[FG, RP#ResType](flowRow, thisSteps)
   }
+
+  /**
+   * Converts all Step level CombinedRuleSuiteRows into Ids by adding them to the [[FlowRuleGroup.ruleGroup]]
+   * @param fullFlow
+   * @return
+   */
+  def convertToIds(fullFlow: FullFlow[CombinedRuleSuiteRows, CombinedRuleSuiteRows]): FullFlow[CombinedRuleSuiteRows, Id] = {
+
+    FullFlow(
+      flowRow = {
+        val group = fullFlow.flowRow.flowRuleGroup.map(_.ruleGroup).getOrElse(Seq.empty) ++ fullFlow.steps.map(_.ruleSuite)
+        val name = fullFlow.flowRow.flowRuleGroup.map(_.ruleGroupName).getOrElse(defaultConvertGroupName)
+        fullFlow.flowRow.copy( flowRuleGroup = Some( FlowRuleGroup(name, group) ) )
+      },
+      steps = fullFlow.steps.map {
+        fullStep =>
+          FullStep[Id](fullStep.step, Id(fullStep.ruleSuite.ruleSuiteId, fullStep.ruleSuite.ruleSuiteVersion), fullStep.initConfiguration)
+      }
+    )
+  }
+
 }
