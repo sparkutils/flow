@@ -1,0 +1,87 @@
+site_name: Flow
+site_url: https://sparkutils.github.io/flow/
+
+repo_url: https://github.com/sparkutils/flow/
+repo_name: Flow
+
+extra_javascript:
+  - js/jquery-3.6.3.min.js
+  - js/tagflipper.js
+
+extra_css:
+  - stylesheets/site.css
+
+edit_uri: !ENV [MKDOCS_EDIT_URL, ''] # empty disables shows with value enabled -/edit/master/docs/
+
+theme:
+  name: material
+  logo: img/quality.png
+  favicon: img/quality.png
+  include_search_page: false
+  search_index_only: true
+  features:
+    - navigation.tabs
+    - navigation.top
+    - navigation.expand
+    - content.code.copy
+
+extra:
+  version:
+    default: latest
+    provider: mike
+
+nav:
+  - Home: index.md
+
+plugins:
+  - search:
+      prebuild_index: true
+      lang: en
+  - macros
+  - git-revision-date-localized:
+      type: datetime
+      fallback_to_build_date: true
+      enable_creation_date: true
+  - with-pdf:
+      enabled_if_env: ENABLE_PDF_EXPORT
+      cover_subtitle: A High Performance Spark Data Processing Library
+      copyright: Copyright @ 2022 - UBS AG
+      author: Chris Twiner
+
+markdown_extensions:
+  - markdown.extensions.toc:
+      permalink: true
+  - markdown.extensions.admonition:
+  - markdown.extensions.smarty:
+      smart_quotes: false
+  - pymdownx.betterem:
+  - markdown.extensions.attr_list:
+  - markdown.extensions.def_list:
+  - markdown.extensions.tables:
+  - markdown.extensions.abbr:
+  - markdown.extensions.footnotes:
+  - markdown.extensions.md_in_html:
+  - pymdownx.highlight:
+  - pymdownx.superfences:
+      preserve_tabs: true
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.emoji:
+      emoji_index: !!python/name:materialx.emoji.twemoji
+      emoji_generator: !!python/name:materialx.emoji.to_svg
+  - pymdownx.details:
+  - pymdownx.tabbed:
+  - pymdownx.inlinehilite:
+  - meta
+  - plantuml_markdown:
+      priority: 50
+  - pymdownx.magiclink:
+      repo_url_shortener: true
+      repo_url_shorthand: true
+      social_url_shorthand: true
+      social_url_shortener: true
+      user: sparkutils
+      repo: flow
+  - pymdownx.saneheaders:

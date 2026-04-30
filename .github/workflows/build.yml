@@ -78,3 +78,106 @@ jobs:
       mvnCliOpts: *MAVEN_CLI_TESTSHADES_OPTS
       mvnOpts: *MAVEN_OPTS_21
     secrets: inherit
+
+  # prove tests run with single thread, ensures compilation issues aren't hidden by being run on multiple threads instead of re-used in the same thread (e.g. state resetting etc.)
+  # build scoverage tests on 3.3.2 first, then 3.5.0 and finally 4 with aggregate, the copy the data out, not doing a clean build fails on site.  Also needs single threading to work, have noticed multiple failures and inconsistent coverage.
+  mvn_site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.1.2
+      - uses: s-weigand/setup-conda@v1
+        with:
+          python-version: '3.10'
+      - uses: sparkutils/spark-maven-action@main
+        with:
+          title: Building Spark4 coverage and site
+          noCheckout: true # checkout removes tmpSCoverage
+          script: |
+            export MAVEN_OPTS="${{ inputs.mvnOpts }}"
+            if [ "${{ github.event_name }}" == "pull_request" ]; then
+              echo Skipping GPG from PR
+              SKIP_GPG="-Dgpg.skip"
+            else
+              echo Running GPG
+              SKIP_GPG=""
+            fi
+            conda install libgomp=11.2.0 # force the right libs
+            conda install graphviz=2.50.0 # conda is from fatty
+
+            echo '#!/bin/bash' > dott
+            echo 'dot "$@" 2> >(grep -v "pango" | grep -v "Warning" >&2 )' >> dott
+
+            chmod u+x dott
+
+            export QUALITY_SPARK_HOSTS=1
+            export QUALITY_LAMBDA_SUBS=true
+
+            mvn $MAVEN_CLI_OPTS clean scoverage:test $SKIP_GPG -P Spark4
+            
+            mvn $MAVEN_CLI_OPTS site $SKIP_GPG -P Spark4
+            
+            # copy over the jar sites
+            mv server/target/site target/site/$(mvn -f server help:evaluate -Dexpression=project.artifactId -q -DforceStdout $SKIP_GPG -P Spark4)
+            mv api/target/site target/site/$(mvn -f api help:evaluate -Dexpression=project.artifactId -q -DforceStdout $SKIP_GPG -P Spark4)
+            mv api_stub/target/site target/site/$(mvn -f api_stub help:evaluate -Dexpression=project.artifactId -q -DforceStdout $SKIP_GPG -P Spark4)
+            mv core/target/site target/site/$(mvn -f core help:evaluate -Dexpression=project.artifactId -q -DforceStdout $SKIP_GPG -P Spark4)
+
+            # prepare ids for the 
+            echo $(mvn -f server help:evaluate -Dexpression=project.artifactId -q -DforceStdout $SKIP_GPG -P Spark4) > target/server_id.txt
+            echo $(mvn -f api help:evaluate -Dexpression=project.artifactId -q -DforceStdout $SKIP_GPG -P Spark4) > target/api.txt
+            echo $(mvn -f api_stub help:evaluate -Dexpression=project.artifactId -q -DforceStdout $SKIP_GPG -P Spark4) > target/api_stub.txt
+            echo $(mvn -f core help:evaluate -Dexpression=project.artifactId -q -DforceStdout $SKIP_GPG -P Spark4) > target/core.txt
+            
+            echo $(mvn help:evaluate -Dexpression=project.version -q -DforceStdout $SKIP_GPG -P Spark4) > target/version.txt
+
+            grep -A 3 'Statement coverage:' target/site/scoverage/overview.html | tail -1 | sed 's/[[:space:]]\+//g' > target/coverage.txt
+            grep -A 3 'Branch coverage:' target/site/scoverage/overview.html | tail -1 | sed 's/[[:space:]]\+//g' >> target/coverage.txt
+          gpgKey: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          jdk: 21
+          mvnCliOpts: *MAVEN_CLI_OPTS
+          mvnOpts: *MAVEN_OPTS_21
+        env:
+          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+          CENTRAL_TOKEN: ${{ secrets.CENTRAL_TOKEN }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+      - id: version
+        run: echo version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout $SKIP_GPG -P Spark4) >> "$GITHUB_OUTPUT"
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+      - name: target
+        uses: actions/upload-artifact@v4
+        with:
+          name: target-mvn_site
+          path: |
+            target/site
+            target/coverage.txt
+            target/version.txt
+            target/server_id.txt
+            target/api.txt
+            target/api_stub.txt
+            target/core.txt
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+  site:
+    needs: [mvn_site]
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4.1.2
+      - uses: actions/download-artifact@v4
+        with:
+          name: target-mvn_site
+          path: target
+      - uses: sparkutils/mkdocs-action@main
+        with:
+          prepScript: |
+            cp -rf target/site docs/
+            cp target/coverage.txt docs/
+            cp target/version.txt .
+            cp target/coverage.txt .
+            
+            cp target/server_id.txt .
+            cp target/api.txt .
+            cp target/api_stub.txt .
+            cp target/core.txt .

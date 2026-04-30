@@ -21,7 +21,7 @@ processing template and takes care of the stitching together or each step.
   * A unique name within the Flow
   * A set of Step name dependencies
   * Input and Output view names (or tokens for loading)
-  * A Quality RuleSuite with ViewLoader's
+  * A Quality RuleSuite with view and map support
   * An Operation of a Quality Runner with configurable result processing
   * Audit trail columns from previous steps can be combined
  
@@ -34,5 +34,6 @@ processing template and takes care of the stitching together or each step.
   * Step processing:
     * Before a Step starts the DataFrame can be manipulated based on the Step
     * After a Step completes custom logic for saving can be provided, by default temp views are used
+    * Each Step can configure a custom Runner or ResultApproach instead of the inbuilt options
 * Flow works with Spark 4 Connect and Classic handling 
 * Flows can be serialised and loaded for all supported types and Operations  
