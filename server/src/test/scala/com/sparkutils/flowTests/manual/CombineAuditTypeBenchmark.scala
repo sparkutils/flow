@@ -1,10 +1,10 @@
 package com.sparkutils.flowTests.manual
 
-import com.sparkutils.flow.{Flow, MergeFields, Operation, Step, StepData, forceMergeProjection, Folder}
+import com.sparkutils.flow.{Flow, Folder, MergeFields, Operation, Step, StepData, forceMergeProjection}
 import com.sparkutils.flowTests.RulesGen.rulesRaw
 import com.sparkutils.flowTests.utils.SharedPureConnectTests
 import com.sparkutils.quality
-import com.sparkutils.quality.{ ExpressionRule, Id, OutputExpression, RunOnPassProcessor}
+import com.sparkutils.quality.{ExpressionRule, Id, OutputExpression, RuleSuite, RunOnPassProcessor}
 import com.sparkutils.testing.{ClassicOnly, ConnectionType, Sessions, TestUtils}
 import org.apache.spark.sql.SaveMode.Overwrite
 import org.apache.spark.storage.StorageLevel
@@ -59,7 +59,7 @@ object CombineAuditBenchmark extends Bench.OfflineReport with TestUtils {
 
   def evaluate[T](alternate: Boolean)(params: (Int, Int)) = {
     new Flow(Id(1,1), Seq(
-      Step("0", Set.empty, Operation(rulesRaw(Seq(
+      Step("0", Set.empty, Operation[RuleSuite](rulesRaw(Seq(
         (ExpressionRule("(lower % 2) = 0"), RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("set(higher = lower + 10)")))
         )), Folder, MergeFields, "view1E"),
@@ -74,7 +74,7 @@ object CombineAuditBenchmark extends Bench.OfflineReport with TestUtils {
 
   def stepsGen(size: Int, alternate: Boolean) =
     for{i <- 1 until size} yield
-      Step(s"$i", Set.empty, Operation(rulesRaw(Seq(
+      Step(s"$i", Set.empty, Operation[RuleSuite](rulesRaw(Seq(
         (ExpressionRule("(higher % 5) = 0"), RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("set(lower = lower - 3)")))
         )).copy(id = Id(i + 1,0)),// Id change to verify combineAuditWith

@@ -53,7 +53,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
 
   test("multiple roots and paths should work, along with default columns, views and json serialisation") {
     // a and c are roots, d joins both c and b
-    val flowOG = new FlowT[Id](Id(1,1), Seq(
+    val flowOG = new FlowT[Id, RuleSuite](Id(1,1), Seq(
       Step("a",Set.empty, Operation(rulesRaw(Seq(
         (ExpressionRule("product = 'edt'"), RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("array(account_row('from'), account_row('to', 'other_account1'))")))
@@ -78,11 +78,13 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
         ) // flow_audit here is from v4
     ))//, showInterim = true)
     val s = sparkSession
+    import s.implicits._
 
     // write out to the full version and read back again
     val ds = toFullFlow(s, flowOG)
     ds.write.mode(SaveMode.Overwrite).json(outputDir + "/multipleRoots.json")
-    val rds = s.read.schema(typedFullFlowExpEnc[Id].schema).json(outputDir + "/multipleRoots.json").as[FullFlow[Id]]
+    val rds = s.read.schema(typedFullFlowExpEnc[Id, CombinedRuleSuiteRows].schema).json(outputDir + "/multipleRoots.json").
+      as[FullFlow[Id, CombinedRuleSuiteRows]]
     val flowData = fromFullFlow(rds, flowOG.flowId)
     val flow = new Flow(flowOG.flowId, flowData.steps, flowData.flowRow.flowAuditColName)
 
@@ -123,7 +125,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
         ViewRow(ruleSuiteId = 4, ruleSuiteVersion = 1, name = "filteredView4", token = None, filter = None,
           sql = Some(s"select * from view4 where $nullFieldCheck is not null")))),
       data = StepData("filteredView4", "view5"))
-  )) with FlowDataHandling[CombinedRuleSuiteRows] {
+  )) with FlowDataHandling[CombinedRuleSuiteRows, RuleSuite] {
     override protected def loadData(sparkSession: SparkSession, token: String): DataFrame = {
       if (dataHandling)
         // same as the real code, just forces the default to work
@@ -177,13 +179,13 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
     )
   }
 
-  def folderFlow(extraSteps: Seq[Step] = Seq.empty) = new Flow(Id(1,1), Seq(
-    Step("a",Set.empty, Operation(rulesRaw(Seq(
+  def folderFlow(extraSteps: Seq[Step[RuleSuite]] = Seq.empty) = new Flow(Id(1,1), Seq(
+    Step("a",Set.empty, Operation[RuleSuite](rulesRaw(Seq(
       (ExpressionRule("product = 'edt'"), RunOnPassProcessor(1000, Id(1040, 1),
         OutputExpression("set(subcode = 10)")))
       )), Folder, MergeFields, "view1E"), // identity should be added automatically
       data = StepData("view1", "view2")),
-    Step("b",Set("a"), Operation(rulesRaw(Seq(
+    Step("b",Set("a"), Operation[RuleSuite](rulesRaw(Seq(
       (ExpressionRule("product like 'fx%'"), RunOnPassProcessor(1000, Id(1040, 1),
         OutputExpression("set(account = 'newacc')")))
       )).copy(defaultProcessor = DefaultProcessor(Id(1041,1), OutputExpression("row -> row")),
@@ -418,7 +420,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
         )
       )) {
         // wierd view bug with connect, could be due to local views on connect not being visible to name resolution, needs adding to test in
-        override protected def startStep(input: DataFrame, step: Step, previousSteps: Set[StepResult]): DataFrame = {
+        override protected def startStep(input: DataFrame, step: Step[RuleSuite], previousSteps: Set[StepResult[RuleSuite]]): DataFrame = {
           input.write.mode(SaveMode.Overwrite).parquet(outputDir+s"/flowearly${step.name}")
           input.sparkSession.read.parquet(outputDir+s"/flowearly${step.name}")
         }

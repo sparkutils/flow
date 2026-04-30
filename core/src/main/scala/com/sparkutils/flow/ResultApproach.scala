@@ -1,5 +1,6 @@
 package com.sparkutils.flow
 
+import com.sparkutils.quality.RuleSuiteParam
 import org.apache.spark.sql.{Column, DataFrame}
 
 /**
@@ -46,8 +47,8 @@ case object StarOnly extends ResultApproach
 case object OutputFieldOnly extends ResultApproach
 
 trait CustomResultApproach extends Serializable {
-  def apply(input: DataFrame, function: Column, engineInputs: EngineInputs,
-            resultProcessInputs: ResultProcessInputs, step: Step): DataFrame
+  def apply[RP: RuleSuiteParam](input: DataFrame, function: Column, engineInputs: RunnerInputs,
+            resultProcessInputs: ResultProcessInputs, step: Step[RP]): DataFrame
 }
 
 /**

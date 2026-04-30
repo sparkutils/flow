@@ -1,7 +1,8 @@
 package com.sparkutils.flow
 
-import com.sparkutils.quality.impl.Encoders
-import com.sparkutils.quality.{DataFrameLoader, MapRow, RuleSuite, ViewRow}
+import com.sparkutils.quality.impl.{Encoders, RuleSuiteHelpers}
+import com.sparkutils.quality.{DataFrameLoader, GroupRuleId, Id, MapRow, RuleSuite, RuleSuiteParam, ViewRow, rule_suite_from}
+import org.apache.spark.sql.functions.{col, lit}
 import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 
@@ -22,20 +23,21 @@ case class FlowException(msg: String, cause: Throwable = null) extends Exception
  *                         with the operation fieldName automatically provided
  */
 @SerialVersionUID(1L)
-case class Operation(ruleSuite: RuleSuite, function: Runner, resultApproach: ResultApproach,
+case class Operation[T: RuleSuiteTypeParam](ruleSuite: T, function: Runner, resultApproach: ResultApproach,
                      fieldName: Option[String] = None,
                      combineAuditWith: Option[Set[String]] = None) extends Serializable
 
 object Operation {
 
-  def apply(ruleSuite: RuleSuite, function: Runner, resultApproach: ResultApproach,
-            fieldName: String): Operation = Operation(ruleSuite, function, resultApproach, Option(fieldName))
+  def apply[T: RuleSuiteTypeParam](ruleSuite: T, function: Runner, resultApproach: ResultApproach,
+            fieldName: String): Operation[T] = Operation(ruleSuite, function, resultApproach, Option(fieldName))
 
-  def apply(ruleSuite: RuleSuite, function: Runner, resultApproach: ResultApproach,
-            fieldName: String, combineAuditWith: Set[String]): Operation =
+  def apply[T: RuleSuiteTypeParam](ruleSuite: T, function: Runner, resultApproach: ResultApproach,
+            fieldName: String, combineAuditWith: Set[String]): Operation[T] =
     Operation(ruleSuite, function, resultApproach, Option(fieldName), Option(combineAuditWith))
 
-  def apply(ruleSuite: RuleSuite, function: Runner, resultApproach: ResultApproach, combineAuditWith: Set[String]): Operation =
+  def apply[T: RuleSuiteTypeParam](ruleSuite: T, function: Runner, resultApproach: ResultApproach,
+                               combineAuditWith: Set[String]): Operation[T] =
     new Operation(ruleSuite, function, resultApproach, combineAuditWith = Option(combineAuditWith))
 
 }
@@ -74,6 +76,31 @@ object StepData {
 }
 
 /**
+ * Which types are allowed in an encoded Operation, similar to [[com.sparkutils.quality.RuleSuiteParam]] but no Column
+ * instance exists.
+ */
+sealed trait RuleSuiteTypeParam[T] {
+  def id(t: T): Id
+}
+
+object RuleSuiteTypeParam {
+
+  implicit val rsParam: RuleSuiteTypeParam[RuleSuite] = new RuleSuiteTypeParam[RuleSuite] {
+    override def id(t: RuleSuite): Id = t.id
+  }
+
+  implicit val idNameParam: RuleSuiteTypeParam[GroupRuleId] = new RuleSuiteTypeParam[GroupRuleId] {
+    override def id(t: GroupRuleId): Id = t.id
+  }
+
+}
+
+trait StepLike extends Serializable {
+  def function: Runner
+  def options: Map[String, String]
+}
+
+/**
  * Each step represents a ruleSuite applied via an operation over a view.  This resulting dataframe is then passed to a
  * callback
  * @param name this steps name
@@ -84,9 +111,9 @@ object StepData {
  * @param options properties associated with this step, for example filenames or id's to save results against
  */
 @SerialVersionUID(1L)
-case class Step(name: String, dependencies: Set[String], operation: Operation,
+case class Step[T: RuleSuiteTypeParam](name: String, dependencies: Set[String], operation: Operation[T],
                 initConfiguration: StepInitConfiguration = StepInitConfiguration(),
-                data: StepData = StepData(), options: Map[String, String] = Map.empty) extends Serializable {
+                data: StepData = StepData(), options: Map[String, String] = Map.empty) extends StepLike {
   /**
    * The default output viewname for this step
    * @return
@@ -98,6 +125,9 @@ case class Step(name: String, dependencies: Set[String], operation: Operation,
    */
   def defaultFieldName: String = operation.fieldName.getOrElse(name)
 
+  def function: Runner = operation.function
+
+  val rsType: RuleSuiteTypeParam[T] = implicitly[RuleSuiteTypeParam[T]]
 }
 
 /**
@@ -115,7 +145,7 @@ case class StepTimings(runner: Duration, result: Duration) extends Serializable
  * @param timings the time taken to prepare the output
  */
 @SerialVersionUID(1L)
-case class StepResult(step: Step, output: DataFrame, timings: StepTimings) extends Serializable
+case class StepResult[T: RuleSuiteTypeParam](step: Step[T], output: DataFrame, timings: StepTimings) extends Serializable
 
 /**
  * The result of a successful Flow
@@ -123,5 +153,5 @@ case class StepResult(step: Step, output: DataFrame, timings: StepTimings) exten
  * @param duration the time taken by the entire flow
  */
 @SerialVersionUID(1L)
-case class FlowResult(stepResults: Map[String, StepResult], duration: Duration) extends Serializable
+case class FlowResult[T: RuleSuiteTypeParam](stepResults: Map[String, StepResult[T]], duration: Duration) extends Serializable
 

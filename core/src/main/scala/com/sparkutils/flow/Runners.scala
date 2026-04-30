@@ -1,6 +1,7 @@
 package com.sparkutils.flow
 
-import org.apache.spark.sql.{Column, DataFrame}
+import com.sparkutils.quality.RuleSuiteParam
+import org.apache.spark.sql.DataFrame
 
 /**
  * Runners that can be used by Flow Step operations
@@ -51,7 +52,7 @@ trait CustomRunner extends Serializable {
    * @param step
    * @return
    */
-  def apply(dataFrame: DataFrame, engineInputs: EngineInputs, step: Step): RunnerOutput
+  def apply[RP: RuleSuiteParam](dataFrame: DataFrame, engineInputs: RunnerInputs, step: Step[RP]): RunnerOutput
 }
 
 /**

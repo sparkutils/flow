@@ -558,7 +558,7 @@
         <javaLangVersion>9</javaLangVersion>
         <skip.scala.docs>false</skip.scala.docs>
 
-        <qualityVersion>0.2.0-RC4</qualityVersion>
+        <qualityVersion>0.2.0-RC5</qualityVersion>
         <graphVersion>2.0.3</graphVersion>
     </properties>
 

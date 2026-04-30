@@ -1,5 +1,6 @@
 package com.sparkutils.flowTests
 
+import com.sparkutils.flow.FlowGroupAndOperationType.WritableRuleSuite
 import com.sparkutils.flow._
 import com.sparkutils.flow.impl.util.FlowExceptionConstants.FlowEarlyExitException
 import com.sparkutils.flowTests.RulesGen.{rulesRaw, testData}
@@ -17,9 +18,9 @@ import scala.util.Try
 class CustomExtensions extends SharedPureConnectTests with Matchers {
 
   def buildFlow[FG](resultApproach: ResultApproach = StarOnly, runner: Runner = Engine,
-                options: Map[String,String] = Map.empty, flowRuleGroup: Option[FlowRuleGroup[FG]] = None): FlowT[FG] =
-    new FlowT[FG](Id(1, 1), Seq(
-      Step("a", Set.empty, Operation(rulesRaw(Seq(
+                options: Map[String,String] = Map.empty, flowRuleGroup: Option[FlowRuleGroup[FG]] = None): FlowT[FG, RuleSuite] =
+    new FlowT[FG, RuleSuite](Id(1, 1), Seq(
+      Step("a", Set.empty, Operation[RuleSuite](rulesRaw(Seq(
         (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1040, 1),
           OutputExpression("2")))
       )), runner, resultApproach), options = options
@@ -80,8 +81,13 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
   }
 //(
 //    implicit ffenc: Encoder[FullFlow[T]], fgenc: Encoder[FlowRuleGroup[T]])
-  def doNoOpRunnerGroup[T: TypedEncoder: FlowRuleGroupProcessing](
-      grpF: RuleSuite => FlowRuleGroup[T])( flowF: (FlowDataSets[T], RuleSuite) => FlowDataSets[T]): Unit={
+  def doNoOpRunnerGroup[T: TypedEncoder: FlowRuleGroupProcessing, OP <: OperationProcessing](process: OP)(
+      grpF: RuleSuite => FlowRuleGroup[T])( flowF: (FlowDataSets[T], RuleSuite) => FlowDataSets[T])(op: OP)(
+      implicit rtp: RuleSuiteTypeParam[OP#ResType], rp : RuleSuiteParam[OP#ResType],
+      operation: FlowGroupAndOperationType[T, OP], toDSImplFG: FlowGroupAndOperationType[T,RuleSuiteFromDataset.type] with WritableRuleSuite,
+      toDSImplEnc: Encoder[FullFlow[T,CombinedRuleSuiteRows]], toFlowEnc: Encoder[FullFlow[T,OP#StorageType]],
+      storageParam: RuleSuiteStorageType[OP#StorageType], storageTypedEnc: TypedEncoder[OP#StorageType]
+    ): Unit = {
     import com.sparkutils.flow.implicits._
 
     // add the test suite...
@@ -92,8 +98,8 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
 
     val grp = grpF(rs)
 
-    val flow = buildFlow(runner = NoOp, flowRuleGroup = Some(grp))
-    val odses = toDatasets(sparkSession, flow)
+    val flow = buildFlow[T](runner = NoOp, flowRuleGroup = Some(grp))
+    val odses = toDatasets(RuleSuiteFromDataset)(sparkSession, flow)
 
     val s = sparkSession
     import s.implicits._
@@ -101,11 +107,12 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
     // TODO Cache needed to stop Spark optimiser bug - make a simpler test case and raise
     val dses = flowF(odses, rs)
 
-    val flowData = fromDatasets(sparkSession, dses, flow.flowId)
-    toFullFlow(sparkSession, new FlowT[T](Id(flowData.flowRow.flowId, flowData.flowRow.flowVersion), flowData.steps,
+    val flowData = fromDatasets(op)(sparkSession, dses, flow.flowId)
+    toFullFlow(process)(sparkSession, new FlowT[T, OP#ResType](Id(flowData.flowRow.flowId, flowData.flowRow.flowVersion), flowData.steps,
       flowRuleGroup = flowData.flowRow.flowRuleGroup)).write.mode(SaveMode.Overwrite).json(outputDir + "/" + grp.ruleGroupName)
     val readBack =
-      s.read.schema(typedFullFlowExpEnc[T].schema).json(outputDir + "/" + grp.ruleGroupName).as[FullFlow[T]].head()
+      s.read.schema(typedFullFlowExpEnc[T, OP#StorageType].schema).json(outputDir + "/" + grp.ruleGroupName).
+        as[FullFlow[T, OP#StorageType]].head()
     // do the rule group id serde
     readBack.flowRow.flowRuleGroup.toSet shouldBe flowData.flowRow.flowRuleGroup.toSet
 
@@ -120,7 +127,7 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
   }
 
   test("NoOp runner and var rule group loading works id's") {
-    doNoOpRunnerGroup(_ => FlowRuleGroup("noOpFlowId", Seq(Id(200,1)))){
+    doNoOpRunnerGroup(RuleSuiteFromDataset)(_ => FlowRuleGroup("noOpFlowId", Seq(Id(200,1)))){
       (odses, rs) =>
 
         val s = sparkSession
@@ -132,32 +139,32 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
             odses.outputExpressionRows.fold(toOutputExpressionDS(rs))(d => (d union toOutputExpressionDS(rs)).cache())
           ),
           ruleSuites = Some(
-            odses.ruleSuites.fold(Seq(toRuleSuiteRow(rs)._1).toDS)(d => (d union Seq(toRuleSuiteRow(rs)._1).toDS()).cache())
+            odses.ruleSuites.fold(Seq(toRuleSuiteRow(rs)._1).toDS())(d => (d union Seq(toRuleSuiteRow(rs)._1).toDS()).cache())
           )
         )
-      }
+      }(RuleSuiteFromDataset)
   }
 
   test("NoOp runner and var rule group loading works with combined") {
-    doNoOpRunnerGroup{rs =>
+    doNoOpRunnerGroup(RuleSuiteFromDataset){rs =>
       val s = sparkSession
       import s.implicits._
 
       FlowRuleGroup("noOpFlowCombined", combined_rows(rs).collect().toSeq )
-    }((odses, _) => odses)
+    }((odses, _) => odses)(RuleSuiteFromDataset)
   }
 }
 
 class IStar() extends CustomResultApproach {
 
-  override def apply(input: DataFrame, function: Column, engineInputs: EngineInputs, resultProcessInputs: ResultProcessInputs, step: Step): DataFrame =
+  override def apply[RP: RuleSuiteParam](input: DataFrame, function: Column, engineInputs: RunnerInputs, resultProcessInputs: ResultProcessInputs, step: Step[RP]): DataFrame =
     input.select(function).select(resultProcessInputs.children: _*).selectExpr("result - 1")
 
 }
 
 class IRun() extends CustomRunner {
 
-  override def apply(dataFrame: DataFrame, engineInputs: EngineInputs, step: Step): RunnerOutput =
+  override def apply[RP: RuleSuiteParam](dataFrame: DataFrame, engineInputs: RunnerInputs, step: Step[RP]): RunnerOutput =
     if (step.options.get("throw").fold(
       false
     ) { s =>

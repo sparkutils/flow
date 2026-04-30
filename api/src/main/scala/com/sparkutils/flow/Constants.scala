@@ -1,7 +1,9 @@
 package com.sparkutils.flow
 
 
-import scala.concurrent.duration.{Duration, HOURS, MINUTES}
+import com.sparkutils.quality.GroupRuleId
+
+import scala.concurrent.duration.{Duration, FiniteDuration, HOURS, MINUTES}
 
 trait Constants {
 
@@ -159,5 +161,32 @@ trait Constants {
    */
   val rootInputSuffix = "_root_input"
 
-  val defaultFlowDuration = Duration(1L, HOURS)
+  /**
+   * By default, the duration a low lasts for is 1hr
+   */
+  val defaultFlowDuration: Duration = Duration(1L, HOURS)
+
+  /**
+   * This optional [[Step.options]] configuration, defaulting to true, takes effect when the [[Step]]'s
+   * [[Operation.ruleSuite]] type is [[com.sparkutils.quality.Id]] and [[FlowRuleGroup.ruleGroup]] type is
+   * [[com.sparkutils.quality.CombinedRuleSuiteRows]].  In this case the [[FlowRuleGroup.ruleGroupName]]
+   * is used and data is taken from [[FlowRuleGroup.ruleGroup]].
+   *
+   * This setting on a Step forces a filter on the provided RuleSuite dataset to be used for the RuleSuite Id and uses
+   * this name to register it.
+   */
+  val useFlowRuleGroupLevelRows = "useFlowRuleGroupLevelRows"
+
+  /**
+   * This optional [[Step.options]] configuration, takes effect when the [[Step]]'s
+   * [[Operation.ruleSuite]] type is [[com.sparkutils.quality.Id]].  It overrides whatever logic is used by
+   * [[OperationProcessing]] with Id including [[useFlowRuleGroupLevelRows]]
+   */
+  val useRuleGroupName = "useRuleGroupName"
+
+  /**
+   * This optional [[Step.options]] configuration, defaulting to false, stops modifying [[Operation.ruleSuite]]'s
+   * defaultProcessor when [[Operation.function]] is [[FolderRunnerName]] to introduce a default {{row -> row}}.
+   */
+  val doNotAddFolderDefault = "doNotAddFolderDefault"
 }

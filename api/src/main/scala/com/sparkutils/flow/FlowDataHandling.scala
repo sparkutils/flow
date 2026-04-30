@@ -3,7 +3,7 @@ package com.sparkutils.flow
 import com.sparkutils.flow
 import com.sparkutils.flow.impl.util.Utils
 import com.sparkutils.flow.impl.util.Utils.MapOps
-import com.sparkutils.quality.{DataFrameLoader, VersionedId}
+import com.sparkutils.quality.{DataFrameLoader, RuleSuiteParam, VersionedId}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.types.{DataType, StructType}
@@ -15,7 +15,7 @@ import scala.util.Try
  *
  * Derive and mix in with Flow creation to allow writing to catalog's or custom storage layers
  */
-trait FlowDataHandling[FG] extends Serializable with Logging { this: FlowT[FG] =>
+trait FlowDataHandling[FG, RP] extends Serializable with Logging { this: FlowT[FG, RP] =>
 
   def flowId: VersionedId
 
@@ -44,7 +44,7 @@ trait FlowDataHandling[FG] extends Serializable with Logging { this: FlowT[FG] =
    * @param step
    * @return
    */
-  protected def inputSchema(input: DataFrame, step: Step): StructType =
+  protected def inputSchema(input: DataFrame, step: Step[RP]): StructType =
     step.options.get(flow.inputSchema).fold {
       val (s, t) = Utils.timed {
         input.schema
@@ -63,7 +63,7 @@ trait FlowDataHandling[FG] extends Serializable with Logging { this: FlowT[FG] =
    * @param step only called for root tokens
    * @return when an inputView is provided it's used, otherwise {{step.name + rootInputSuffix}}
    */
-  protected def rootToken(step: Step): String = step.data.inputView.getOrElse(step.name + rootInputSuffix)
+  protected def rootToken(step: Step[RP]): String = step.data.inputView.getOrElse(step.name + rootInputSuffix)
 
   /**
    * By default, logs and returns input a dataframe using loadData with the token Step.inputViewName
@@ -73,7 +73,7 @@ trait FlowDataHandling[FG] extends Serializable with Logging { this: FlowT[FG] =
    * @param previousSteps previous Steps, can be empty if this is a root step
    * @return the actual dataset used as input to the set
    */
-  protected def startStep(input: DataFrame, step: Step, previousSteps: Set[StepResult]): DataFrame
+  protected def startStep(input: DataFrame, step: Step[RP], previousSteps: Set[StepResult[RP]]): DataFrame
 
   /**
    * The default implementation optionally caches (cacheStepResults) and uses the outputViewName to register a temp view
@@ -81,7 +81,7 @@ trait FlowDataHandling[FG] extends Serializable with Logging { this: FlowT[FG] =
    * @param previousSteps previous Steps, can be empty if this is a root step
    * @return a, by default, optionally cached dataFrame
    */
-  protected def stepCompleted(result: DataFrame, step: Step, previousSteps: Set[StepResult]): DataFrame
+  protected def stepCompleted(result: DataFrame, step: Step[RP], previousSteps: Set[StepResult[RP]]): DataFrame
 
   /**
    * Called after stepCompleted, by default [[Constants.flowEarlyExitSQL]] logic is run, any [[Step.defaultOutputViewName]]
@@ -93,5 +93,5 @@ trait FlowDataHandling[FG] extends Serializable with Logging { this: FlowT[FG] =
    * @param step
    * @param previousSteps
    */
-  protected def earlyExitCheck(result: DataFrame, step: Step, previousSteps: Set[StepResult]): Unit
+  protected def earlyExitCheck(result: DataFrame, step: Step[RP], previousSteps: Set[StepResult[RP]]): Unit
 }

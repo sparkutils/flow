@@ -89,9 +89,9 @@ class StepValidation extends SharedPureConnectTests with Matchers {
     test(null)
   }
 
-  def testNames(name: String, err: Step => String, parents: Set[String] = Set("b")) = {
+  def doTestNames(name: String, err: Step[RuleSuite] => String, parents: Set[String] = Set("b")) = {
     val d = Step("d", parents,
-      Operation(rulesRaw(Seq()).copy(id = Id(4, 1)), Engine, OutputFieldOnly, "view3"),
+      Operation[RuleSuite](rulesRaw(Seq()).copy(id = Id(4, 1)), Engine, OutputFieldOnly, "view3"),
       data = StepData(name, "view5")
     )
 
@@ -110,12 +110,12 @@ class StepValidation extends SharedPureConnectTests with Matchers {
   }
 
   test("Missing step view names should throw") {
-    testNames("", err = InvalidViewNames)
+    doTestNames("", err = InvalidViewNames)
   }
 
   test("Missing step view names with multiple parents should throw") {
-    testNames("", DefaultViewNamesMultipleParents, Set("c", "b"))
-    testNames(null, DefaultViewNamesMultipleParents, Set("c", "b"))
+    doTestNames("", DefaultViewNamesMultipleParents, Set("c", "b"))
+    doTestNames(null, DefaultViewNamesMultipleParents, Set("c", "b"))
   }
 
   test("Cycles should throw") {
@@ -139,7 +139,7 @@ class StepValidation extends SharedPureConnectTests with Matchers {
   test("dq with certain processing combinations should fail") { // correct dq is in the "dq mixes in..." test
     def withOutput(resultApproach: ResultApproach) = {
       val step = Step("d", Set("c", "b"),
-        Operation(rulesRaw(Seq()).copy(id = Id(4, 1)), DQ, resultApproach, "view4E"),
+        Operation[RuleSuite](rulesRaw(Seq()).copy(id = Id(4, 1)), DQ, resultApproach, "view4E"),
         data = StepData("filteredView4", "view5"))
       val r = intercept[FlowException] {
         val flow =

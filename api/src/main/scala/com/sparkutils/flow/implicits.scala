@@ -49,7 +49,7 @@ object implicits {
   implicit val typedStepEnc = TypedEncoder[StepRow]
   implicit val typedStepExpEnc: Encoder[StepRow] = TypedExpressionEncoder[StepRow]
 
-  implicit def typedFlowRuleGroupEnc[T: TypedEncoder, G <: HList, H <: HList](implicit
+  implicit def typedFlowRuleGroupEnc[T: TypedEncoder: FlowRuleGroupProcessing, G <: HList, H <: HList](implicit
       i0: LabelledGeneric.Aux[FlowRuleGroup[T], G],
       i1: DropUnitValues.Aux[G, H],
       i2: IsHCons[H],
@@ -58,9 +58,11 @@ object implicits {
     ): TypedEncoder[FlowRuleGroup[T]] = {
       TypedEncoder.usingDerivation[FlowRuleGroup[T], G, H]
     }
-  implicit def typedFlowRuleGroupExpEnc[FG: TypedEncoder]: Encoder[FlowRuleGroup[FG]] = TypedExpressionEncoder[FlowRuleGroup[FG]]
 
-  implicit def typedFlowEnc[T: TypedEncoder, G <: HList, H <: HList](implicit
+  implicit def typedFlowRuleGroupExpEnc[FG: TypedEncoder: FlowRuleGroupProcessing]: Encoder[FlowRuleGroup[FG]] =
+    TypedExpressionEncoder[FlowRuleGroup[FG]]
+
+  implicit def typedFlowEnc[T: TypedEncoder: FlowRuleGroupProcessing, G <: HList, H <: HList](implicit
       i0: LabelledGeneric.Aux[FlowRow[T], G],
       i1: DropUnitValues.Aux[G, H],
       i2: IsHCons[H],
@@ -69,18 +71,21 @@ object implicits {
     ): TypedEncoder[FlowRow[T]] = {
       TypedEncoder.usingDerivation[FlowRow[T], G, H]
     }
-  implicit def typedFlowExpEnc[FG: TypedEncoder]: Encoder[FlowRow[FG]] = TypedExpressionEncoder[FlowRow[FG]]
+  implicit def typedFlowExpEnc[FG: TypedEncoder: FlowRuleGroupProcessing]: Encoder[FlowRow[FG]] =
+    TypedExpressionEncoder[FlowRow[FG]]
 
-  implicit def typedFullFlowEnc[T: TypedEncoder, G <: HList, H <: HList](implicit
-      i0: LabelledGeneric.Aux[FullFlow[T], G],
+  implicit def typedFullFlowEnc[FG: TypedEncoder: FlowRuleGroupProcessing, RP: TypedEncoder: RuleSuiteStorageType,
+    G <: HList, H <: HList](implicit
+      i0: LabelledGeneric.Aux[FullFlow[FG, RP], G],
       i1: DropUnitValues.Aux[G, H],
       i2: IsHCons[H],
       i3: Lazy[RecordEncoderFields[H]],
-      i5: ClassTag[FullFlow[T]]
-    ): TypedEncoder[FullFlow[T]] = {
-      TypedEncoder.usingDerivation[FullFlow[T], G, H]
+      i5: ClassTag[FullFlow[FG, RP]]
+    ): TypedEncoder[FullFlow[FG, RP]] = {
+      TypedEncoder.usingDerivation[FullFlow[FG, RP], G, H]
     }
 
-  implicit def typedFullFlowExpEnc[FG: TypedEncoder]: Encoder[FullFlow[FG]] = TypedExpressionEncoder[FullFlow[FG]]
+  implicit def typedFullFlowExpEnc[FG: TypedEncoder: FlowRuleGroupProcessing, RP: TypedEncoder: RuleSuiteStorageType]:
+    Encoder[FullFlow[FG, RP]] = TypedExpressionEncoder[FullFlow[FG, RP]]
 
 }

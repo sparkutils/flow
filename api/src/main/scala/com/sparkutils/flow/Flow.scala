@@ -2,14 +2,16 @@ package com.sparkutils.flow
 
 import com.sparkutils.flow.StepUtils.withOutputFields
 import com.sparkutils.flow.Timer.DurationOps
-import com.sparkutils.quality.{DataFrameLoader, DefaultProcessor, Id, MapConfigColumns, NoOpDefaultProcessor, OutputExpression, VersionedId, ViewConfigColumns, collectRunner, ruleEngineRunner, ruleFolderRunner}
+import com.sparkutils.quality.{DataFrameLoader, DefaultProcessor, Id, MapConfigColumns, NoOpDefaultProcessor,
+  OutputExpression, RuleSuiteParam, VersionedId, ViewConfigColumns}
+import com.sparkutils.quality.generic.{collector, dq, engine, folder}
 import com.sparkutils.quality.impl.views.ViewLoadResults
 import org.apache.spark.sql.functions.{expr, col => scol}
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 import com.sparkutils.flow.impl.util.Utils._
-import com.sparkutils.flow.impl.util.FlowExceptionConstants.{CycleDetected, DefaultViewNamesMultipleParents, DuplicateNames, EmptyFlow, EmptyStepName, FlowEarlyExitException, InvalidDQResultApproach, InvalidViewNames, MissingStep}
+import com.sparkutils.flow.impl.util.FlowExceptionConstants.{CycleDetected, DefaultViewNamesMultipleParents,
+  DuplicateNames, EmptyFlow, EmptyStepName, FlowEarlyExitException, InvalidDQResultApproach, InvalidViewNames, MissingStep}
 import com.sparkutils.quality.functions.group_audit
-import com.sparkutils.quality.impl.Encoders
 import com.sparkutils.quality.impl.mapLookup.MapTypes.MapLookups
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.types.StructType
@@ -17,7 +19,7 @@ import scalax.collection.edges.{DiEdge, DiEdgeImplicits}
 import scalax.collection.immutable.Graph
 
 import scala.collection.parallel.CollectionConverters.ImmutableIterableIsParallelizable
-import scala.concurrent.duration.{Duration, HOURS}
+import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future, Promise}
 
 /**
@@ -35,7 +37,7 @@ import scala.concurrent.{Await, ExecutionContext, Future, Promise}
  * @tparam FG Either a simple list of Id's, or CombinedRuleSuites for flowRuleGroup usage
  */
 @SerialVersionUID(1L)
-class FlowT[FG](val flowId: VersionedId, val steps: Seq[Step],
+class FlowT[FG, RP: RuleSuiteParam: RuleSuiteTypeParam](val flowId: VersionedId, val steps: Seq[Step[RP]],
            val flowAuditColName: String = flowAuditDefault, val duration: Duration = defaultFlowDuration,
            val flowRuleGroup: Option[FlowRuleGroup[FG]] = None,
            val loader: DataFrameLoader = new DataFrameLoader {
@@ -44,13 +46,13 @@ class FlowT[FG](val flowId: VersionedId, val steps: Seq[Step],
            showInterim: Boolean = false, viewColumns: ViewConfigColumns = ViewConfigColumns(),
            mapColumns: MapConfigColumns = MapConfigColumns())(
              implicit ec: ExecutionContext
-           ) extends Serializable with FlowDataHandling[FG] with Logging {
+           ) extends Serializable with FlowDataHandling[FG, RP] with Logging {
 
   @transient
-  lazy val theGraph: Graph[Step, DiEdge[Step]] = {
+  lazy val theGraph: Graph[Step[RP], DiEdge[Step[RP]]] = {
     val map = steps.map(s => s.name -> s).toMap
 
-    val graph = steps.foldLeft(scalax.collection.immutable.Graph.from[Step, DiEdge[Step]](steps, Seq.empty)){
+    val graph = steps.foldLeft(scalax.collection.immutable.Graph.from[Step[RP], DiEdge[Step[RP]]](steps, Seq.empty)){
       (cur, step) =>
         if (step.dependencies.isEmpty)
           cur
@@ -76,14 +78,14 @@ class FlowT[FG](val flowId: VersionedId, val steps: Seq[Step],
    */
   private val (roots, rest) = steps.partition(_.dependencies.isEmpty)
 
-  private def processResult(dataFrame: DataFrame, step: Step,
+  private def processResult(dataFrame: DataFrame, step: Step[RP],
                             engine: RunnerOutput): (DataFrame, Duration) = Timer{
     import step.operation._
     import step.options
 
     val RunnerOutput(col, childrenRaw, outputFieldsI) = engine
 
-    val ei @ EngineInputs(struct, withoutFlowAudit, _) = engineInputs(options, dataFrame, step)
+    val ei @ RunnerInputs(struct, withoutFlowAudit, _) = runnerInputs(options, dataFrame, step)
 
     val ri @ ResultProcessInputs(outputFields, starterColumns, fieldName, children, group_auditF) =
       resultProcessInputs(step, col, childrenRaw, outputFieldsI, ei)
@@ -137,8 +139,8 @@ class FlowT[FG](val flowId: VersionedId, val steps: Seq[Step],
 
   }
 
-  private def resultProcessInputs(step: Step, col: Column, childrenRaw: Seq[String],
-                                  outputFieldsI: Option[Set[String]], ei: EngineInputs): ResultProcessInputs = {
+  private def resultProcessInputs(step: Step[RP], col: Column, childrenRaw: Seq[String],
+                                  outputFieldsI: Option[Set[String]], ei: RunnerInputs): ResultProcessInputs = {
     val outputFields: Option[Set[String]] =
       outputFieldsI.flatMap { s =>
         if (step.options.boolean(forceMergeProjection))
@@ -173,18 +175,18 @@ class FlowT[FG](val flowId: VersionedId, val steps: Seq[Step],
   }
 
   // TODO move this to the server?, allowing upgrades for all jobs on shared cluster
-  private def process(dataFrame: DataFrame, step: Step): ((DataFrame, Duration), Duration) = Timer{
+  private def process(dataFrame: DataFrame, step: Step[RP]): ((DataFrame, Duration), Duration) = Timer{
     import step.operation._
     import step.options
 
     val fieldName = step.defaultFieldName
 
-    val ei @ EngineInputs(struct, withoutFlowAudit, dataRefTypeFields) = engineInputs(options, dataFrame, step)
+    val ei @ RunnerInputs(struct, withoutFlowAudit, dataRefTypeFields) = runnerInputs(options, dataFrame, step)
 
-    val engine =
+    val runner =
       function match {
         case Collect =>
-          RunnerOutput(collectRunner(step.operation.ruleSuite, resultDataType = options.dataType(resultDataType),
+          RunnerOutput(collector(step.operation.ruleSuite, resultDataType = options.dataType(resultDataType),
             variablesPerFunc = options.int("variablesPerFunc", 40),
             variableFuncGroup = options.int("variableFuncGroup", 20),
             flatten = options.boolean(collectFlatten, true),
@@ -196,7 +198,7 @@ class FlowT[FG](val flowId: VersionedId, val steps: Seq[Step],
           )
 
         case Engine =>
-          RunnerOutput(ruleEngineRunner(step.operation.ruleSuite,
+          RunnerOutput(engine(step.operation.ruleSuite,
             resultDataType = options.dataType(resultDataType),
             debugMode = options.boolean(debugMode),
             variablesPerFunc = options.int("variablesPerFunc", 40),
@@ -205,15 +207,7 @@ class FlowT[FG](val flowId: VersionedId, val steps: Seq[Step],
           )
 
         case Folder =>
-          val rs =
-            if (step.operation.ruleSuite.defaultProcessor != NoOpDefaultProcessor.noOp)
-              // even if the result is null, it's been chosen as such
-              step.operation.ruleSuite
-            else
-              // identity function - let the row through
-              step.operation.ruleSuite.copy(defaultProcessor = DefaultProcessor(Id(-1,-1), OutputExpression("row -> row")))
-
-          RunnerOutput(ruleFolderRunner(rs,
+          RunnerOutput(folder(defaultFolderT(step, step.operation.ruleSuite),
             startingStruct = options.expr(startingStruct).getOrElse{
               // default to the current row - flow_audit otherwise MergeFields will have dupes
               expr(s"struct(${withoutFlowAudit.mkString(",")})")
@@ -230,7 +224,7 @@ class FlowT[FG](val flowId: VersionedId, val steps: Seq[Step],
           )
 
         case DQ =>
-          RunnerOutput(com.sparkutils.quality.ruleRunner(step.operation.ruleSuite).as(fieldName), Seq(), None)
+          RunnerOutput(dq(step.operation.ruleSuite).as(fieldName), Seq(), None)
 
         case NoOp =>
           RunnerOutput(expr("*"), Seq(), None)
@@ -239,11 +233,11 @@ class FlowT[FG](val flowId: VersionedId, val steps: Seq[Step],
           c.customRunner(dataFrame, ei, step)
       }
 
-    processResult(dataFrame, step, engine)
+    processResult(dataFrame, step, runner)
 
   }
 
-  private def engineInputs(options: Map[String, String], dataFrame: DataFrame, step: Step): EngineInputs = {
+  private def runnerInputs(options: Map[String, String], dataFrame: DataFrame, step: Step[RP]): RunnerInputs = {
     val struct = inputSchema(dataFrame, step)
     val withoutFlowAudit = struct.filterNot(_.name == flowAuditColName).map(_.name)
 
@@ -252,23 +246,23 @@ class FlowT[FG](val flowId: VersionedId, val steps: Seq[Step],
         case Some(s: StructType) => Some(s.fields.map(_.name).filterNot(_ == flowAuditColName).toSet)
         case _ => None
       }
-    EngineInputs(struct, withoutFlowAudit, dataRefTypeFields)
+    RunnerInputs(struct, withoutFlowAudit, dataRefTypeFields)
   }
 
-  protected def loadViews(sparkSession: SparkSession, step: Step): ViewLoadResults = {
+  protected def loadViews(sparkSession: SparkSession, step: Step[RP]): ViewLoadResults = {
     import sparkSession.implicits._
     val (config, _) = com.sparkutils.quality.loadViewConfigs(loader = loader,
       viewDF = step.initConfiguration.viewConfig.toDF(),
-      ruleSuiteId = step.operation.ruleSuite.id,
+      ruleSuiteId = step.rsType.id( step.operation.ruleSuite ),
       viewColumns = viewColumns)
     com.sparkutils.quality.loadViews(config)
   }
 
-  protected def loadMaps(sparkSession: SparkSession, step: Step): MapLookups = {
+  protected def loadMaps(sparkSession: SparkSession, step: Step[RP]): MapLookups = {
     import sparkSession.implicits._
     val (config, _) = com.sparkutils.quality.loadMapConfigs(loader = loader,
       viewDF = step.initConfiguration.mapConfig.toDF(),
-      ruleSuiteId = step.operation.ruleSuite.id,
+      ruleSuiteId = step.rsType.id( step.operation.ruleSuite ),
       mapConfig = mapColumns
     )
     step.initConfiguration.mapName.fold(
@@ -278,7 +272,7 @@ class FlowT[FG](val flowId: VersionedId, val steps: Seq[Step],
     }
   }
 
-  private def performStep(df: DataFrame, step: Step, dependencies: Set[StepResult]): StepResult = {
+  private def performStep(df: DataFrame, step: Step[RP], dependencies: Set[StepResult[RP]]): StepResult[RP] = {
     // ensure the same session is used for the df, otherwise the session may fall back to the classic when called
     // from another thread, mostly a testing issue, but would also apply to DBR using connect on a classic cluster
     SparkSession.setActiveSession(df.sparkSession)
@@ -323,16 +317,16 @@ class FlowT[FG](val flowId: VersionedId, val steps: Seq[Step],
    * Builds the chain of Promises from roots, completing roots triggers processing of the rest of the DAG
    * @return (roots, full) promises
    */
-  private def buildPromises(): (Map[String, Promise[StepResult]], Map[String, Promise[StepResult]]) = {
-    val rootPromises = roots.map(s => s.name -> Promise[StepResult]()).toMap
+  private def buildPromises(): (Map[String, Promise[StepResult[RP]]], Map[String, Promise[StepResult[RP]]]) = {
+    val rootPromises = roots.map(s => s.name -> Promise[StepResult[RP]]()).toMap
     val promises = scala.collection.mutable.Map.empty ++ rootPromises
 
-    def chaseDown(elem: theGraph.NodeT): Future[StepResult] = {
+    def chaseDown(elem: theGraph.NodeT): Future[StepResult[RP]] = {
       val cur = elem.source
 
       val r =
         promises.get(cur.name).map(_.future).getOrElse {
-          val p = Promise[StepResult]()
+          val p = Promise[StepResult[RP]]()
           promises.put(cur.name, p)
 
           // do their roots
@@ -343,7 +337,7 @@ class FlowT[FG](val flowId: VersionedId, val steps: Seq[Step],
             }
           )
 
-          val newF: Future[StepResult] = f.map { names =>
+          val newF: Future[StepResult[RP]] = f.map { names =>
             performStep(names.head.output, cur, names)
           }
 
@@ -425,7 +419,7 @@ class FlowT[FG](val flowId: VersionedId, val steps: Seq[Step],
    *         note although the Step returned may have been replaced by modifyStep
    *         the name key will be the original [[Step.name]]
    */
-  def run(sparkSession: SparkSession, starting: Step => Option[DataFrame]): FlowResult = {
+  def run(sparkSession: SparkSession, starting: Step[RP] => Option[DataFrame]): FlowResult[RP] = {
     val timed = Timer {
       verifySteps()
       logInfo(s"Starting Flow id: ${flowId.id}, version: ${flowId.version}")
@@ -470,7 +464,7 @@ class FlowT[FG](val flowId: VersionedId, val steps: Seq[Step],
    * @param starting
    * @return Tuples of end Steps with their resulting DataFrames and run statistics
    */
-  def run(sparkSession: SparkSession): FlowResult =
+  def run(sparkSession: SparkSession): FlowResult[RP] =
     run(sparkSession, {
       _ => None
     })
@@ -482,7 +476,7 @@ class FlowT[FG](val flowId: VersionedId, val steps: Seq[Step],
    * @param vl
    * @param step
    */
-  private def stepViewsLoaded(vl: ViewLoadResults, step: Step) = {
+  private def stepViewsLoaded(vl: ViewLoadResults, step: Step[RP]) = {
     if (vl.replaced.nonEmpty) {
       logInfo(s"Views in Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} were replaced `${vl.replaced.mkString(",")}`")
     }
@@ -507,7 +501,7 @@ class FlowT[FG](val flowId: VersionedId, val steps: Seq[Step],
   }
   // $COVERAGE-ON$
 
-  final def flowInfo(step: Step, info: String): String =
+  final def flowInfo(step: Step[RP], info: String): String =
     s"Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} $info"
 
   /**
@@ -515,7 +509,7 @@ class FlowT[FG](val flowId: VersionedId, val steps: Seq[Step],
    * @param step
    * @param info extra logging information
    */
-  final def infoLogStep(step: Step, info: String): Unit = {
+  final def infoLogStep(step: Step[RP], info: String): Unit = {
     logInfo(flowInfo(step,info))
   }
   /**
@@ -523,7 +517,7 @@ class FlowT[FG](val flowId: VersionedId, val steps: Seq[Step],
    * @param step
    * @param info extra logging information
    */
-  final def warnLogStep(step: Step, info: String): Unit = {
+  final def warnLogStep(step: Step[RP], info: String): Unit = {
     logWarning(flowInfo(step,info))
   }
   /**
@@ -531,7 +525,7 @@ class FlowT[FG](val flowId: VersionedId, val steps: Seq[Step],
    * @param step
    * @param info extra logging information
    */
-  final protected def errorLogStep(step: Step, info: String): Unit = {
+  final protected def errorLogStep(step: Step[RP], info: String): Unit = {
     logError(flowInfo(step,info))
   }
 
@@ -547,13 +541,13 @@ class FlowT[FG](val flowId: VersionedId, val steps: Seq[Step],
    * @param previousSteps
    * @return
    */
-  protected def modifyStep(input: DataFrame, step: Step, previousSteps: Set[StepResult]): Step =
+  protected def modifyStep(input: DataFrame, step: Step[RP], previousSteps: Set[StepResult[RP]]): Step[RP] =
     step
 
   /**
    * @inheritdoc
    */
-  protected def startStep(input: DataFrame, step: Step, previousSteps: Set[StepResult]): DataFrame = {
+  protected def startStep(input: DataFrame, step: Step[RP], previousSteps: Set[StepResult[RP]]): DataFrame = {
     infoLogStep(step, "Started")
 
     val token = step.data.inputView.getOrElse{
@@ -569,7 +563,7 @@ class FlowT[FG](val flowId: VersionedId, val steps: Seq[Step],
   /**
    * @inheritdoc
    */
-  protected def stepCompleted(result: DataFrame, step: Step, previousSteps: Set[StepResult]): DataFrame = {
+  protected def stepCompleted(result: DataFrame, step: Step[RP], previousSteps: Set[StepResult[RP]]): DataFrame = {
     val ndf =
       if (step.data.cacheResults)
         result.cache()
@@ -586,7 +580,7 @@ class FlowT[FG](val flowId: VersionedId, val steps: Seq[Step],
   /**
    * @inheritdoc
    */
-  protected def earlyExitCheck(result: DataFrame, step: Step, previousSteps: Set[StepResult]): Unit =
+  protected def earlyExitCheck(result: DataFrame, step: Step[RP], previousSteps: Set[StepResult[RP]]): Unit =
     step.options.get(flowEarlyExitSQL).foreach {
       sql =>
         val msg = step.options.getOrElse(flowEarlyExitException, FlowEarlyExitException(step))
