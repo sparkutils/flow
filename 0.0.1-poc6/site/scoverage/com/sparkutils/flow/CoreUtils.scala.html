@@ -33,7 +33,7 @@
 </span>9 <span style=''>      </span><span style='background: #AEF1AE'>obj.getClass.getClassLoader.loadClass(name).newInstance().asInstanceOf[T]</span><span style=''>
 </span>10 <span style=''>    } catch {
 </span>11 <span style=''>      case t: Throwable =&gt;
-</span>12 <span style=''>        </span><span style='background: #F0ADAD'>throw FlowException(s&quot;Attempted to load CustomResultApproach $name&quot;,t)</span><span style=''>
+</span>12 <span style=''>        </span><span style='background: #AEF1AE'>throw FlowException(s&quot;Attempted to load CustomResultApproach $name&quot;,t)</span><span style=''>
 </span>13 <span style=''>    }
 </span>14 <span style=''>}
 </span>15 <span style=''>
@@ -140,7 +140,7 @@
         <td>
           
         </td>
-        <td style="background: #F0ADAD">
+        <td style="background: #AEF1AE">
           throw FlowException.apply(&quot;Attempted to load CustomResultApproach &quot;.+(name), t)
         </td>
       </tr><tr>
@@ -164,7 +164,7 @@
         <td>
           
         </td>
-        <td style="background: #F0ADAD">
+        <td style="background: #AEF1AE">
           throw FlowException.apply(&quot;Attempted to load CustomResultApproach &quot;.+(name), t)
         </td>
       </tr><tr>

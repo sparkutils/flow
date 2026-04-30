@@ -94,7 +94,7 @@
 </span>70 <span style=''>    }
 </span>71 <span style=''>
 </span>72 <span style=''>    override def combinedRuleSuiteRows(flowRuleGroup: FlowRuleGroup[CombinedRuleSuiteRows]): Seq[CombinedRuleSuiteRows] =
-</span>73 <span style=''>      </span><span style='background: #F0ADAD'>flowRuleGroup.ruleGroup</span><span style=''>
+</span>73 <span style=''>      </span><span style='background: #AEF1AE'>flowRuleGroup.ruleGroup</span><span style=''>
 </span>74 <span style=''>  }
 </span>75 <span style=''>
 </span>76 <span style=''>}
@@ -152,132 +152,150 @@
 </span>128 <span style=''>  def fromFullRow(rules: Seq[CombinedRuleSuiteRows], variableName: String, flowRow: FlowRow[F], fullStep: FullStep[O#StorageType], rid: Id,
 </span>129 <span style=''>                  s: O#StorageType): O#ResType
 </span>130 <span style=''>
-</span>131 <span style=''>  def toCombinedRows(rs: O#StorageType): Option[CombinedRuleSuiteRows] = </span><span style='background: #F0ADAD'>None</span><span style=''>
-</span>132 <span style=''>}
-</span>133 <span style=''>
-</span>134 <span style=''>object FlowGroupAndOperationType {
-</span>135 <span style=''>  trait WritableRuleSuite {
-</span>136 <span style=''>    def writableRuleSuite(rs: RuleSuite): CombinedRuleSuiteRows = </span><span style='background: #AEF1AE'>combined_rows(rs).head</span><span style=''>
-</span>137 <span style=''>
-</span>138 <span style=''>    def toRuleSuite(rs: RuleSuite): RuleSuite = rs
-</span>139 <span style=''>  }
+</span>131 <span style=''>  def toCombinedRows(rs: O#StorageType): Option[CombinedRuleSuiteRows] = </span><span style='background: #AEF1AE'>None</span><span style=''>
+</span>132 <span style=''>
+</span>133 <span style=''>  def toRuleSuite(flow: FlowT[F, O#ResType], rs: O#ResType): Option[ RuleSuite ]
+</span>134 <span style=''>
+</span>135 <span style=''>}
+</span>136 <span style=''>
+</span>137 <span style=''>object FlowGroupAndOperationType {
+</span>138 <span style=''>  trait WritableRuleSuite[F] {
+</span>139 <span style=''>    def writableRuleSuite(rs: RuleSuite): CombinedRuleSuiteRows = </span><span style='background: #AEF1AE'>combined_rows(rs).head()</span><span style=''>
 </span>140 <span style=''>
-</span>141 <span style=''>  trait WritableId {
-</span>142 <span style=''>    def writableRuleSuite(rs: GroupRuleId): Id = </span><span style='background: #F0ADAD'>rs.id</span><span style=''>
+</span>141 <span style=''>    //def toRuleSuite(rs: RuleSuite): RuleSuite = rs
+</span>142 <span style=''>    def toRuleSuite(flow: FlowT[F, RuleSuite], rs: RuleSuite): Option[RuleSuite] = </span><span style='background: #AEF1AE'>Some(rs)</span><span style=''>
 </span>143 <span style=''>  }
 </span>144 <span style=''>
-</span>145 <span style=''>  trait HasCombinedRows[F, O &lt;: StorageIsCombinedRows] extends FlowGroupAndOperationType[F, O] {
-</span>146 <span style=''>    override def toCombinedRows(rs: CombinedRuleSuiteRows): Option[CombinedRuleSuiteRows] = </span><span style='background: #AEF1AE'>Some(rs)</span><span style=''>
+</span>145 <span style=''>  trait WritableId {
+</span>146 <span style=''>    def writableRuleSuite(rs: GroupRuleId): Id = </span><span style='background: #F0ADAD'>rs.id</span><span style=''>
 </span>147 <span style=''>  }
 </span>148 <span style=''>
-</span>149 <span style=''>  implicit val idsAndRuleSuite: FlowGroupAndOperationType[Id, RuleSuiteFromDataset.type] with WritableRuleSuite  =
-</span>150 <span style=''>    </span><span style='background: #AEF1AE'>new</span><span style=''> HasCombinedRows[Id, RuleSuiteFromDataset.type] with WritableRuleSuite {
-</span>151 <span style=''>
-</span>152 <span style=''>      override def apply(flowId: VersionedId, rsName: String, rsRows: Dataset[CombinedRuleSuiteRows],
-</span>153 <span style=''>                         rid: Id, flowRow: FlowRow[Id], step: StepRow): RuleSuite =
-</span>154 <span style=''>        </span><span style='background: #AEF1AE'>rule_suite(rsRows, rid).getOrElse(
-</span>155 <span style=''></span><span style='background: #AEF1AE'>          </span><span style='background: #F0ADAD'>throw FlowException(s&quot;Flow $flowId could not be loaded as a Step's RuleSuite $rid is missing&quot;)</span><span style='background: #AEF1AE'>
-</span>156 <span style=''></span><span style='background: #AEF1AE'>        )</span><span style=''>
-</span>157 <span style=''>
-</span>158 <span style=''>      override def fromFullRow(rules: Seq[CombinedRuleSuiteRows], variableName: String, flowRow: FlowRow[Id], fullStep: FullStep[CombinedRuleSuiteRows], rid: Id,
-</span>159 <span style=''>                               s: CombinedRuleSuiteRows): RuleSuite =
-</span>160 <span style=''>        </span><span style='background: #AEF1AE'>defaultFolder(fullStep.step, rule_suite_group(Seq(s)).ruleSuites.values.head)</span><span style=''>
+</span>149 <span style=''>  trait HasCombinedRows[F, O &lt;: StorageIsCombinedRows] extends FlowGroupAndOperationType[F, O] {
+</span>150 <span style=''>    override def toCombinedRows(rs: CombinedRuleSuiteRows): Option[CombinedRuleSuiteRows] = </span><span style='background: #AEF1AE'>Some(rs)</span><span style=''>
+</span>151 <span style=''>  }
+</span>152 <span style=''>
+</span>153 <span style=''>  implicit val idsAndRuleSuite: FlowGroupAndOperationType[Id, RuleSuiteFromDataset.type] with WritableRuleSuite[Id]  =
+</span>154 <span style=''>    </span><span style='background: #AEF1AE'>new</span><span style=''> HasCombinedRows[Id, RuleSuiteFromDataset.type] with WritableRuleSuite[Id] {
+</span>155 <span style=''>
+</span>156 <span style=''>      override def apply(flowId: VersionedId, rsName: String, rsRows: Dataset[CombinedRuleSuiteRows],
+</span>157 <span style=''>                         rid: Id, flowRow: FlowRow[Id], step: StepRow): RuleSuite =
+</span>158 <span style=''>        </span><span style='background: #AEF1AE'>rule_suite(rsRows, rid).getOrElse(
+</span>159 <span style=''></span><span style='background: #AEF1AE'>          </span><span style='background: #F0ADAD'>throw FlowException(s&quot;Flow $flowId could not be loaded as a Step's RuleSuite $rid is missing&quot;)</span><span style='background: #AEF1AE'>
+</span>160 <span style=''></span><span style='background: #AEF1AE'>        )</span><span style=''>
 </span>161 <span style=''>
-</span>162 <span style=''>    }
-</span>163 <span style=''>
-</span>164 <span style=''>  // use a global name for all lookups
-</span>165 <span style=''>  implicit val idsAndId: FlowGroupAndOperationType[Id, IdFromDatasets.type] =
-</span>166 <span style=''>    </span><span style='background: #AEF1AE'>new</span><span style=''> FlowGroupAndOperationType[Id, IdFromDatasets.type] with WritableId {
+</span>162 <span style=''>      override def fromFullRow(rules: Seq[CombinedRuleSuiteRows], variableName: String, flowRow: FlowRow[Id], fullStep: FullStep[CombinedRuleSuiteRows], rid: Id,
+</span>163 <span style=''>                               s: CombinedRuleSuiteRows): RuleSuite =
+</span>164 <span style=''>        </span><span style='background: #AEF1AE'>defaultFolder(fullStep.step, rule_suite_group(Seq(s)).ruleSuites.values.head)</span><span style=''>
+</span>165 <span style=''>
+</span>166 <span style=''>    }
 </span>167 <span style=''>
-</span>168 <span style=''>      override def apply(flowId: VersionedId, rsName: String, rsRows: Dataset[CombinedRuleSuiteRows],
-</span>169 <span style=''>                         rid: Id, flowRow: FlowRow[Id], step: StepRow): GroupRuleId =
-</span>170 <span style=''>        </span><span style='background: #F0ADAD'>GroupRuleId(rsName, rid)</span><span style=''>
-</span>171 <span style=''>
-</span>172 <span style=''>      override def fromFullRow(rules: Seq[CombinedRuleSuiteRows], variableName: String,
-</span>173 <span style=''>                               flowRow: FlowRow[Id], fullStep: FullStep[Id], rid: Id, s: Id): GroupRuleId =
-</span>174 <span style=''>        </span><span style='background: #F0ADAD'>GroupRuleId(variableName, s)</span><span style=''>
-</span>175 <span style=''>
-</span>176 <span style=''>    }
-</span>177 <span style=''>
-</span>178 <span style=''>  implicit val rowsAndFullSuites: FlowGroupAndOperationType[CombinedRuleSuiteRows, RuleSuiteFromDataset.type] with WritableRuleSuite  =
-</span>179 <span style=''>    </span><span style='background: #AEF1AE'>new</span><span style=''> HasCombinedRows[CombinedRuleSuiteRows, RuleSuiteFromDataset.type] with WritableRuleSuite {
-</span>180 <span style=''>
-</span>181 <span style=''>      override def apply(flowId: VersionedId, rsName: String, rsRows: Dataset[CombinedRuleSuiteRows],
-</span>182 <span style=''>                         rid: Id, flowRow: FlowRow[CombinedRuleSuiteRows], step: StepRow): RuleSuite =
-</span>183 <span style=''>        </span><span style='background: #AEF1AE'>rule_suite(rsRows, rid).getOrElse(
-</span>184 <span style=''></span><span style='background: #AEF1AE'>          </span><span style='background: #F0ADAD'>throw FlowException(s&quot;Flow $flowId could not be loaded as a Step's RuleSuite $rid is missing&quot;)</span><span style='background: #AEF1AE'>
-</span>185 <span style=''></span><span style='background: #AEF1AE'>        )</span><span style=''>
-</span>186 <span style=''>
-</span>187 <span style=''>      override def fromFullRow(rules: Seq[CombinedRuleSuiteRows], variableName: String,
-</span>188 <span style=''>                               flowRow: FlowRow[CombinedRuleSuiteRows], fullStep: FullStep[CombinedRuleSuiteRows],
-</span>189 <span style=''>                               rid: Id, s: CombinedRuleSuiteRows): RuleSuite =
-</span>190 <span style=''>        </span><span style='background: #F0ADAD'>defaultFolder(fullStep.step, rule_suite_group(Seq(s)).ruleSuites.values.head)</span><span style=''>
-</span>191 <span style=''>
-</span>192 <span style=''>    }
-</span>193 <span style=''>
-</span>194 <span style=''>  implicit val rowsAndFullSuitesFromFlows: FlowGroupAndOperationType[CombinedRuleSuiteRows, RuleSuiteFromFlows.type] with WritableRuleSuite  =
-</span>195 <span style=''>    </span><span style='background: #AEF1AE'>new</span><span style=''> HasCombinedRows[CombinedRuleSuiteRows, RuleSuiteFromFlows.type] with WritableRuleSuite {
-</span>196 <span style=''>
-</span>197 <span style=''>      override def apply(flowId: VersionedId, rsName: String, rsRows: Dataset[CombinedRuleSuiteRows],
-</span>198 <span style=''>                         rid: Id, flowRow: FlowRow[CombinedRuleSuiteRows], step: StepRow): RuleSuite = {
-</span>199 <span style=''>        val s = </span><span style='background: #F0ADAD'>rsRows.sparkSession</span><span style=''>
-</span>200 <span style=''>        import s.implicits._
-</span>201 <span style=''>        </span><span style='background: #F0ADAD'>rule_suite(flowRow.flowRuleGroup.map(_.ruleGroup.toDS()).getOrElse(rsRows), rid).getOrElse(
-</span>202 <span style=''></span><span style='background: #F0ADAD'>          throw FlowException(s&quot;Flow $flowId could not be loaded as a Step's RuleSuite $rid is missing&quot;)
-</span>203 <span style=''></span><span style='background: #F0ADAD'>        )</span><span style=''>
-</span>204 <span style=''>      }
+</span>168 <span style=''>  implicit val idsAndId: FlowGroupAndOperationType[Id, IdFromDatasets.type] =
+</span>169 <span style=''>    </span><span style='background: #AEF1AE'>new</span><span style=''> FlowGroupAndOperationType[Id, IdFromDatasets.type] with WritableId {
+</span>170 <span style=''>
+</span>171 <span style=''>      override def apply(flowId: VersionedId, rsName: String, rsRows: Dataset[CombinedRuleSuiteRows],
+</span>172 <span style=''>                         rid: Id, flowRow: FlowRow[Id], step: StepRow): GroupRuleId =
+</span>173 <span style=''>        </span><span style='background: #F0ADAD'>GroupRuleId(rsName, rid)</span><span style=''>
+</span>174 <span style=''>
+</span>175 <span style=''>      override def fromFullRow(rules: Seq[CombinedRuleSuiteRows], variableName: String,
+</span>176 <span style=''>                               flowRow: FlowRow[Id], fullStep: FullStep[Id], rid: Id, s: Id): GroupRuleId =
+</span>177 <span style=''>        </span><span style='background: #F0ADAD'>GroupRuleId(variableName, s)</span><span style=''>
+</span>178 <span style=''>
+</span>179 <span style=''>      override def toRuleSuite(flow: FlowT[Id, GroupRuleId], rs: GroupRuleId): Option[RuleSuite] = </span><span style='background: #F0ADAD'>None</span><span style=''>
+</span>180 <span style=''>    }
+</span>181 <span style=''>
+</span>182 <span style=''>  implicit val rowsAndFullSuites: FlowGroupAndOperationType[CombinedRuleSuiteRows, RuleSuiteFromDataset.type] with
+</span>183 <span style=''>    WritableRuleSuite[CombinedRuleSuiteRows] =
+</span>184 <span style=''>    </span><span style='background: #AEF1AE'>new</span><span style=''> HasCombinedRows[CombinedRuleSuiteRows, RuleSuiteFromDataset.type] with WritableRuleSuite[CombinedRuleSuiteRows] {
+</span>185 <span style=''>
+</span>186 <span style=''>      override def apply(flowId: VersionedId, rsName: String, rsRows: Dataset[CombinedRuleSuiteRows],
+</span>187 <span style=''>                         rid: Id, flowRow: FlowRow[CombinedRuleSuiteRows], step: StepRow): RuleSuite =
+</span>188 <span style=''>        </span><span style='background: #AEF1AE'>rule_suite(rsRows, rid).getOrElse(
+</span>189 <span style=''></span><span style='background: #AEF1AE'>          </span><span style='background: #F0ADAD'>flowRow.flowRuleGroup.flatMap(g =&gt;
+</span>190 <span style=''></span><span style='background: #F0ADAD'>            g.ruleGroup.find(r =&gt; Id(r.ruleSuiteId, r.ruleSuiteVersion) == rid).map(rule_suite)).getOrElse(
+</span>191 <span style=''></span><span style='background: #F0ADAD'>            throw FlowException(s&quot;Flow $flowId could not be loaded as a Step's RuleSuite $rid is missing&quot;)
+</span>192 <span style=''></span><span style='background: #F0ADAD'>          )</span><span style='background: #AEF1AE'>
+</span>193 <span style=''></span><span style='background: #AEF1AE'>        )</span><span style=''>
+</span>194 <span style=''>
+</span>195 <span style=''>      override def fromFullRow(rules: Seq[CombinedRuleSuiteRows], variableName: String,
+</span>196 <span style=''>                               flowRow: FlowRow[CombinedRuleSuiteRows], fullStep: FullStep[CombinedRuleSuiteRows],
+</span>197 <span style=''>                               rid: Id, s: CombinedRuleSuiteRows): RuleSuite =
+</span>198 <span style=''>        </span><span style='background: #F0ADAD'>defaultFolder(fullStep.step, rule_suite_group(Seq(s)).ruleSuites.values.head)</span><span style=''>
+</span>199 <span style=''>
+</span>200 <span style=''>    }
+</span>201 <span style=''>
+</span>202 <span style=''>  implicit val rowsAndFullSuitesFromFlows: FlowGroupAndOperationType[CombinedRuleSuiteRows, RuleSuiteFromFlows.type] with
+</span>203 <span style=''>    WritableRuleSuite[CombinedRuleSuiteRows]  =
+</span>204 <span style=''>    </span><span style='background: #AEF1AE'>new</span><span style=''> HasCombinedRows[CombinedRuleSuiteRows, RuleSuiteFromFlows.type] with WritableRuleSuite[CombinedRuleSuiteRows] {
 </span>205 <span style=''>
-</span>206 <span style=''>      override def fromFullRow(rules: Seq[CombinedRuleSuiteRows], variableName: String,
-</span>207 <span style=''>                               flowRow: FlowRow[CombinedRuleSuiteRows], fullStep: FullStep[CombinedRuleSuiteRows],
-</span>208 <span style=''>                               rid: Id, s: CombinedRuleSuiteRows): RuleSuite = </span><span style='background: #F0ADAD'>rule_suite(s)</span><span style=''>
-</span>209 <span style=''>
-</span>210 <span style=''>    }
-</span>211 <span style=''>
-</span>212 <span style=''>  implicit val rowsAndIdsFromDatasets: FlowGroupAndOperationType[CombinedRuleSuiteRows, IdFromDatasets.type] =
-</span>213 <span style=''>    </span><span style='background: #AEF1AE'>new</span><span style=''> FlowGroupAndOperationType[CombinedRuleSuiteRows, IdFromDatasets.type] with WritableId {
+</span>206 <span style=''>      override def apply(flowId: VersionedId, rsName: String, rsRows: Dataset[CombinedRuleSuiteRows],
+</span>207 <span style=''>                         rid: Id, flowRow: FlowRow[CombinedRuleSuiteRows], step: StepRow): RuleSuite = {
+</span>208 <span style=''>        val s = </span><span style='background: #F0ADAD'>rsRows.sparkSession</span><span style=''>
+</span>209 <span style=''>        import s.implicits._
+</span>210 <span style=''>        </span><span style='background: #F0ADAD'>rule_suite(flowRow.flowRuleGroup.map(_.ruleGroup.toDS()).getOrElse(rsRows), rid).getOrElse(
+</span>211 <span style=''></span><span style='background: #F0ADAD'>          throw FlowException(s&quot;Flow $flowId could not be loaded as a Step's RuleSuite $rid is missing&quot;)
+</span>212 <span style=''></span><span style='background: #F0ADAD'>        )</span><span style=''>
+</span>213 <span style=''>      }
 </span>214 <span style=''>
-</span>215 <span style=''>      override def apply(flowId: VersionedId, rsName: String, rsRows: Dataset[CombinedRuleSuiteRows],
-</span>216 <span style=''>                         rid: Id, flowRow: FlowRow[CombinedRuleSuiteRows], step: StepRow): GroupRuleId =
-</span>217 <span style=''>        </span><span style='background: #F0ADAD'>GroupRuleId(rsName, rid)</span><span style=''>
+</span>215 <span style=''>      override def fromFullRow(rules: Seq[CombinedRuleSuiteRows], variableName: String,
+</span>216 <span style=''>                               flowRow: FlowRow[CombinedRuleSuiteRows], fullStep: FullStep[CombinedRuleSuiteRows],
+</span>217 <span style=''>                               rid: Id, s: CombinedRuleSuiteRows): RuleSuite = </span><span style='background: #F0ADAD'>rule_suite(s)</span><span style=''>
 </span>218 <span style=''>
-</span>219 <span style=''>      def fromFullRow(rules: Seq[CombinedRuleSuiteRows], variableName: String, flowRow: FlowRow[CombinedRuleSuiteRows],
-</span>220 <span style=''>                      fullStep: FullStep[Id], rid: Id, s: Id): GroupRuleId =
-</span>221 <span style=''>        </span><span style='background: #F0ADAD'>GroupRuleId(variableName, s)</span><span style=''>
+</span>219 <span style=''>    }
+</span>220 <span style=''>
+</span>221 <span style=''>  trait RuleSuiteFromGroup {
 </span>222 <span style=''>
-</span>223 <span style=''>    }
-</span>224 <span style=''>
-</span>225 <span style=''>  implicit val rowsAndIdsFromFlows: FlowGroupAndOperationType[CombinedRuleSuiteRows, IdFromFlows.type] =
-</span>226 <span style=''>    </span><span style='background: #AEF1AE'>new</span><span style=''> FlowGroupAndOperationType[CombinedRuleSuiteRows, IdFromFlows.type] with WritableId {
-</span>227 <span style=''>
-</span>228 <span style=''>      override def apply(flowId: VersionedId, rsName: String, rsRows: Dataset[CombinedRuleSuiteRows],
-</span>229 <span style=''>                         rid: Id, flowRow: FlowRow[CombinedRuleSuiteRows], step: StepRow): GroupRuleId = {
-</span>230 <span style=''>
-</span>231 <span style=''>        val useFlow = </span><span style='background: #F0ADAD'>step.options.boolean(useFlowRuleGroupLevelRows, true)</span><span style=''>
+</span>223 <span style=''>    def toRuleSuite(flow: FlowT[CombinedRuleSuiteRows, GroupRuleId], rs: GroupRuleId): Option[RuleSuite] =
+</span>224 <span style=''>      </span><span style='background: #AEF1AE'>flow.flowRuleGroup.flatMap(g =&gt;
+</span>225 <span style=''></span><span style='background: #AEF1AE'>        g.ruleGroup.find(r =&gt; Id(r.ruleSuiteId, r.ruleSuiteVersion) == rs.id).map(rule_suite)
+</span>226 <span style=''></span><span style='background: #AEF1AE'>      )</span><span style=''>
+</span>227 <span style=''>  }
+</span>228 <span style=''>
+</span>229 <span style=''>
+</span>230 <span style=''>  implicit val rowsAndIdsFromDatasets: FlowGroupAndOperationType[CombinedRuleSuiteRows, IdFromDatasets.type] =
+</span>231 <span style=''>    </span><span style='background: #AEF1AE'>new</span><span style=''> FlowGroupAndOperationType[CombinedRuleSuiteRows, IdFromDatasets.type] with WritableId with RuleSuiteFromGroup {
 </span>232 <span style=''>
-</span>233 <span style=''>        val name =
-</span>234 <span style=''>          </span><span style='background: #F0ADAD'>step.options.getOrElse(useRuleGroupName,
-</span>235 <span style=''></span><span style='background: #F0ADAD'>            if (useFlow)
-</span>236 <span style=''></span><span style='background: #F0ADAD'>              flowRow.flowRuleGroup.map(_.ruleGroupName).getOrElse(rsName)
-</span>237 <span style=''></span><span style='background: #F0ADAD'>            else
-</span>238 <span style=''></span><span style='background: #F0ADAD'>              rsName
-</span>239 <span style=''></span><span style='background: #F0ADAD'>          )</span><span style=''>
+</span>233 <span style=''>      override def apply(flowId: VersionedId, rsName: String, rsRows: Dataset[CombinedRuleSuiteRows],
+</span>234 <span style=''>                         rid: Id, flowRow: FlowRow[CombinedRuleSuiteRows], step: StepRow): GroupRuleId =
+</span>235 <span style=''>        </span><span style='background: #F0ADAD'>GroupRuleId(rsName, rid)</span><span style=''>
+</span>236 <span style=''>
+</span>237 <span style=''>      def fromFullRow(rules: Seq[CombinedRuleSuiteRows], variableName: String, flowRow: FlowRow[CombinedRuleSuiteRows],
+</span>238 <span style=''>                      fullStep: FullStep[Id], rid: Id, s: Id): GroupRuleId =
+</span>239 <span style=''>        </span><span style='background: #F0ADAD'>GroupRuleId(variableName, s)</span><span style=''>
 </span>240 <span style=''>
-</span>241 <span style=''>        </span><span style='background: #F0ADAD'>GroupRuleId(name, rid)</span><span style=''>
-</span>242 <span style=''>      }
-</span>243 <span style=''>
-</span>244 <span style=''>      def fromFullRow(rules: Seq[CombinedRuleSuiteRows], variableName: String, flowRow: FlowRow[CombinedRuleSuiteRows],
-</span>245 <span style=''>                      fullStep: FullStep[Id], rid: Id, s: Id): GroupRuleId =
-</span>246 <span style=''>        </span><span style='background: #F0ADAD'>flowRow.flowRuleGroup.map{
-</span>247 <span style=''></span><span style='background: #F0ADAD'>          g =&gt;
-</span>248 <span style=''></span><span style='background: #F0ADAD'>            if (g.ruleGroup.exists(c =&gt; Id(c.ruleSuiteId, c.ruleSuiteVersion) == s))
-</span>249 <span style=''></span><span style='background: #F0ADAD'>              GroupRuleId(g.ruleGroupName, s)
-</span>250 <span style=''></span><span style='background: #F0ADAD'>            else
-</span>251 <span style=''></span><span style='background: #F0ADAD'>              GroupRuleId(variableName, s)
-</span>252 <span style=''></span><span style='background: #F0ADAD'>        }.getOrElse{
-</span>253 <span style=''></span><span style='background: #F0ADAD'>          GroupRuleId(variableName, s)
-</span>254 <span style=''></span><span style='background: #F0ADAD'>        }</span><span style=''>
-</span>255 <span style=''>    }
-</span>256 <span style=''>}
+</span>241 <span style=''>    }
+</span>242 <span style=''>
+</span>243 <span style=''>  implicit val rowsAndIdsFromFlows: FlowGroupAndOperationType[CombinedRuleSuiteRows, IdFromFlows.type] =
+</span>244 <span style=''>    </span><span style='background: #AEF1AE'>new</span><span style=''> FlowGroupAndOperationType[CombinedRuleSuiteRows, IdFromFlows.type] with WritableId with RuleSuiteFromGroup  {
+</span>245 <span style=''>
+</span>246 <span style=''>      override def apply(flowId: VersionedId, rsName: String, rsRows: Dataset[CombinedRuleSuiteRows],
+</span>247 <span style=''>                         rid: Id, flowRow: FlowRow[CombinedRuleSuiteRows], step: StepRow): GroupRuleId = {
+</span>248 <span style=''>
+</span>249 <span style=''>        val useFlow = </span><span style='background: #F0ADAD'>step.options.boolean(useFlowRuleGroupLevelRows, true)</span><span style=''>
+</span>250 <span style=''>
+</span>251 <span style=''>        val name =
+</span>252 <span style=''>          </span><span style='background: #F0ADAD'>step.options.getOrElse(useRuleGroupName,
+</span>253 <span style=''></span><span style='background: #F0ADAD'>            if (useFlow)
+</span>254 <span style=''></span><span style='background: #F0ADAD'>              flowRow.flowRuleGroup.map(_.ruleGroupName).getOrElse(rsName)
+</span>255 <span style=''></span><span style='background: #F0ADAD'>            else
+</span>256 <span style=''></span><span style='background: #F0ADAD'>              rsName
+</span>257 <span style=''></span><span style='background: #F0ADAD'>          )</span><span style=''>
+</span>258 <span style=''>
+</span>259 <span style=''>        </span><span style='background: #F0ADAD'>GroupRuleId(name, rid)</span><span style=''>
+</span>260 <span style=''>      }
+</span>261 <span style=''>
+</span>262 <span style=''>      def fromFullRow(rules: Seq[CombinedRuleSuiteRows], variableName: String, flowRow: FlowRow[CombinedRuleSuiteRows],
+</span>263 <span style=''>                      fullStep: FullStep[Id], rid: Id, s: Id): GroupRuleId =
+</span>264 <span style=''>        </span><span style='background: #AEF1AE'>flowRow.flowRuleGroup.map{
+</span>265 <span style=''></span><span style='background: #AEF1AE'>          g =&gt;
+</span>266 <span style=''></span><span style='background: #AEF1AE'>            if (g.ruleGroup.exists(c =&gt; Id(c.ruleSuiteId, c.ruleSuiteVersion) == s))
+</span>267 <span style=''></span><span style='background: #AEF1AE'>              GroupRuleId(g.ruleGroupName, s)
+</span>268 <span style=''></span><span style='background: #AEF1AE'>            else
+</span>269 <span style=''></span><span style='background: #AEF1AE'>              </span><span style='background: #F0ADAD'>GroupRuleId(variableName, s)</span><span style='background: #AEF1AE'>
+</span>270 <span style=''></span><span style='background: #AEF1AE'>        }.getOrElse{
+</span>271 <span style=''></span><span style='background: #AEF1AE'>          </span><span style='background: #F0ADAD'>GroupRuleId(variableName, s)</span><span style='background: #AEF1AE'>
+</span>272 <span style=''></span><span style='background: #AEF1AE'>        }</span><span style=''>
+</span>273 <span style=''>    }
+</span>274 <span style=''>}
 </span></pre>
           </div>
           <div class="tab-pane" id="statementlist">
@@ -295,7 +313,7 @@
           21
         </td>
         <td>
-          666
+          699
         </td>
         <td>
           701
@@ -319,7 +337,7 @@
           22
         </td>
         <td>
-          663
+          696
         </td>
         <td>
           806
@@ -343,7 +361,7 @@
           22
         </td>
         <td>
-          664
+          697
         </td>
         <td>
           821
@@ -367,7 +385,7 @@
           22
         </td>
         <td>
-          665
+          698
         </td>
         <td>
           803
@@ -391,7 +409,7 @@
           25
         </td>
         <td>
-          667
+          700
         </td>
         <td>
           901
@@ -415,7 +433,7 @@
           42
         </td>
         <td>
-          668
+          701
         </td>
         <td>
           1563
@@ -439,7 +457,7 @@
           47
         </td>
         <td>
-          688
+          721
         </td>
         <td>
           1662
@@ -463,7 +481,7 @@
           50
         </td>
         <td>
-          669
+          702
         </td>
         <td>
           1862
@@ -487,7 +505,7 @@
           51
         </td>
         <td>
-          670
+          703
         </td>
         <td>
           1905
@@ -511,7 +529,7 @@
           53
         </td>
         <td>
-          683
+          716
         </td>
         <td>
           1935
@@ -535,7 +553,7 @@
           53
         </td>
         <td>
-          684
+          717
         </td>
         <td>
           1935
@@ -559,7 +577,7 @@
           54
         </td>
         <td>
-          671
+          704
         </td>
         <td>
           1985
@@ -583,7 +601,7 @@
           54
         </td>
         <td>
-          672
+          705
         </td>
         <td>
           2002
@@ -607,7 +625,7 @@
           54
         </td>
         <td>
-          673
+          706
         </td>
         <td>
           2022
@@ -631,7 +649,7 @@
           54
         </td>
         <td>
-          674
+          707
         </td>
         <td>
           1995
@@ -655,7 +673,7 @@
           54
         </td>
         <td>
-          681
+          714
         </td>
         <td>
           1991
@@ -679,7 +697,7 @@
           54
         </td>
         <td>
-          682
+          715
         </td>
         <td>
           1962
@@ -703,7 +721,7 @@
           55
         </td>
         <td>
-          675
+          708
         </td>
         <td>
           2110
@@ -727,7 +745,7 @@
           55
         </td>
         <td>
-          676
+          709
         </td>
         <td>
           2106
@@ -751,7 +769,7 @@
           55
         </td>
         <td>
-          677
+          710
         </td>
         <td>
           2122
@@ -775,7 +793,7 @@
           55
         </td>
         <td>
-          678
+          711
         </td>
         <td>
           2118
@@ -799,7 +817,7 @@
           55
         </td>
         <td>
-          679
+          712
         </td>
         <td>
           2099
@@ -823,7 +841,7 @@
           55
         </td>
         <td>
-          680
+          713
         </td>
         <td>
           2065
@@ -847,7 +865,7 @@
           59
         </td>
         <td>
-          685
+          718
         </td>
         <td>
           2218
@@ -871,7 +889,7 @@
           59
         </td>
         <td>
-          686
+          719
         </td>
         <td>
           2173
@@ -895,7 +913,7 @@
           59
         </td>
         <td>
-          687
+          720
         </td>
         <td>
           2207
@@ -919,7 +937,7 @@
           63
         </td>
         <td>
-          697
+          730
         </td>
         <td>
           2338
@@ -943,7 +961,7 @@
           65
         </td>
         <td>
-          689
+          722
         </td>
         <td>
           2557
@@ -967,7 +985,7 @@
           68
         </td>
         <td>
-          690
+          723
         </td>
         <td>
           2648
@@ -991,7 +1009,7 @@
           68
         </td>
         <td>
-          691
+          724
         </td>
         <td>
           2620
@@ -1015,7 +1033,7 @@
           69
         </td>
         <td>
-          692
+          725
         </td>
         <td>
           2721
@@ -1056,7 +1074,7 @@
           69
         </td>
         <td>
-          693
+          726
         </td>
         <td>
           2732
@@ -1080,7 +1098,7 @@
           69
         </td>
         <td>
-          694
+          727
         </td>
         <td>
           2686
@@ -1121,7 +1139,7 @@
           69
         </td>
         <td>
-          695
+          728
         </td>
         <td>
           2720
@@ -1145,7 +1163,7 @@
           73
         </td>
         <td>
-          696
+          729
         </td>
         <td>
           2896
@@ -1161,7 +1179,7 @@
         <td>
           
         </td>
-        <td style="background: #F0ADAD">
+        <td style="background: #AEF1AE">
           flowRuleGroup.ruleGroup
         </td>
       </tr><tr>
@@ -1169,7 +1187,7 @@
           131
         </td>
         <td>
-          698
+          731
         </td>
         <td>
           4770
@@ -1185,20 +1203,20 @@
         <td>
           
         </td>
-        <td style="background: #F0ADAD">
+        <td style="background: #AEF1AE">
           scala.None
         </td>
       </tr><tr>
         <td>
-          136
+          139
         </td>
         <td>
-          699
+          732
         </td>
         <td>
-          4907
+          4993
           -
-          4929
+          5017
         </td>
         <td>
           Apply
@@ -1217,12 +1235,36 @@
           142
         </td>
         <td>
-          700
+          733
         </td>
         <td>
-          5057
+          5155
           -
-          5062
+          5163
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[com.sparkutils.quality.RuleSuite](rs)
+        </td>
+      </tr><tr>
+        <td>
+          146
+        </td>
+        <td>
+          734
+        </td>
+        <td>
+          5239
+          -
+          5244
         </td>
         <td>
           Select
@@ -1238,15 +1280,15 @@
         </td>
       </tr><tr>
         <td>
-          146
+          150
         </td>
         <td>
-          701
+          735
         </td>
         <td>
-          5257
+          5439
           -
-          5265
+          5447
         </td>
         <td>
           Apply
@@ -1262,15 +1304,15 @@
         </td>
       </tr><tr>
         <td>
-          150
+          154
         </td>
         <td>
-          708
+          742
         </td>
         <td>
-          5390
+          5576
           -
-          5393
+          5579
         </td>
         <td>
           Apply
@@ -1286,15 +1328,15 @@
         </td>
       </tr><tr>
         <td>
-          154
+          158
         </td>
         <td>
-          703
+          737
         </td>
         <td>
-          5661
+          5851
           -
-          5810
+          6000
         </td>
         <td>
           Apply
@@ -1310,15 +1352,15 @@
         </td>
       </tr><tr>
         <td>
-          155
+          159
         </td>
         <td>
-          702
+          736
         </td>
         <td>
-          5706
+          5896
           -
-          5800
+          5990
         </td>
         <td>
           Throw
@@ -1334,15 +1376,15 @@
         </td>
       </tr><tr>
         <td>
-          160
+          164
         </td>
         <td>
-          704
+          738
         </td>
         <td>
-          6066
+          6256
           -
-          6079
+          6269
         </td>
         <td>
           Select
@@ -1358,15 +1400,15 @@
         </td>
       </tr><tr>
         <td>
-          160
+          164
         </td>
         <td>
-          705
+          739
         </td>
         <td>
-          6098
+          6288
           -
-          6104
+          6294
         </td>
         <td>
           Apply
@@ -1382,15 +1424,15 @@
         </td>
       </tr><tr>
         <td>
-          160
+          164
         </td>
         <td>
-          706
+          740
         </td>
         <td>
-          6081
+          6271
           -
-          6128
+          6318
         </td>
         <td>
           Select
@@ -1406,15 +1448,15 @@
         </td>
       </tr><tr>
         <td>
-          160
+          164
         </td>
         <td>
-          707
+          741
         </td>
         <td>
-          6052
+          6242
           -
-          6129
+          6319
         </td>
         <td>
           Apply
@@ -1430,15 +1472,15 @@
         </td>
       </tr><tr>
         <td>
-          166
+          169
         </td>
         <td>
-          711
+          746
         </td>
         <td>
-          6259
+          6410
           -
-          6262
+          6413
         </td>
         <td>
           Apply
@@ -1454,15 +1496,15 @@
         </td>
       </tr><tr>
         <td>
-          170
+          173
         </td>
         <td>
-          709
+          743
         </td>
         <td>
-          6529
+          6680
           -
-          6553
+          6704
         </td>
         <td>
           Apply
@@ -1478,15 +1520,15 @@
         </td>
       </tr><tr>
         <td>
-          174
+          177
         </td>
         <td>
-          710
+          744
         </td>
         <td>
-          6759
+          6910
           -
-          6787
+          6938
         </td>
         <td>
           Apply
@@ -1505,12 +1547,36 @@
           179
         </td>
         <td>
-          718
+          745
         </td>
         <td>
-          6936
+          7039
           -
-          6939
+          7043
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          184
+        </td>
+        <td>
+          757
+        </td>
+        <td>
+          7217
+          -
+          7220
         </td>
         <td>
           Apply
@@ -1526,15 +1592,15 @@
         </td>
       </tr><tr>
         <td>
-          183
+          188
         </td>
         <td>
-          713
+          752
         </td>
         <td>
-          7245
+          7549
           -
-          7394
+          7865
         </td>
         <td>
           Apply
@@ -1546,19 +1612,115 @@
           
         </td>
         <td style="background: #AEF1AE">
-          com.sparkutils.quality.`package`.rule_suite(rsRows, rid).getOrElse[com.sparkutils.quality.RuleSuite](throw FlowException.apply(&quot;Flow &quot;.+(flowId).+(&quot; could not be loaded as a Step\'s RuleSuite &quot;).+(rid).+(&quot; is missing&quot;), FlowException.apply$default$2))
+          com.sparkutils.quality.`package`.rule_suite(rsRows, rid).getOrElse[com.sparkutils.quality.RuleSuite](flowRow.flowRuleGroup.flatMap[com.sparkutils.quality.RuleSuite](((g: com.sparkutils.flow.FlowRuleGroup[com.sparkutils.quality.CombinedRuleSuiteRows]) =&gt; g.ruleGroup.find(((r: com.sparkutils.quality.CombinedRuleSuiteRows) =&gt; com.sparkutils.quality.Id.apply(r.ruleSuiteId, r.ruleSuiteVersion).==(rid))).map[com.sparkutils.quality.RuleSuite](((row: com.sparkutils.quality.CombinedRuleSuiteRows) =&gt; com.sparkutils.quality.`package`.rule_suite(row))))).getOrElse[com.sparkutils.quality.RuleSuite](throw FlowException.apply(&quot;Flow &quot;.+(flowId).+(&quot; could not be loaded as a Step\'s RuleSuite &quot;).+(rid).+(&quot; is missing&quot;), FlowException.apply$default$2)))
         </td>
       </tr><tr>
         <td>
-          184
+          190
         </td>
         <td>
-          712
+          747
         </td>
         <td>
-          7290
+          7663
           -
-          7384
+          7707
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #F0ADAD">
+          com.sparkutils.quality.Id.apply(r.ruleSuiteId, r.ruleSuiteVersion).==(rid)
+        </td>
+      </tr><tr>
+        <td>
+          190
+        </td>
+        <td>
+          748
+        </td>
+        <td>
+          7713
+          -
+          7723
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.quality.impl.util.VersionSpecificSerializingImports.rule_suite
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #F0ADAD">
+          com.sparkutils.quality.`package`.rule_suite(row)
+        </td>
+      </tr><tr>
+        <td>
+          190
+        </td>
+        <td>
+          749
+        </td>
+        <td>
+          7641
+          -
+          7724
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.map
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #F0ADAD">
+          g.ruleGroup.find(((r: com.sparkutils.quality.CombinedRuleSuiteRows) =&gt; com.sparkutils.quality.Id.apply(r.ruleSuiteId, r.ruleSuiteVersion).==(rid))).map[com.sparkutils.quality.RuleSuite](((row: com.sparkutils.quality.CombinedRuleSuiteRows) =&gt; com.sparkutils.quality.`package`.rule_suite(row)))
+        </td>
+      </tr><tr>
+        <td>
+          190
+        </td>
+        <td>
+          751
+        </td>
+        <td>
+          7594
+          -
+          7855
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #F0ADAD">
+          flowRow.flowRuleGroup.flatMap[com.sparkutils.quality.RuleSuite](((g: com.sparkutils.flow.FlowRuleGroup[com.sparkutils.quality.CombinedRuleSuiteRows]) =&gt; g.ruleGroup.find(((r: com.sparkutils.quality.CombinedRuleSuiteRows) =&gt; com.sparkutils.quality.Id.apply(r.ruleSuiteId, r.ruleSuiteVersion).==(rid))).map[com.sparkutils.quality.RuleSuite](((row: com.sparkutils.quality.CombinedRuleSuiteRows) =&gt; com.sparkutils.quality.`package`.rule_suite(row))))).getOrElse[com.sparkutils.quality.RuleSuite](throw FlowException.apply(&quot;Flow &quot;.+(flowId).+(&quot; could not be loaded as a Step\'s RuleSuite &quot;).+(rid).+(&quot; is missing&quot;), FlowException.apply$default$2))
+        </td>
+      </tr><tr>
+        <td>
+          191
+        </td>
+        <td>
+          750
+        </td>
+        <td>
+          7749
+          -
+          7843
         </td>
         <td>
           Throw
@@ -1574,15 +1736,15 @@
         </td>
       </tr><tr>
         <td>
-          190
+          198
         </td>
         <td>
-          714
+          753
         </td>
         <td>
-          7700
+          8171
           -
-          7713
+          8184
         </td>
         <td>
           Select
@@ -1598,15 +1760,15 @@
         </td>
       </tr><tr>
         <td>
-          190
+          198
         </td>
         <td>
-          715
+          754
         </td>
         <td>
-          7732
+          8203
           -
-          7738
+          8209
         </td>
         <td>
           Apply
@@ -1622,15 +1784,15 @@
         </td>
       </tr><tr>
         <td>
-          190
+          198
         </td>
         <td>
-          716
+          755
         </td>
         <td>
-          7715
+          8186
           -
-          7762
+          8233
         </td>
         <td>
           Select
@@ -1646,15 +1808,15 @@
         </td>
       </tr><tr>
         <td>
-          190
+          198
         </td>
         <td>
-          717
+          756
         </td>
         <td>
-          7686
+          8157
           -
-          7763
+          8234
         </td>
         <td>
           Apply
@@ -1670,15 +1832,15 @@
         </td>
       </tr><tr>
         <td>
-          195
+          204
         </td>
         <td>
-          724
+          763
         </td>
         <td>
-          7919
+          8417
           -
-          7922
+          8420
         </td>
         <td>
           Apply
@@ -1694,15 +1856,15 @@
         </td>
       </tr><tr>
         <td>
-          199
+          208
         </td>
         <td>
-          719
+          758
         </td>
         <td>
-          8236
+          8757
           -
-          8255
+          8776
         </td>
         <td>
           Select
@@ -1718,15 +1880,15 @@
         </td>
       </tr><tr>
         <td>
-          201
+          210
         </td>
         <td>
-          720
+          759
         </td>
         <td>
-          8304
+          8825
           -
-          8367
+          8888
         </td>
         <td>
           Apply
@@ -1759,15 +1921,15 @@
         </td>
       </tr><tr>
         <td>
-          201
+          210
         </td>
         <td>
-          722
+          761
         </td>
         <td>
-          8293
+          8814
           -
-          8499
+          9020
         </td>
         <td>
           Apply
@@ -1800,15 +1962,15 @@
         </td>
       </tr><tr>
         <td>
-          202
+          211
         </td>
         <td>
-          721
+          760
         </td>
         <td>
-          8395
+          8916
           -
-          8489
+          9010
         </td>
         <td>
           Throw
@@ -1824,15 +1986,15 @@
         </td>
       </tr><tr>
         <td>
-          208
+          217
         </td>
         <td>
-          723
+          762
         </td>
         <td>
-          8791
+          9312
           -
-          8804
+          9325
         </td>
         <td>
           Apply
@@ -1848,15 +2010,183 @@
         </td>
       </tr><tr>
         <td>
-          213
+          224
         </td>
         <td>
-          727
+          770
         </td>
         <td>
-          8928
+          9477
           -
-          8931
+          9610
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.flatMap
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.flowRuleGroup.flatMap[com.sparkutils.quality.RuleSuite](((g: com.sparkutils.flow.FlowRuleGroup[com.sparkutils.quality.CombinedRuleSuiteRows]) =&gt; g.ruleGroup.find(((r: com.sparkutils.quality.CombinedRuleSuiteRows) =&gt; com.sparkutils.quality.Id.apply(r.ruleSuiteId, r.ruleSuiteVersion).==(rs.id))).map[com.sparkutils.quality.RuleSuite](((row: com.sparkutils.quality.CombinedRuleSuiteRows) =&gt; com.sparkutils.quality.`package`.rule_suite(row)))))
+        </td>
+      </tr><tr>
+        <td>
+          225
+        </td>
+        <td>
+          764
+        </td>
+        <td>
+          9542
+          -
+          9555
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.quality.CombinedRuleSuiteRows.ruleSuiteId
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          r.ruleSuiteId
+        </td>
+      </tr><tr>
+        <td>
+          225
+        </td>
+        <td>
+          765
+        </td>
+        <td>
+          9557
+          -
+          9575
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.quality.CombinedRuleSuiteRows.ruleSuiteVersion
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          r.ruleSuiteVersion
+        </td>
+      </tr><tr>
+        <td>
+          225
+        </td>
+        <td>
+          766
+        </td>
+        <td>
+          9580
+          -
+          9585
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.quality.GroupRuleId.id
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          rs.id
+        </td>
+      </tr><tr>
+        <td>
+          225
+        </td>
+        <td>
+          767
+        </td>
+        <td>
+          9539
+          -
+          9585
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          com.sparkutils.quality.Id.apply(r.ruleSuiteId, r.ruleSuiteVersion).==(rs.id)
+        </td>
+      </tr><tr>
+        <td>
+          225
+        </td>
+        <td>
+          768
+        </td>
+        <td>
+          9591
+          -
+          9601
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.quality.impl.util.VersionSpecificSerializingImports.rule_suite
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          com.sparkutils.quality.`package`.rule_suite(row)
+        </td>
+      </tr><tr>
+        <td>
+          225
+        </td>
+        <td>
+          769
+        </td>
+        <td>
+          9517
+          -
+          9602
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.map
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          g.ruleGroup.find(((r: com.sparkutils.quality.CombinedRuleSuiteRows) =&gt; com.sparkutils.quality.Id.apply(r.ruleSuiteId, r.ruleSuiteVersion).==(rs.id))).map[com.sparkutils.quality.RuleSuite](((row: com.sparkutils.quality.CombinedRuleSuiteRows) =&gt; com.sparkutils.quality.`package`.rule_suite(row)))
+        </td>
+      </tr><tr>
+        <td>
+          231
+        </td>
+        <td>
+          773
+        </td>
+        <td>
+          9732
+          -
+          9735
         </td>
         <td>
           Apply
@@ -1872,15 +2202,15 @@
         </td>
       </tr><tr>
         <td>
-          217
+          235
         </td>
         <td>
-          725
+          771
         </td>
         <td>
-          9236
+          10064
           -
-          9260
+          10088
         </td>
         <td>
           Apply
@@ -1896,15 +2226,15 @@
         </td>
       </tr><tr>
         <td>
-          221
+          239
         </td>
         <td>
-          726
+          772
         </td>
         <td>
-          9467
+          10295
           -
-          9495
+          10323
         </td>
         <td>
           Apply
@@ -1920,15 +2250,15 @@
         </td>
       </tr><tr>
         <td>
-          226
+          244
         </td>
         <td>
-          747
+          793
         </td>
         <td>
-          9613
+          10441
           -
-          9616
+          10444
         </td>
         <td>
           Apply
@@ -1944,15 +2274,15 @@
         </td>
       </tr><tr>
         <td>
-          231
+          249
         </td>
         <td>
-          728
+          774
         </td>
         <td>
-          9935
+          10788
           -
-          9947
+          10800
         </td>
         <td>
           Select
@@ -1968,15 +2298,15 @@
         </td>
       </tr><tr>
         <td>
-          231
+          249
         </td>
         <td>
-          729
+          775
         </td>
         <td>
-          9956
+          10809
           -
-          9981
+          10834
         </td>
         <td>
           Select
@@ -1992,15 +2322,15 @@
         </td>
       </tr><tr>
         <td>
-          231
+          249
         </td>
         <td>
-          730
+          776
         </td>
         <td>
-          9983
+          10836
           -
-          9987
+          10840
         </td>
         <td>
           Literal
@@ -2016,15 +2346,15 @@
         </td>
       </tr><tr>
         <td>
-          231
+          249
         </td>
         <td>
-          731
+          777
         </td>
         <td>
-          9935
+          10788
           -
-          9988
+          10841
         </td>
         <td>
           Apply
@@ -2040,15 +2370,15 @@
         </td>
       </tr><tr>
         <td>
-          234
+          252
         </td>
         <td>
-          732
+          778
         </td>
         <td>
-          10042
+          10895
           -
-          10058
+          10911
         </td>
         <td>
           Select
@@ -2064,15 +2394,15 @@
         </td>
       </tr><tr>
         <td>
-          234
+          252
         </td>
         <td>
-          736
+          782
         </td>
         <td>
-          10019
+          10872
           -
-          10209
+          11062
         </td>
         <td>
           Apply
@@ -2091,15 +2421,15 @@ else
         </td>
       </tr><tr>
         <td>
-          236
+          254
         </td>
         <td>
-          733
+          779
         </td>
         <td>
-          10099
+          10952
           -
-          10159
+          11012
         </td>
         <td>
           Apply
@@ -2115,15 +2445,15 @@ else
         </td>
       </tr><tr>
         <td>
-          236
+          254
         </td>
         <td>
-          734
+          780
         </td>
         <td>
-          10099
+          10952
           -
-          10159
+          11012
         </td>
         <td>
           Block
@@ -2139,15 +2469,15 @@ else
         </td>
       </tr><tr>
         <td>
-          238
+          256
         </td>
         <td>
-          735
+          781
         </td>
         <td>
-          10191
+          11044
           -
-          10197
+          11050
         </td>
         <td>
           Ident
@@ -2163,15 +2493,15 @@ else
         </td>
       </tr><tr>
         <td>
-          241
+          259
         </td>
         <td>
-          737
+          783
         </td>
         <td>
-          10219
+          11072
           -
-          10241
+          11094
         </td>
         <td>
           Apply
@@ -2187,15 +2517,15 @@ else
         </td>
       </tr><tr>
         <td>
-          248
+          266
         </td>
         <td>
-          738
+          784
         </td>
         <td>
-          10538
+          11391
           -
-          10580
+          11433
         </td>
         <td>
           Apply
@@ -2206,20 +2536,20 @@ else
         <td>
           
         </td>
-        <td style="background: #F0ADAD">
+        <td style="background: #AEF1AE">
           com.sparkutils.quality.Id.apply(c.ruleSuiteId, c.ruleSuiteVersion).==(s)
         </td>
       </tr><tr>
         <td>
-          248
+          266
         </td>
         <td>
-          739
+          785
         </td>
         <td>
-          10514
+          11367
           -
-          10581
+          11434
         </td>
         <td>
           Apply
@@ -2230,20 +2560,20 @@ else
         <td>
           
         </td>
-        <td style="background: #F0ADAD">
+        <td style="background: #AEF1AE">
           g.ruleGroup.exists(((c: com.sparkutils.quality.CombinedRuleSuiteRows) =&gt; com.sparkutils.quality.Id.apply(c.ruleSuiteId, c.ruleSuiteVersion).==(s)))
         </td>
       </tr><tr>
         <td>
-          249
+          267
         </td>
         <td>
-          740
+          786
         </td>
         <td>
-          10609
+          11462
           -
-          10624
+          11477
         </td>
         <td>
           Select
@@ -2254,20 +2584,20 @@ else
         <td>
           
         </td>
-        <td style="background: #F0ADAD">
+        <td style="background: #AEF1AE">
           g.ruleGroupName
         </td>
       </tr><tr>
         <td>
-          249
+          267
         </td>
         <td>
-          741
+          787
         </td>
         <td>
-          10597
+          11450
           -
-          10628
+          11481
         </td>
         <td>
           Apply
@@ -2278,20 +2608,20 @@ else
         <td>
           
         </td>
-        <td style="background: #F0ADAD">
+        <td style="background: #AEF1AE">
           com.sparkutils.quality.GroupRuleId.apply(g.ruleGroupName, s)
         </td>
       </tr><tr>
         <td>
-          249
+          267
         </td>
         <td>
-          742
+          788
         </td>
         <td>
-          10597
+          11450
           -
-          10628
+          11481
         </td>
         <td>
           Block
@@ -2302,20 +2632,20 @@ else
         <td>
           
         </td>
-        <td style="background: #F0ADAD">
+        <td style="background: #AEF1AE">
           com.sparkutils.quality.GroupRuleId.apply(g.ruleGroupName, s)
         </td>
       </tr><tr>
         <td>
-          251
+          269
         </td>
         <td>
-          743
+          789
         </td>
         <td>
-          10660
+          11513
           -
-          10688
+          11541
         </td>
         <td>
           Apply
@@ -2331,15 +2661,15 @@ else
         </td>
       </tr><tr>
         <td>
-          251
+          269
         </td>
         <td>
-          744
+          790
         </td>
         <td>
-          10660
+          11513
           -
-          10688
+          11541
         </td>
         <td>
           Block
@@ -2355,15 +2685,15 @@ else
         </td>
       </tr><tr>
         <td>
-          252
+          270
         </td>
         <td>
-          746
+          792
         </td>
         <td>
-          10456
+          11309
           -
-          10758
+          11611
         </td>
         <td>
           Apply
@@ -2374,7 +2704,7 @@ else
         <td>
           
         </td>
-        <td style="background: #F0ADAD">
+        <td style="background: #AEF1AE">
           flowRow.flowRuleGroup.map[com.sparkutils.quality.GroupRuleId](((g: com.sparkutils.flow.FlowRuleGroup[com.sparkutils.quality.CombinedRuleSuiteRows]) =&gt; if (g.ruleGroup.exists(((c: com.sparkutils.quality.CombinedRuleSuiteRows) =&gt; com.sparkutils.quality.Id.apply(c.ruleSuiteId, c.ruleSuiteVersion).==(s))))
   com.sparkutils.quality.GroupRuleId.apply(g.ruleGroupName, s)
 else
@@ -2382,15 +2712,15 @@ else
         </td>
       </tr><tr>
         <td>
-          253
+          271
         </td>
         <td>
-          745
+          791
         </td>
         <td>
-          10720
+          11573
           -
-          10748
+          11601
         </td>
         <td>
           Apply
