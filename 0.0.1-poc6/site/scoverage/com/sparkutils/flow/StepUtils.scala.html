@@ -1,0 +1,198 @@
+<html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title id="title">
+          com/sparkutils/flow/StepUtils.scala.html
+        </title>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        $(document).ready(function() {$(".tablesorter").tablesorter();});
+      </script>
+        <style>
+          table.codegrid { font-family: monospace; font-size: 12px; width: auto!important; }table.statementlist { width: auto!important; font-size: 13px; } table.codegrid td { padding: 0!important; border: 0!important } table td.linenumber { width: 40px!important; } 
+        </style>
+      </head>
+      <body style="font-family: monospace;">
+        <ul class="nav nav-tabs">
+          <li>
+            <a href="#codegrid" data-toggle="tab">Codegrid</a>
+          </li>
+          <li>
+            <a href="#statementlist" data-toggle="tab">Statement List</a>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="codegrid">
+            <pre style='font-size: 12pt; font-family: courier, monospace;'>1 <span style=''>package com.sparkutils.flow
+</span>2 <span style=''>
+</span>3 <span style=''>import org.apache.spark.sql.{Column, DataFrame}
+</span>4 <span style=''>import org.apache.spark.sql.functions.{col =&gt; scol}
+</span>5 <span style=''>
+</span>6 <span style=''>/**
+</span>7 <span style=''> * Utility functions for processing Steps
+</span>8 <span style=''> */
+</span>9 <span style=''>object StepUtils {
+</span>10 <span style=''>
+</span>11 <span style=''>  // if fields are present, either by default in the folder case or by providing a result type that is not an
+</span>12 <span style=''>  // array we can remove two calls to columns action, 632.73ms vs 554.88ms on using 14 chained engines 1 rule each
+</span>13 <span style=''>  // forceMergeProjection on 200,000 rows
+</span>14 <span style=''>
+</span>15 <span style=''>  /**
+</span>16 <span style=''>   * Processes output fields for [[MergeFields]] and [[OutputFieldsOnly]]
+</span>17 <span style=''>   *
+</span>18 <span style=''>   * @param fieldName the field name to be used by the runner column
+</span>19 <span style=''>   * @param runner the runnerColumn for interface completeness - this is reserved for future use
+</span>20 <span style=''>   * @param group_audit the group_audit column
+</span>21 <span style=''>   * @param input the dataframe to add the output fields to
+</span>22 <span style=''>   * @param outputFields a set of output fields which will be mapped to {{{s&quot;$fieldName.result.$n&quot;}}}
+</span>23 <span style=''>   * @param extraFields any extra columns to be added
+</span>24 <span style=''>   * @return
+</span>25 <span style=''>   */
+</span>26 <span style=''>  def withOutputFields(fieldName: String, runner: Column, group_audit: Column, input: DataFrame, outputFields: Set[String], extraFields: Set[Column] = Set.empty) =
+</span>27 <span style=''>    // cannot be run directly on dataFrame as otherwise an lca will be added to any repetitive expressions
+</span>28 <span style=''>    // this stops row number plus another of other queries running correctly in all circumstances
+</span>29 <span style=''>    </span><span style='background: #AEF1AE'>input.select(
+</span>30 <span style=''></span><span style='background: #AEF1AE'>      Seq(scol(fieldName), group_audit)
+</span>31 <span style=''></span><span style='background: #AEF1AE'>        ++ extraFields ++
+</span>32 <span style=''></span><span style='background: #AEF1AE'>        outputFields.map{n =&gt;
+</span>33 <span style=''></span><span style='background: #AEF1AE'>          scol(s&quot;$fieldName.result.$n&quot;).as(n)
+</span>34 <span style=''></span><span style='background: #AEF1AE'>        } :_*)</span><span style=''>
+</span>35 <span style=''>
+</span>36 <span style=''>}
+</span></pre>
+          </div>
+          <div class="tab-pane" id="statementlist">
+            <table cellspacing="0" cellpadding="0" class="table statementlist">
+      <tr>
+        <th>Line</th>
+        <th>Stmt Id</th>
+        <th>Pos</th>
+        <th>Tree</th>
+        <th>Symbol</th>
+        <th>Tests</th>
+        <th>Code</th>
+      </tr><tr>
+        <td>
+          29
+        </td>
+        <td>
+          752
+        </td>
+        <td>
+          1374
+          -
+          1544
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.select
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          input.select((scala.`package`.Seq.apply[org.apache.spark.sql.Column](org.apache.spark.sql.functions.col(fieldName), group_audit).++[org.apache.spark.sql.Column](extraFields).++[org.apache.spark.sql.Column](outputFields.map[org.apache.spark.sql.Column](((n: String) =&gt; org.apache.spark.sql.functions.col(&quot;&quot;.+(fieldName).+(&quot;.result.&quot;).+(n)).as(n)))): _*))
+        </td>
+      </tr><tr>
+        <td>
+          30
+        </td>
+        <td>
+          748
+        </td>
+        <td>
+          1398
+          -
+          1413
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.functions.col
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          org.apache.spark.sql.functions.col(fieldName)
+        </td>
+      </tr><tr>
+        <td>
+          31
+        </td>
+        <td>
+          751
+        </td>
+        <td>
+          1394
+          -
+          1539
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableOps.++
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.`package`.Seq.apply[org.apache.spark.sql.Column](org.apache.spark.sql.functions.col(fieldName), group_audit).++[org.apache.spark.sql.Column](extraFields).++[org.apache.spark.sql.Column](outputFields.map[org.apache.spark.sql.Column](((n: String) =&gt; org.apache.spark.sql.functions.col(&quot;&quot;.+(fieldName).+(&quot;.result.&quot;).+(n)).as(n))))
+        </td>
+      </tr><tr>
+        <td>
+          32
+        </td>
+        <td>
+          750
+        </td>
+        <td>
+          1462
+          -
+          1539
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableOps.map
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          outputFields.map[org.apache.spark.sql.Column](((n: String) =&gt; org.apache.spark.sql.functions.col(&quot;&quot;.+(fieldName).+(&quot;.result.&quot;).+(n)).as(n)))
+        </td>
+      </tr><tr>
+        <td>
+          33
+        </td>
+        <td>
+          749
+        </td>
+        <td>
+          1494
+          -
+          1529
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Column.as
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          org.apache.spark.sql.functions.col(&quot;&quot;.+(fieldName).+(&quot;.result.&quot;).+(n)).as(n)
+        </td>
+      </tr>
+    </table>
+          </div>
+        </div>
+      </body>
+    </html>

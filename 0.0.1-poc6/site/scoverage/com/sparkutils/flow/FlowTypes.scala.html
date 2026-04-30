@@ -1,0 +1,870 @@
+<html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title id="title">
+          com/sparkutils/flow/FlowTypes.scala.html
+        </title>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        $(document).ready(function() {$(".tablesorter").tablesorter();});
+      </script>
+        <style>
+          table.codegrid { font-family: monospace; font-size: 12px; width: auto!important; }table.statementlist { width: auto!important; font-size: 13px; } table.codegrid td { padding: 0!important; border: 0!important } table td.linenumber { width: 40px!important; } 
+        </style>
+      </head>
+      <body style="font-family: monospace;">
+        <ul class="nav nav-tabs">
+          <li>
+            <a href="#codegrid" data-toggle="tab">Codegrid</a>
+          </li>
+          <li>
+            <a href="#statementlist" data-toggle="tab">Statement List</a>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="codegrid">
+            <pre style='font-size: 12pt; font-family: courier, monospace;'>1 <span style=''>package com.sparkutils.flow
+</span>2 <span style=''>
+</span>3 <span style=''>import com.sparkutils.quality.impl.{Encoders, RuleSuiteHelpers}
+</span>4 <span style=''>import com.sparkutils.quality.{DataFrameLoader, GroupRuleId, Id, MapRow, RuleSuite, RuleSuiteParam, ViewRow, rule_suite_from}
+</span>5 <span style=''>import org.apache.spark.sql.functions.{col, lit}
+</span>6 <span style=''>import org.apache.spark.sql.types.{DataType, StructType}
+</span>7 <span style=''>import org.apache.spark.sql.{Column, DataFrame, SparkSession}
+</span>8 <span style=''>
+</span>9 <span style=''>import scala.concurrent.duration.Duration
+</span>10 <span style=''>import scala.util.Try
+</span>11 <span style=''>
+</span>12 <span style=''>@SerialVersionUID(1L)
+</span>13 <span style=''>case class FlowException(msg: String, cause: Throwable = null) extends Exception(msg, cause) with Serializable
+</span>14 <span style=''>
+</span>15 <span style=''>/**
+</span>16 <span style=''> * Represents an operation on a dataset
+</span>17 <span style=''> * @param ruleSuite the rulesuite used by the named [[function]]
+</span>18 <span style=''> * @param function either the quality function collect
+</span>19 <span style=''> * @param fieldName the optional expression column name, when not provided the [[Step.defaultFieldName]] is used
+</span>20 <span style=''> * @param resultApproach how should the resulting data be processed
+</span>21 <span style=''> * @param combineAuditWith provide additional expressions to group_audit e.g. group_audit( operationFieldName, audit expression 1,
+</span>22 <span style=''> *                         audit expression 2, ... )
+</span>23 <span style=''> *                         with the operation fieldName automatically provided
+</span>24 <span style=''> */
+</span>25 <span style=''>@SerialVersionUID(1L)
+</span>26 <span style=''>case class Operation[T: RuleSuiteTypeParam](ruleSuite: T, function: Runner, resultApproach: ResultApproach,
+</span>27 <span style=''>                     fieldName: Option[String] = None,
+</span>28 <span style=''>                     combineAuditWith: Option[Set[String]] = None) extends Serializable
+</span>29 <span style=''>
+</span>30 <span style=''>object Operation {
+</span>31 <span style=''>
+</span>32 <span style=''>  def apply[T: RuleSuiteTypeParam](ruleSuite: T, function: Runner, resultApproach: ResultApproach,
+</span>33 <span style=''>            fieldName: String): Operation[T] = </span><span style='background: #AEF1AE'>Operation(ruleSuite, function, resultApproach, Option(fieldName))</span><span style=''>
+</span>34 <span style=''>
+</span>35 <span style=''>  def apply[T: RuleSuiteTypeParam](ruleSuite: T, function: Runner, resultApproach: ResultApproach,
+</span>36 <span style=''>            fieldName: String, combineAuditWith: Set[String]): Operation[T] =
+</span>37 <span style=''>    </span><span style='background: #F0ADAD'>Operation(ruleSuite, function, resultApproach, Option(fieldName), Option(combineAuditWith))</span><span style=''>
+</span>38 <span style=''>
+</span>39 <span style=''>  def apply[T: RuleSuiteTypeParam](ruleSuite: T, function: Runner, resultApproach: ResultApproach,
+</span>40 <span style=''>                               combineAuditWith: Set[String]): Operation[T] =
+</span>41 <span style=''>    </span><span style='background: #AEF1AE'>new Operation(ruleSuite, function, resultApproach, combineAuditWith = Option(combineAuditWith))</span><span style=''>
+</span>42 <span style=''>
+</span>43 <span style=''>}
+</span>44 <span style=''>
+</span>45 <span style=''>/**
+</span>46 <span style=''> * Represents configuration information for a step, views and maps.  If a map is defined a mapName must also be provided
+</span>47 <span style=''> * @param viewConfig
+</span>48 <span style=''> * @param mapConfig
+</span>49 <span style=''> * @param mapName
+</span>50 <span style=''> */
+</span>51 <span style=''>@SerialVersionUID(1L)
+</span>52 <span style=''>case class StepInitConfiguration(viewConfig: Seq[ViewRow] = Seq.empty, mapConfig: Seq[MapRow] = Seq.empty,
+</span>53 <span style=''>                                 mapName: Option[String] = None) extends Serializable {
+</span>54 <span style=''>  if (</span><span style='background: #AEF1AE'>mapConfig.nonEmpty</span><span style=''>) {
+</span>55 <span style=''>    </span><span style='background: #AEF1AE'>require(mapName.isDefined, </span><span style='background: #F0ADAD'>&quot;mapName is required when MapConfig is provided&quot;</span><span style='background: #AEF1AE'>)</span><span style=''>
+</span>56 <span style=''>  }
+</span>57 <span style=''>}
+</span>58 <span style=''>
+</span>59 <span style=''>/**
+</span>60 <span style=''> * Input and output data usage for a step
+</span>61 <span style=''> * @param inputView the optional input view name, when provided it will be loaded, when not provided the output of
+</span>62 <span style=''> *                  the dependency will be used.  It is an error to not specify an input name when there are more than
+</span>63 <span style=''> *                  one dependency
+</span>64 <span style=''> * @param outputView the output view name, when not specified the step name is used.
+</span>65 <span style=''> * @param cacheResults should the resulting dataframe be cached
+</span>66 <span style=''> */
+</span>67 <span style=''>@SerialVersionUID(1L)
+</span>68 <span style=''>case class StepData(inputView: Option[String] = None, outputView: Option[String] = None,
+</span>69 <span style=''>                    cacheResults: Boolean = false) extends Serializable
+</span>70 <span style=''>
+</span>71 <span style=''>object StepData {
+</span>72 <span style=''>  def apply(inputView: String, outputView: String, cacheResults: Boolean): StepData =
+</span>73 <span style=''>    </span><span style='background: #AEF1AE'>StepData(Option(inputView), Option(outputView), cacheResults)</span><span style=''>
+</span>74 <span style=''>  def apply(inputView: String, outputView: String): StepData =
+</span>75 <span style=''>    </span><span style='background: #AEF1AE'>StepData(Option(inputView), Option(outputView))</span><span style=''>
+</span>76 <span style=''>}
+</span>77 <span style=''>
+</span>78 <span style=''>/**
+</span>79 <span style=''> * Which types are allowed in an encoded Operation, similar to [[com.sparkutils.quality.RuleSuiteParam]] but no Column
+</span>80 <span style=''> * instance exists.
+</span>81 <span style=''> */
+</span>82 <span style=''>sealed trait RuleSuiteTypeParam[T] {
+</span>83 <span style=''>  def id(t: T): Id
+</span>84 <span style=''>}
+</span>85 <span style=''>
+</span>86 <span style=''>object RuleSuiteTypeParam {
+</span>87 <span style=''>
+</span>88 <span style=''>  implicit val rsParam: RuleSuiteTypeParam[RuleSuite] = </span><span style='background: #AEF1AE'>new</span><span style=''> RuleSuiteTypeParam[RuleSuite] {
+</span>89 <span style=''>    override def id(t: RuleSuite): Id = </span><span style='background: #AEF1AE'>t.id</span><span style=''>
+</span>90 <span style=''>  }
+</span>91 <span style=''>
+</span>92 <span style=''>  implicit val idNameParam: RuleSuiteTypeParam[GroupRuleId] = </span><span style='background: #AEF1AE'>new</span><span style=''> RuleSuiteTypeParam[GroupRuleId] {
+</span>93 <span style=''>    override def id(t: GroupRuleId): Id = </span><span style='background: #F0ADAD'>t.id</span><span style=''>
+</span>94 <span style=''>  }
+</span>95 <span style=''>
+</span>96 <span style=''>}
+</span>97 <span style=''>
+</span>98 <span style=''>trait StepLike extends Serializable {
+</span>99 <span style=''>  def function: Runner
+</span>100 <span style=''>  def options: Map[String, String]
+</span>101 <span style=''>}
+</span>102 <span style=''>
+</span>103 <span style=''>/**
+</span>104 <span style=''> * Each step represents a ruleSuite applied via an operation over a view.  This resulting dataframe is then passed to a
+</span>105 <span style=''> * callback
+</span>106 <span style=''> * @param name this steps name
+</span>107 <span style=''> * @param dependencies the set of steps which must be run before this Step can start
+</span>108 <span style=''> * @param operation the operation this step performs
+</span>109 <span style=''> * @param initConfiguration configuration items used to prepare a step such as maps or views to be loaded
+</span>110 <span style=''> * @param data the input and output views to be used by this Step.
+</span>111 <span style=''> * @param options properties associated with this step, for example filenames or id's to save results against
+</span>112 <span style=''> */
+</span>113 <span style=''>@SerialVersionUID(1L)
+</span>114 <span style=''>case class Step[T: RuleSuiteTypeParam](name: String, dependencies: Set[String], operation: Operation[T],
+</span>115 <span style=''>                initConfiguration: StepInitConfiguration = StepInitConfiguration(),
+</span>116 <span style=''>                data: StepData = StepData(), options: Map[String, String] = Map.empty) extends StepLike {
+</span>117 <span style=''>  /**
+</span>118 <span style=''>   * The default output viewname for this step
+</span>119 <span style=''>   * @return
+</span>120 <span style=''>   */
+</span>121 <span style=''>  def defaultOutputViewName: String = </span><span style='background: #AEF1AE'>data.outputView.getOrElse(name)</span><span style=''>
+</span>122 <span style=''>
+</span>123 <span style=''>  /**
+</span>124 <span style=''>   * The default field name or provided one, when present
+</span>125 <span style=''>   */
+</span>126 <span style=''>  def defaultFieldName: String = </span><span style='background: #AEF1AE'>operation.fieldName.getOrElse(name)</span><span style=''>
+</span>127 <span style=''>
+</span>128 <span style=''>  def function: Runner = </span><span style='background: #AEF1AE'>operation.function</span><span style=''>
+</span>129 <span style=''>
+</span>130 <span style=''>  val rsType: RuleSuiteTypeParam[T] = </span><span style='background: #AEF1AE'>implicitly[RuleSuiteTypeParam[T]]</span><span style=''>
+</span>131 <span style=''>}
+</span>132 <span style=''>
+</span>133 <span style=''>/**
+</span>134 <span style=''> * Timings associated with Step processing
+</span>135 <span style=''> * @param runner the preparation time take by the runner processing
+</span>136 <span style=''> * @param result the preparation time take by the result processing
+</span>137 <span style=''> */
+</span>138 <span style=''>@SerialVersionUID(1L)
+</span>139 <span style=''>case class StepTimings(runner: Duration, result: Duration) extends Serializable
+</span>140 <span style=''>
+</span>141 <span style=''>/**
+</span>142 <span style=''> * The result of a step
+</span>143 <span style=''> * @param step this may be a modified Step if modifyStep was overridden
+</span>144 <span style=''> * @param output the resulting datafrome from this step
+</span>145 <span style=''> * @param timings the time taken to prepare the output
+</span>146 <span style=''> */
+</span>147 <span style=''>@SerialVersionUID(1L)
+</span>148 <span style=''>case class StepResult[T: RuleSuiteTypeParam](step: Step[T], output: DataFrame, timings: StepTimings) extends Serializable
+</span>149 <span style=''>
+</span>150 <span style=''>/**
+</span>151 <span style=''> * The result of a successful Flow
+</span>152 <span style=''> * @param stepResults the original Step name mapped to it's result
+</span>153 <span style=''> * @param duration the time taken by the entire flow
+</span>154 <span style=''> */
+</span>155 <span style=''>@SerialVersionUID(1L)
+</span>156 <span style=''>case class FlowResult[T: RuleSuiteTypeParam](stepResults: Map[String, StepResult[T]], duration: Duration) extends Serializable
+</span></pre>
+          </div>
+          <div class="tab-pane" id="statementlist">
+            <table cellspacing="0" cellpadding="0" class="table statementlist">
+      <tr>
+        <th>Line</th>
+        <th>Stmt Id</th>
+        <th>Pos</th>
+        <th>Tree</th>
+        <th>Symbol</th>
+        <th>Tests</th>
+        <th>Code</th>
+      </tr><tr>
+        <td>
+          33
+        </td>
+        <td>
+          19
+        </td>
+        <td>
+          1639
+          -
+          1704
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          com.sparkutils.flow.Operation.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          Operation.apply[T](ruleSuite, function, resultApproach, scala.Option.apply[String](fieldName), Operation.apply$default$5[Nothing])(evidence$2)
+        </td>
+      </tr><tr>
+        <td>
+          37
+        </td>
+        <td>
+          20
+        </td>
+        <td>
+          1887
+          -
+          1978
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          com.sparkutils.flow.Operation.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #F0ADAD">
+          Operation.apply[T](ruleSuite, function, resultApproach, scala.Option.apply[String](fieldName), scala.Option.apply[Set[String]](combineAuditWith))(evidence$3)
+        </td>
+      </tr><tr>
+        <td>
+          41
+        </td>
+        <td>
+          21
+        </td>
+        <td>
+          2231
+          -
+          2255
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Option.apply[Set[String]](combineAuditWith)
+        </td>
+      </tr><tr>
+        <td>
+          41
+        </td>
+        <td>
+          22
+        </td>
+        <td>
+          2161
+          -
+          2161
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.sparkutils.flow.Operation.&lt;init&gt;$default$4
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.this.Operation.&lt;init&gt;$default$4[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          41
+        </td>
+        <td>
+          23
+        </td>
+        <td>
+          2161
+          -
+          2256
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          com.sparkutils.flow.Operation.&lt;init&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          new com.sparkutils.flow.Operation[T](x$1, x$2, x$3, x$5, x$4)(evidence$4)
+        </td>
+      </tr><tr>
+        <td>
+          54
+        </td>
+        <td>
+          24
+        </td>
+        <td>
+          2672
+          -
+          2690
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.IterableOnceOps.nonEmpty
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          StepInitConfiguration.this.mapConfig.nonEmpty
+        </td>
+      </tr><tr>
+        <td>
+          54
+        </td>
+        <td>
+          29
+        </td>
+        <td>
+          2668
+          -
+          2668
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          54
+        </td>
+        <td>
+          30
+        </td>
+        <td>
+          2668
+          -
+          2668
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          55
+        </td>
+        <td>
+          25
+        </td>
+        <td>
+          2706
+          -
+          2723
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.isDefined
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          StepInitConfiguration.this.mapName.isDefined
+        </td>
+      </tr><tr>
+        <td>
+          55
+        </td>
+        <td>
+          26
+        </td>
+        <td>
+          2725
+          -
+          2773
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;mapName is required when MapConfig is provided&quot;
+        </td>
+      </tr><tr>
+        <td>
+          55
+        </td>
+        <td>
+          27
+        </td>
+        <td>
+          2698
+          -
+          2774
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.require
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Predef.require(StepInitConfiguration.this.mapName.isDefined, &quot;mapName is required when MapConfig is provided&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          55
+        </td>
+        <td>
+          28
+        </td>
+        <td>
+          2698
+          -
+          2774
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          scala.Predef.require
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Predef.require(StepInitConfiguration.this.mapName.isDefined, &quot;mapName is required when MapConfig is provided&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          73
+        </td>
+        <td>
+          31
+        </td>
+        <td>
+          3551
+          -
+          3568
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Option.apply[String](inputView)
+        </td>
+      </tr><tr>
+        <td>
+          73
+        </td>
+        <td>
+          32
+        </td>
+        <td>
+          3570
+          -
+          3588
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Option.apply[String](outputView)
+        </td>
+      </tr><tr>
+        <td>
+          73
+        </td>
+        <td>
+          33
+        </td>
+        <td>
+          3542
+          -
+          3603
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.StepData.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          StepData.apply(scala.Option.apply[String](inputView), scala.Option.apply[String](outputView), cacheResults)
+        </td>
+      </tr><tr>
+        <td>
+          75
+        </td>
+        <td>
+          34
+        </td>
+        <td>
+          3680
+          -
+          3697
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Option.apply[String](inputView)
+        </td>
+      </tr><tr>
+        <td>
+          75
+        </td>
+        <td>
+          35
+        </td>
+        <td>
+          3699
+          -
+          3717
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Option.apply[String](outputView)
+        </td>
+      </tr><tr>
+        <td>
+          75
+        </td>
+        <td>
+          36
+        </td>
+        <td>
+          3671
+          -
+          3718
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.StepData.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          StepData.apply(scala.Option.apply[String](inputView), scala.Option.apply[String](outputView), StepData.apply$default$3)
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          38
+        </td>
+        <td>
+          4013
+          -
+          4016
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.RuleSuiteTypeParam.$anon.&lt;init&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          new $anon()
+        </td>
+      </tr><tr>
+        <td>
+          89
+        </td>
+        <td>
+          37
+        </td>
+        <td>
+          4089
+          -
+          4093
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.quality.RuleSuite.id
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          t.id
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          40
+        </td>
+        <td>
+          4161
+          -
+          4164
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.RuleSuiteTypeParam.$anon.&lt;init&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          new $anon()
+        </td>
+      </tr><tr>
+        <td>
+          93
+        </td>
+        <td>
+          39
+        </td>
+        <td>
+          4241
+          -
+          4245
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.quality.GroupRuleId.id
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #F0ADAD">
+          t.id
+        </td>
+      </tr><tr>
+        <td>
+          121
+        </td>
+        <td>
+          41
+        </td>
+        <td>
+          5398
+          -
+          5402
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.Step.name
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          Step.this.name
+        </td>
+      </tr><tr>
+        <td>
+          121
+        </td>
+        <td>
+          42
+        </td>
+        <td>
+          5372
+          -
+          5403
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          Step.this.data.outputView.getOrElse[String](Step.this.name)
+        </td>
+      </tr><tr>
+        <td>
+          126
+        </td>
+        <td>
+          43
+        </td>
+        <td>
+          5538
+          -
+          5542
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.Step.name
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          Step.this.name
+        </td>
+      </tr><tr>
+        <td>
+          126
+        </td>
+        <td>
+          44
+        </td>
+        <td>
+          5508
+          -
+          5543
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          Step.this.operation.fieldName.getOrElse[String](Step.this.name)
+        </td>
+      </tr><tr>
+        <td>
+          128
+        </td>
+        <td>
+          45
+        </td>
+        <td>
+          5570
+          -
+          5588
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.Operation.function
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          Step.this.operation.function
+        </td>
+      </tr><tr>
+        <td>
+          130
+        </td>
+        <td>
+          46
+        </td>
+        <td>
+          5628
+          -
+          5661
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          scala.Predef.implicitly
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Predef.implicitly[com.sparkutils.flow.RuleSuiteTypeParam[T]](Step.this.evidence$5)
+        </td>
+      </tr>
+    </table>
+          </div>
+        </div>
+      </body>
+    </html>

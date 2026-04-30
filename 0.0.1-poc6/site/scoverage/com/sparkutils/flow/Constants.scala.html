@@ -1,0 +1,834 @@
+<html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title id="title">
+          com/sparkutils/flow/Constants.scala.html
+        </title>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        $(document).ready(function() {$(".tablesorter").tablesorter();});
+      </script>
+        <style>
+          table.codegrid { font-family: monospace; font-size: 12px; width: auto!important; }table.statementlist { width: auto!important; font-size: 13px; } table.codegrid td { padding: 0!important; border: 0!important } table td.linenumber { width: 40px!important; } 
+        </style>
+      </head>
+      <body style="font-family: monospace;">
+        <ul class="nav nav-tabs">
+          <li>
+            <a href="#codegrid" data-toggle="tab">Codegrid</a>
+          </li>
+          <li>
+            <a href="#statementlist" data-toggle="tab">Statement List</a>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="codegrid">
+            <pre style='font-size: 12pt; font-family: courier, monospace;'>1 <span style=''>package com.sparkutils.flow
+</span>2 <span style=''>
+</span>3 <span style=''>
+</span>4 <span style=''>import com.sparkutils.quality.GroupRuleId
+</span>5 <span style=''>
+</span>6 <span style=''>import scala.concurrent.duration.{Duration, FiniteDuration, HOURS, MINUTES}
+</span>7 <span style=''>
+</span>8 <span style=''>trait Constants {
+</span>9 <span style=''>
+</span>10 <span style=''>  /**
+</span>11 <span style=''>   * Optionally specify this [[Step.options]] in all three Quality runners to control the output type
+</span>12 <span style=''>   */
+</span>13 <span style=''>  val resultDataType = </span><span style='background: #AEF1AE'>&quot;resultDataType&quot;</span><span style=''>
+</span>14 <span style=''>  /**
+</span>15 <span style=''>   * The default name used by Flow for the flow's auto-audit column
+</span>16 <span style=''>   */
+</span>17 <span style=''>  val flowAuditDefault = </span><span style='background: #AEF1AE'>&quot;flow_audit&quot;</span><span style=''>
+</span>18 <span style=''>
+</span>19 <span style=''>  /**
+</span>20 <span style=''>   * The collect runner name for [[Operation.function]]
+</span>21 <span style=''>   * @group collect runner
+</span>22 <span style=''>   */
+</span>23 <span style=''>  val CollectRunnerName = </span><span style='background: #AEF1AE'>&quot;collect&quot;</span><span style=''>
+</span>24 <span style=''>  /**
+</span>25 <span style=''>   * Optional collect runner [[Step.options]] to flatten nested arrays, by default true
+</span>26 <span style=''>   * @group collect runner
+</span>27 <span style=''>   */
+</span>28 <span style=''>  val collectFlatten = </span><span style='background: #AEF1AE'>&quot;flatten&quot;</span><span style=''>
+</span>29 <span style=''>  /**
+</span>30 <span style=''>   * Optional collect runner [[Step.options]] to includeNulls in the resulting array, by default false
+</span>31 <span style=''>   * @group collect runner
+</span>32 <span style=''>   */
+</span>33 <span style=''>  val collectIncludeNulls = </span><span style='background: #AEF1AE'>&quot;includeNulls&quot;</span><span style=''>
+</span>34 <span style=''>  /**
+</span>35 <span style=''>   * Optional collect runner [[Step.options]] to use the InPlaceArray optimisation, by default true.
+</span>36 <span style=''>   * @group collect runner
+</span>37 <span style=''>   * @group advanced property
+</span>38 <span style=''>   */
+</span>39 <span style=''>  val collectUseInPlaceArray = </span><span style='background: #AEF1AE'>&quot;useInPlaceArray&quot;</span><span style=''>
+</span>40 <span style=''>  /**
+</span>41 <span style=''>   * Optional collect runner [[Step.options]] to unroll loops with the InPlaceArray optimisation, ba default false.
+</span>42 <span style=''>   *
+</span>43 <span style=''>   * This should only be used when OutputExpressions return arrays with large numbers of entries, the JVM JIT is otherwise
+</span>44 <span style=''>   * faster.
+</span>45 <span style=''>   *
+</span>46 <span style=''>   * @group collect runner
+</span>47 <span style=''>   * @group advanced property
+</span>48 <span style=''>   */
+</span>49 <span style=''>  val collectUnrollInPlaceArray = </span><span style='background: #AEF1AE'>&quot;unrollInPlaceArray&quot;</span><span style=''>
+</span>50 <span style=''>  /**
+</span>51 <span style=''>   * Optional collect runner [[Step.options]] to control the size of batching in the loop unrolling optimisation,
+</span>52 <span style=''>   * by default this is not used, but has a value of 1, implying all entries should be unrolled.
+</span>53 <span style=''>   *
+</span>54 <span style=''>   * This will be slower for very large array sizes from the OutputExpressions, and increasing the number can improve
+</span>55 <span style=''>   * performance by nesting loops.
+</span>56 <span style=''>   *
+</span>57 <span style=''>   * @group collect runner
+</span>58 <span style=''>   * @group advanced property
+</span>59 <span style=''>   */
+</span>60 <span style=''>  val collectUnrollOutputArraySize = </span><span style='background: #AEF1AE'>&quot;unrollOutputArraySize&quot;</span><span style=''>
+</span>61 <span style=''>
+</span>62 <span style=''>  /**
+</span>63 <span style=''>   * The engine runner name for [[Operation.function]]
+</span>64 <span style=''>   * @group engine runner
+</span>65 <span style=''>   */
+</span>66 <span style=''>  val EngineRunnerName = </span><span style='background: #AEF1AE'>&quot;engine&quot;</span><span style=''>
+</span>67 <span style=''>
+</span>68 <span style=''>  /**
+</span>69 <span style=''>   * The engine runner name for [[Operation.function]]
+</span>70 <span style=''>   * @group folder runner
+</span>71 <span style=''>   */
+</span>72 <span style=''>  val FolderRunnerName = </span><span style='background: #AEF1AE'>&quot;folder&quot;</span><span style=''>
+</span>73 <span style=''>
+</span>74 <span style=''>  /**
+</span>75 <span style=''>   * Optional engine and folder runner [[Step.options]] to use debug mode output
+</span>76 <span style=''>   * @group engine runner
+</span>77 <span style=''>   * @group collect runner
+</span>78 <span style=''>   * @group advanced property
+</span>79 <span style=''>   */
+</span>80 <span style=''>  val debugMode = </span><span style='background: #AEF1AE'>&quot;debugMode&quot;</span><span style=''>
+</span>81 <span style=''>
+</span>82 <span style=''>  /**
+</span>83 <span style=''>   * Optional folder runner [[Step.options]] to control the starting struct expression, by default this will use the
+</span>84 <span style=''>   * incoming schema, which requires analysis of the dataframe and, with parquet, can lead to full file system scans,
+</span>85 <span style=''>   * known to be very slow on azure, for example.
+</span>86 <span style=''>   *
+</span>87 <span style=''>   * Prefer to specify this when the cost of obtaining the schema is too high (you can use the
+</span>88 <span style=''>   * [[inputSchemaTimeTakenWarning]] configuration to trigger a warning log entry to observe this, by default it's 1 minute).
+</span>89 <span style=''>   *
+</span>90 <span style=''>   * @group folder runner
+</span>91 <span style=''>   */
+</span>92 <span style=''>  val startingStruct = </span><span style='background: #AEF1AE'>&quot;startingStruct&quot;</span><span style=''>
+</span>93 <span style=''>
+</span>94 <span style=''>
+</span>95 <span style=''>  /**
+</span>96 <span style=''>   * Optional [[Step.options]] to force the use of an additional projection, by default false.  Used by [[MergeFields]]
+</span>97 <span style=''>   * and [[OutputFieldsOnly]] [[Operation.resultApproach]]s
+</span>98 <span style=''>   */
+</span>99 <span style=''>  val forceMergeProjection = </span><span style='background: #AEF1AE'>&quot;forceMergeProjection&quot;</span><span style=''>
+</span>100 <span style=''>
+</span>101 <span style=''>  /**
+</span>102 <span style=''>   * Optional [[Step.options]] to specify the input schema to use for a Step should the cost of deriving the schema
+</span>103 <span style=''>   * be too high.
+</span>104 <span style=''>   *
+</span>105 <span style=''>   * @group input schema
+</span>106 <span style=''>   */
+</span>107 <span style=''>  val inputSchema = </span><span style='background: #AEF1AE'>&quot;inputSchema&quot;</span><span style=''>
+</span>108 <span style=''>  /**
+</span>109 <span style=''>   * Optional [[Step.options]] to specify [[scala.concurrent.duration.Duration]] compatible string for how long a
+</span>110 <span style=''>   * [[org.apache.spark.sql.Dataset.schema]] call should take before a warning is logged.  e.g. &quot;3minutes&quot;
+</span>111 <span style=''>   *
+</span>112 <span style=''>   * @group input schema
+</span>113 <span style=''>   */
+</span>114 <span style=''>  val inputSchemaTimeTakenWarning = </span><span style='background: #AEF1AE'>&quot;inputSchemaTimeTakenWarning&quot;</span><span style=''>
+</span>115 <span style=''>  /**
+</span>116 <span style=''>   * The default value of 1minute used by [[inputSchemaTimeTakenWarning]]
+</span>117 <span style=''>   *
+</span>118 <span style=''>   * @group input schema
+</span>119 <span style=''>   */
+</span>120 <span style=''>  val inputSchemaTimeTakenDefault: Duration = </span><span style='background: #AEF1AE'>Duration(1, MINUTES)</span><span style=''>
+</span>121 <span style=''>
+</span>122 <span style=''>  /**
+</span>123 <span style=''>   * DQ Runner name
+</span>124 <span style=''>   */
+</span>125 <span style=''>  val DQRunnerName = </span><span style='background: #AEF1AE'>&quot;dq&quot;</span><span style=''>
+</span>126 <span style=''>
+</span>127 <span style=''>  /**
+</span>128 <span style=''>   * The column name which must be returned by [[flowEarlyExitSQL]] and evaluate to either an empty dataset
+</span>129 <span style=''>   * or to a *true* boolean value on the first row to indicate the flow should continue.
+</span>130 <span style=''>   * Otherwise, if the first row with a *false* value is returned the Flow will exit with exception per
+</span>131 <span style=''>   * [[flowEarlyExitException]]
+</span>132 <span style=''>   */
+</span>133 <span style=''>  val flowEarlyExitColumn = </span><span style='background: #AEF1AE'>&quot;flowEarlyExitColumn&quot;</span><span style=''>
+</span>134 <span style=''>
+</span>135 <span style=''>  /**
+</span>136 <span style=''>   * Optional [[Step.options]] to specify the Name for a step to run an SQL to decide if the flow should be exited.
+</span>137 <span style=''>   *
+</span>138 <span style=''>   * The SQL is evaluated after the Steps result view is created, by default the [[Step.name]].
+</span>139 <span style=''>   *
+</span>140 <span style=''>   * When present the SQL will be evaluated after a step is completed, it should return [[flowEarlyExitColumn]]
+</span>141 <span style=''>   * with it's associated semantics.
+</span>142 <span style=''>   *
+</span>143 <span style=''>   * NOTE - The graph runs in parallel, if any Steps must perform &quot;safe&quot; actions such as saving a data frame these checks
+</span>144 <span style=''>   * are recommended to be done as dependencies of those Steps
+</span>145 <span style=''>   */
+</span>146 <span style=''>  val flowEarlyExitSQL = </span><span style='background: #AEF1AE'>&quot;flowEarlyExitSQL&quot;</span><span style=''>
+</span>147 <span style=''>
+</span>148 <span style=''>  /**
+</span>149 <span style=''>   * Optional [[Step.options]] to specify a user Exception text if [[flowEarlyExitSQL]] returns a false
+</span>150 <span style=''>   * [[flowEarlyExitColumn]] result.
+</span>151 <span style=''>   *
+</span>152 <span style=''>   * When not present a default text is used:
+</span>153 <span style=''>   * {{{
+</span>154 <span style=''>   * Step ${step.name} had flowEarlyExitSQL configured which returned false - the Flow will be stopped
+</span>155 <span style=''>   * }}}
+</span>156 <span style=''>   */
+</span>157 <span style=''>  val flowEarlyExitException = </span><span style='background: #AEF1AE'>&quot;flowEarlyExitException&quot;</span><span style=''>
+</span>158 <span style=''>
+</span>159 <span style=''>  /**
+</span>160 <span style=''>   * The suffix used for root Steps if, as is default, no inputViewName is defined
+</span>161 <span style=''>   */
+</span>162 <span style=''>  val rootInputSuffix = </span><span style='background: #AEF1AE'>&quot;_root_input&quot;</span><span style=''>
+</span>163 <span style=''>
+</span>164 <span style=''>  /**
+</span>165 <span style=''>   * By default, the duration a low lasts for is 1hr
+</span>166 <span style=''>   */
+</span>167 <span style=''>  val defaultFlowDuration: Duration = </span><span style='background: #AEF1AE'>Duration(1L, HOURS)</span><span style=''>
+</span>168 <span style=''>
+</span>169 <span style=''>  /**
+</span>170 <span style=''>   * This optional [[Step.options]] configuration, defaulting to true, takes effect when the [[Step]]'s
+</span>171 <span style=''>   * [[Operation.ruleSuite]] type is [[com.sparkutils.quality.Id]] and [[FlowRuleGroup.ruleGroup]] type is
+</span>172 <span style=''>   * [[com.sparkutils.quality.CombinedRuleSuiteRows]].  In this case the [[FlowRuleGroup.ruleGroupName]]
+</span>173 <span style=''>   * is used and data is taken from [[FlowRuleGroup.ruleGroup]].
+</span>174 <span style=''>   *
+</span>175 <span style=''>   * This setting on a Step forces a filter on the provided RuleSuite dataset to be used for the RuleSuite Id and uses
+</span>176 <span style=''>   * this name to register it.
+</span>177 <span style=''>   */
+</span>178 <span style=''>  val useFlowRuleGroupLevelRows = </span><span style='background: #AEF1AE'>&quot;useFlowRuleGroupLevelRows&quot;</span><span style=''>
+</span>179 <span style=''>
+</span>180 <span style=''>  /**
+</span>181 <span style=''>   * This optional [[Step.options]] configuration, takes effect when the [[Step]]'s
+</span>182 <span style=''>   * [[Operation.ruleSuite]] type is [[com.sparkutils.quality.Id]].  It overrides whatever logic is used by
+</span>183 <span style=''>   * [[OperationProcessing]] with Id including [[useFlowRuleGroupLevelRows]]
+</span>184 <span style=''>   */
+</span>185 <span style=''>  val useRuleGroupName = </span><span style='background: #AEF1AE'>&quot;useRuleGroupName&quot;</span><span style=''>
+</span>186 <span style=''>
+</span>187 <span style=''>  /**
+</span>188 <span style=''>   * This optional [[Step.options]] configuration, defaulting to false, stops modifying [[Operation.ruleSuite]]'s
+</span>189 <span style=''>   * defaultProcessor when [[Operation.function]] is [[FolderRunnerName]] to introduce a default {{row -&gt; row}}.
+</span>190 <span style=''>   */
+</span>191 <span style=''>  val doNotAddFolderDefault = </span><span style='background: #AEF1AE'>&quot;doNotAddFolderDefault&quot;</span><span style=''>
+</span>192 <span style=''>}
+</span></pre>
+          </div>
+          <div class="tab-pane" id="statementlist">
+            <table cellspacing="0" cellpadding="0" class="table statementlist">
+      <tr>
+        <th>Line</th>
+        <th>Stmt Id</th>
+        <th>Pos</th>
+        <th>Tree</th>
+        <th>Symbol</th>
+        <th>Tests</th>
+        <th>Code</th>
+      </tr><tr>
+        <td>
+          13
+        </td>
+        <td>
+          53
+        </td>
+        <td>
+          306
+          -
+          322
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;resultDataType&quot;
+        </td>
+      </tr><tr>
+        <td>
+          17
+        </td>
+        <td>
+          54
+        </td>
+        <td>
+          428
+          -
+          440
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;flow_audit&quot;
+        </td>
+      </tr><tr>
+        <td>
+          23
+        </td>
+        <td>
+          55
+        </td>
+        <td>
+          563
+          -
+          572
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;collect&quot;
+        </td>
+      </tr><tr>
+        <td>
+          28
+        </td>
+        <td>
+          56
+        </td>
+        <td>
+          723
+          -
+          732
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;flatten&quot;
+        </td>
+      </tr><tr>
+        <td>
+          33
+        </td>
+        <td>
+          57
+        </td>
+        <td>
+          903
+          -
+          917
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;includeNulls&quot;
+        </td>
+      </tr><tr>
+        <td>
+          39
+        </td>
+        <td>
+          58
+        </td>
+        <td>
+          1119
+          -
+          1136
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;useInPlaceArray&quot;
+        </td>
+      </tr><tr>
+        <td>
+          49
+        </td>
+        <td>
+          59
+        </td>
+        <td>
+          1502
+          -
+          1522
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;unrollInPlaceArray&quot;
+        </td>
+      </tr><tr>
+        <td>
+          60
+        </td>
+        <td>
+          60
+        </td>
+        <td>
+          2003
+          -
+          2026
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;unrollOutputArraySize&quot;
+        </td>
+      </tr><tr>
+        <td>
+          66
+        </td>
+        <td>
+          61
+        </td>
+        <td>
+          2146
+          -
+          2154
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;engine&quot;
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          62
+        </td>
+        <td>
+          2274
+          -
+          2282
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;folder&quot;
+        </td>
+      </tr><tr>
+        <td>
+          80
+        </td>
+        <td>
+          63
+        </td>
+        <td>
+          2478
+          -
+          2489
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;debugMode&quot;
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          64
+        </td>
+        <td>
+          3068
+          -
+          3084
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;startingStruct&quot;
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          65
+        </td>
+        <td>
+          3308
+          -
+          3330
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;forceMergeProjection&quot;
+        </td>
+      </tr><tr>
+        <td>
+          107
+        </td>
+        <td>
+          66
+        </td>
+        <td>
+          3528
+          -
+          3541
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;inputSchema&quot;
+        </td>
+      </tr><tr>
+        <td>
+          114
+        </td>
+        <td>
+          67
+        </td>
+        <td>
+          3841
+          -
+          3870
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;inputSchemaTimeTakenWarning&quot;
+        </td>
+      </tr><tr>
+        <td>
+          120
+        </td>
+        <td>
+          68
+        </td>
+        <td>
+          4033
+          -
+          4053
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.concurrent.duration.Duration.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.concurrent.duration.Duration.apply(1L, MINUTES)
+        </td>
+      </tr><tr>
+        <td>
+          125
+        </td>
+        <td>
+          69
+        </td>
+        <td>
+          4108
+          -
+          4112
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;dq&quot;
+        </td>
+      </tr><tr>
+        <td>
+          133
+        </td>
+        <td>
+          70
+        </td>
+        <td>
+          4487
+          -
+          4508
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;flowEarlyExitColumn&quot;
+        </td>
+      </tr><tr>
+        <td>
+          146
+        </td>
+        <td>
+          71
+        </td>
+        <td>
+          5108
+          -
+          5126
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;flowEarlyExitSQL&quot;
+        </td>
+      </tr><tr>
+        <td>
+          157
+        </td>
+        <td>
+          72
+        </td>
+        <td>
+          5484
+          -
+          5508
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;flowEarlyExitException&quot;
+        </td>
+      </tr><tr>
+        <td>
+          162
+        </td>
+        <td>
+          73
+        </td>
+        <td>
+          5629
+          -
+          5642
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;_root_input&quot;
+        </td>
+      </tr><tr>
+        <td>
+          167
+        </td>
+        <td>
+          74
+        </td>
+        <td>
+          5747
+          -
+          5766
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.concurrent.duration.Duration.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.concurrent.duration.Duration.apply(1L, HOURS)
+        </td>
+      </tr><tr>
+        <td>
+          178
+        </td>
+        <td>
+          75
+        </td>
+        <td>
+          6350
+          -
+          6377
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;useFlowRuleGroupLevelRows&quot;
+        </td>
+      </tr><tr>
+        <td>
+          185
+        </td>
+        <td>
+          76
+        </td>
+        <td>
+          6685
+          -
+          6703
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;useRuleGroupName&quot;
+        </td>
+      </tr><tr>
+        <td>
+          191
+        </td>
+        <td>
+          77
+        </td>
+        <td>
+          6974
+          -
+          6997
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;doNotAddFolderDefault&quot;
+        </td>
+      </tr>
+    </table>
+          </div>
+        </div>
+      </body>
+    </html>
