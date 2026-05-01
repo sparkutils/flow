@@ -351,7 +351,7 @@
 </span>327 <span style=''>    val thisFlow = </span><span style='background: #AEF1AE'>flows.filter(flowFilter(flowId))</span><span style=''>
 </span>328 <span style=''>    val flowRow =
 </span>329 <span style=''>      if (</span><span style='background: #AEF1AE'>thisFlow.isEmpty</span><span style=''>)
-</span>330 <span style=''>        </span><span style='background: #F0ADAD'>FlowRow[FG](flowId.id, flowId.version, flowAuditDefault, defaultFlowDuration, None)</span><span style=''>
+</span>330 <span style=''>        </span><span style='background: #AEF1AE'>FlowRow[FG](flowId.id, flowId.version, flowAuditDefault, defaultFlowDuration, None)</span><span style=''>
 </span>331 <span style=''>      else </span><span style='background: #AEF1AE'>{
 </span>332 <span style=''></span><span style='background: #AEF1AE'>        val f = thisFlow.head()
 </span>333 <span style=''></span><span style='background: #AEF1AE'>        // register all the relevant groups
@@ -365,7 +365,7 @@
 </span>341 <span style=''>    val thisSteps = </span><span style='background: #AEF1AE'>sourceSteps.map{
 </span>342 <span style=''></span><span style='background: #AEF1AE'>        step =&gt;
 </span>343 <span style=''></span><span style='background: #AEF1AE'>          val rid = Id(step.ruleSuiteId, step.ruleSuiteVersion)
-</span>344 <span style=''></span><span style='background: #AEF1AE'>          val rs = operation(flowId, rsName, rsRows, rid, flowRow, step)
+</span>344 <span style=''></span><span style='background: #AEF1AE'>          val rs = operation.fromDataset(flowId, rsName, rsRows, rid, flowRow, step)
 </span>345 <span style=''></span><span style='background: #AEF1AE'>
 </span>346 <span style=''></span><span style='background: #AEF1AE'>          val views = viewRows.map{ s =&gt;
 </span>347 <span style=''></span><span style='background: #AEF1AE'>            s.filter(s&quot;ruleSuiteId = ${step.ruleSuiteId} and ruleSuiteVersion = ${step.ruleSuiteVersion}&quot;).collect().toSeq
@@ -4832,7 +4832,7 @@
         <td>
           
         </td>
-        <td style="background: #F0ADAD">
+        <td style="background: #AEF1AE">
           flowId.id
         </td>
       </tr><tr>
@@ -4856,7 +4856,7 @@
         <td>
           
         </td>
-        <td style="background: #F0ADAD">
+        <td style="background: #AEF1AE">
           flowId.version
         </td>
       </tr><tr>
@@ -4880,7 +4880,7 @@
         <td>
           
         </td>
-        <td style="background: #F0ADAD">
+        <td style="background: #AEF1AE">
           flow.this.`package`.flowAuditDefault
         </td>
       </tr><tr>
@@ -4904,7 +4904,7 @@
         <td>
           
         </td>
-        <td style="background: #F0ADAD">
+        <td style="background: #AEF1AE">
           flow.this.`package`.defaultFlowDuration
         </td>
       </tr><tr>
@@ -4928,7 +4928,7 @@
         <td>
           
         </td>
-        <td style="background: #F0ADAD">
+        <td style="background: #AEF1AE">
           scala.None
         </td>
       </tr><tr>
@@ -4952,7 +4952,7 @@
         <td>
           
         </td>
-        <td style="background: #F0ADAD">
+        <td style="background: #AEF1AE">
           FlowRow.apply[FG](flowId.id, flowId.version, flow.this.`package`.flowAuditDefault, flow.this.`package`.defaultFlowDuration, scala.None)
         </td>
       </tr><tr>
@@ -4976,7 +4976,7 @@
         <td>
           
         </td>
-        <td style="background: #F0ADAD">
+        <td style="background: #AEF1AE">
           FlowRow.apply[FG](flowId.id, flowId.version, flow.this.`package`.flowAuditDefault, flow.this.`package`.defaultFlowDuration, scala.None)
         </td>
       </tr><tr>
@@ -5089,7 +5089,7 @@
         <td>
           14483
           -
-          15413
+          15425
         </td>
         <td>
           ApplyToImplicitArgs
@@ -5103,7 +5103,7 @@
         <td style="background: #AEF1AE">
           scala.Predef.refArrayOps[com.sparkutils.flow.StepRow](sourceSteps).map[com.sparkutils.flow.Step[RP#ResType]](((step: com.sparkutils.flow.StepRow) =&gt; {
   val rid: com.sparkutils.quality.Id = com.sparkutils.quality.Id.apply(step.ruleSuiteId, step.ruleSuiteVersion);
-  val rs: RP#ResType = operation.apply(flowId, rsName, rsRows, rid, flowRow, step);
+  val rs: RP#ResType = operation.fromDataset(flowId, rsName, rsRows, rid, flowRow, step);
   val views: Seq[com.sparkutils.quality.ViewRow] = flowDataSets.viewRows.map[Seq[com.sparkutils.quality.ViewRow]](((s: org.apache.spark.sql.Dataset[com.sparkutils.quality.ViewRow]) =&gt; scala.Predef.refArrayOps[com.sparkutils.quality.ViewRow](s.filter(&quot;ruleSuiteId = &quot;.+(step.ruleSuiteId).+(&quot; and ruleSuiteVersion = &quot;).+(step.ruleSuiteVersion)).collect()).toSeq)).getOrElse[Seq[com.sparkutils.quality.ViewRow]](scala.`package`.Seq.empty[Nothing]);
   val maps: Seq[com.sparkutils.quality.MapRow] = flowDataSets.mapRows.map[Seq[com.sparkutils.quality.MapRow]](((s: org.apache.spark.sql.Dataset[com.sparkutils.quality.MapRow]) =&gt; scala.Predef.refArrayOps[com.sparkutils.quality.MapRow](s.filter(&quot;ruleSuiteId = &quot;.+(step.ruleSuiteId).+(&quot; and ruleSuiteVersion = &quot;).+(step.ruleSuiteVersion)).collect()).toSeq)).getOrElse[Seq[com.sparkutils.quality.MapRow]](scala.`package`.Seq.empty[Nothing]);
   Step.apply[RP#ResType](step.name, step.dependencies, Operation.apply[RP#ResType](rs, step.operation.function, step.operation.resultApproach, step.operation.fieldName, step.operation.combineAuditWith)(rstp), StepInitConfiguration.apply(views, maps, StepInitConfiguration.apply$default$3), step.data, step.options)(rstp)
@@ -5191,19 +5191,19 @@
         <td>
           14599
           -
-          14652
+          14664
         </td>
         <td>
           Apply
         </td>
         <td>
-          com.sparkutils.flow.FlowGroupAndOperationType.apply
+          com.sparkutils.flow.FlowGroupAndOperationType.fromDataset
         </td>
         <td>
           
         </td>
         <td style="background: #AEF1AE">
-          operation.apply(flowId, rsName, rsRows, rid, flowRow, step)
+          operation.fromDataset(flowId, rsName, rsRows, rid, flowRow, step)
         </td>
       </tr><tr>
         <td>
@@ -5213,9 +5213,9 @@
           661
         </td>
         <td>
-          14707
+          14719
           -
-          14811
+          14823
         </td>
         <td>
           Apply
@@ -5237,9 +5237,9 @@
           662
         </td>
         <td>
-          14707
+          14719
           -
-          14817
+          14829
         </td>
         <td>
           Select
@@ -5261,9 +5261,9 @@
           663
         </td>
         <td>
-          14840
+          14852
           -
-          14849
+          14861
         </td>
         <td>
           TypeApply
@@ -5285,9 +5285,9 @@
           664
         </td>
         <td>
-          14676
+          14688
           -
-          14850
+          14862
         </td>
         <td>
           Apply
@@ -5309,9 +5309,9 @@
           665
         </td>
         <td>
-          14902
+          14914
           -
-          15006
+          15018
         </td>
         <td>
           Apply
@@ -5333,9 +5333,9 @@
           666
         </td>
         <td>
-          14902
+          14914
           -
-          15012
+          15024
         </td>
         <td>
           Select
@@ -5357,9 +5357,9 @@
           667
         </td>
         <td>
-          15035
+          15047
           -
-          15044
+          15056
         </td>
         <td>
           TypeApply
@@ -5381,9 +5381,9 @@
           668
         </td>
         <td>
-          14872
+          14884
           -
-          15045
+          15057
         </td>
         <td>
           Apply
@@ -5405,9 +5405,9 @@
           669
         </td>
         <td>
-          15057
+          15069
           -
-          15405
+          15417
         </td>
         <td>
           ApplyToImplicitArgs
@@ -5429,9 +5429,9 @@
           671
         </td>
         <td>
-          15453
+          15465
           -
-          15462
+          15474
         </td>
         <td>
           ApplyImplicitView
@@ -5453,9 +5453,9 @@
           672
         </td>
         <td>
-          15419
+          15431
           -
-          15463
+          15475
         </td>
         <td>
           Apply
@@ -5477,9 +5477,9 @@
           695
         </td>
         <td>
-          15756
+          15768
           -
-          16314
+          16326
         </td>
         <td>
           Apply
@@ -5512,9 +5512,9 @@
           673
         </td>
         <td>
-          15839
+          15851
           -
-          15850
+          15862
         </td>
         <td>
           Select
@@ -5536,9 +5536,9 @@
           674
         </td>
         <td>
-          15862
+          15874
           -
-          15871
+          15883
         </td>
         <td>
           TypeApply
@@ -5560,9 +5560,9 @@
           675
         </td>
         <td>
-          15895
+          15907
           -
-          15906
+          15918
         </td>
         <td>
           Select
@@ -5584,9 +5584,9 @@
           676
         </td>
         <td>
-          15876
+          15888
           -
-          15907
+          15919
         </td>
         <td>
           Apply
@@ -5608,9 +5608,9 @@
           677
         </td>
         <td>
-          15804
+          15816
           -
-          15907
+          15919
         </td>
         <td>
           Apply
@@ -5632,9 +5632,9 @@
           678
         </td>
         <td>
-          15962
+          15974
           -
-          15977
+          15989
         </td>
         <td>
           Select
@@ -5656,9 +5656,9 @@
           679
         </td>
         <td>
-          15989
+          16001
           -
-          16012
+          16024
         </td>
         <td>
           Select
@@ -5680,9 +5680,9 @@
           680
         </td>
         <td>
-          15927
+          15939
           -
-          16013
+          16025
         </td>
         <td>
           Apply
@@ -5704,9 +5704,9 @@
           681
         </td>
         <td>
-          16067
+          16079
           -
-          16093
+          16105
         </td>
         <td>
           Apply
@@ -5728,9 +5728,9 @@
           682
         </td>
         <td>
-          16061
+          16073
           -
-          16095
+          16107
         </td>
         <td>
           Apply
@@ -5752,9 +5752,9 @@
           683
         </td>
         <td>
-          16039
+          16051
           -
-          16039
+          16051
         </td>
         <td>
           TypeApply
@@ -5776,9 +5776,9 @@
           684
         </td>
         <td>
-          16039
+          16051
           -
-          16039
+          16051
         </td>
         <td>
           TypeApply
@@ -5800,9 +5800,9 @@
           685
         </td>
         <td>
-          16039
+          16051
           -
-          16039
+          16051
         </td>
         <td>
           TypeApply
@@ -5824,9 +5824,9 @@
           686
         </td>
         <td>
-          16039
+          16051
           -
-          16039
+          16051
         </td>
         <td>
           TypeApply
@@ -5848,9 +5848,9 @@
           687
         </td>
         <td>
-          16022
+          16034
           -
-          16097
+          16109
         </td>
         <td>
           Apply
@@ -5872,9 +5872,9 @@
           694
         </td>
         <td>
-          16121
+          16133
           -
-          16308
+          16320
         </td>
         <td>
           Apply
@@ -5896,9 +5896,9 @@
           688
         </td>
         <td>
-          16185
+          16197
           -
-          16198
+          16210
         </td>
         <td>
           Select
@@ -5920,9 +5920,9 @@
           689
         </td>
         <td>
-          16203
+          16215
           -
-          16233
+          16245
         </td>
         <td>
           Select
@@ -5944,9 +5944,9 @@
           690
         </td>
         <td>
-          16235
+          16247
           -
-          16270
+          16282
         </td>
         <td>
           Select
@@ -5968,9 +5968,9 @@
           691
         </td>
         <td>
-          16200
+          16212
           -
-          16271
+          16283
         </td>
         <td>
           Apply
@@ -5992,9 +5992,9 @@
           692
         </td>
         <td>
-          16273
+          16285
           -
-          16299
+          16311
         </td>
         <td>
           Select
@@ -6016,9 +6016,9 @@
           693
         </td>
         <td>
-          16172
+          16184
           -
-          16300
+          16312
         </td>
         <td>
           Apply
