@@ -171,6 +171,21 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
       FlowRuleGroup("noOpFlowCombined", combined_rows(rs).collect().toSeq )
     }((odses, _) => odses)(RuleSuiteFromDataset)
   }
+
+  test("id not present on RuleSuiteFromDataset") {
+    val fe = intercept[FlowException] {
+      doNoOpRunnerGroup(RuleSuiteFromDataset) { rs =>
+        val s = sparkSession
+        import s.implicits._
+
+        FlowRuleGroup("noOpFlowCombined", combined_rows(rs).collect().toSeq)
+      }{(odses, _) =>
+        odses.copy(steps = odses.steps.map(s => s.copy(ruleSuiteId = 1200202)))
+      }(RuleSuiteFromDataset)
+    }
+
+    fe.msg should include("is missing")
+  }
 }
 
 class IStar() extends CustomResultApproach {
