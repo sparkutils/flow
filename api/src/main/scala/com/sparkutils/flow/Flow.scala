@@ -306,7 +306,7 @@ class FlowT[FG, RP: RuleSuiteParam: RuleSuiteTypeParam](val flowId: VersionedId,
         throw f
       case t: Throwable =>
         // $COVERAGE-OFF$
-        val info = "An unexpected error occurred during processing the Step"
+        val info = s"An unexpected error occurred during processing the Step - ${t.getMessage}"
         errorLogStep(step, info)
         // $COVERAGE-ON$
         throw FlowException(flowInfo(step, info), t)

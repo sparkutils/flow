@@ -341,7 +341,7 @@ trait Serialisation {
     val thisSteps = sourceSteps.map{
         step =>
           val rid = Id(step.ruleSuiteId, step.ruleSuiteVersion)
-          val rs = operation(flowId, rsName, rsRows, rid, flowRow, step)
+          val rs = operation.fromDataset(flowId, rsName, rsRows, rid, flowRow, step)
 
           val views = viewRows.map{ s =>
             s.filter(s"ruleSuiteId = ${step.ruleSuiteId} and ruleSuiteVersion = ${step.ruleSuiteVersion}").collect().toSeq

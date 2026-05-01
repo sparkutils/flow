@@ -237,6 +237,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
 
   test("Serialising for folder full id example") {
     val flow = folderFlow()
+    val ogds = toDatasets(sparkSession, flow)
     val full = toFullFlow(sparkSession, flow)
     val s = sparkSession
     import s.implicits._
@@ -248,11 +249,53 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
       flowRuleGroup = flowData.flowRow.flowRuleGroup)
     doFolderTest(idf)
 
-    // use converted with datasets
+    // use converted with datasets via rulesuites
     val dses = toDatasets(IdFromFlows)(sparkSession, idf)
     val flowData2 = fromDatasets(sparkSession, dses, flow.flowId)
     doFolderTest(new Flow(flow.flowId, flowData2.steps, flowData.flowRow.flowAuditColName,
       flowRuleGroup = flowData2.flowRow.flowRuleGroup))
+
+    // from datasets using IdFromFlows
+    val flowData3 = fromDatasets(IdFromFlows)(sparkSession, dses, flow.flowId)
+    doFolderTest(new FlowT(flow.flowId, flowData3.steps, flowData.flowRow.flowAuditColName,
+      flowRuleGroup = flowData3.flowRow.flowRuleGroup))
+
+    // from datasets using IdFromFlows via rsname
+    val idf4 = new FlowT[CombinedRuleSuiteRows, GroupRuleId](flow.flowId,
+      flowData.steps.map(s => s.copy(options = s.options + (useFlowRuleGroupLevelRows -> "false"))),
+      flowData.flowRow.flowAuditColName,
+      flowRuleGroup = flowData.flowRow.flowRuleGroup)
+    val dses4 = toDatasets(IdFromFlows)(sparkSession, idf4)
+
+    val flowData4 = fromDatasets(IdFromFlows)(sparkSession, dses4, flow.flowId)
+    doFolderTest(new FlowT(flow.flowId, flowData4.steps, flowData.flowRow.flowAuditColName,
+      flowRuleGroup = flowData4.flowRow.flowRuleGroup))
+
+    // from datasets using IdFromFlows with specific name
+    val idf5 = new FlowT[CombinedRuleSuiteRows, GroupRuleId](flow.flowId,
+      flowData.steps.map(s => s.copy(options = s.options + (useRuleGroupName -> defaultConvertGroupName))),
+      flowData.flowRow.flowAuditColName,
+      flowRuleGroup = flowData.flowRow.flowRuleGroup)
+    val dses5 = toDatasets(IdFromFlows)(sparkSession, idf5)
+
+    val flowData5 = fromDatasets(IdFromFlows)(sparkSession, dses5, flow.flowId)
+    doFolderTest(new FlowT(flow.flowId, flowData5.steps, flowData.flowRow.flowAuditColName,
+      flowRuleGroup = flowData5.flowRow.flowRuleGroup))
+
+    // from datasets using IdFromFlows but fallback to rsname as there is no group
+    val flowData6 = fromDatasets(IdFromFlows)(sparkSession,
+      ogds.copy(flows = Seq.empty[FlowRow[CombinedRuleSuiteRows]].toDS), flow.flowId)
+    val flow6 = new FlowT(flow.flowId, flowData6.steps, flowData.flowRow.flowAuditColName,
+      flowRuleGroup = flowData6.flowRow.flowRuleGroup)
+    doFolderTest(flow6)
+    // check fromFullRow default
+    val full6 = toFullFlow(IdFromFlows)(sparkSession, flow6)
+    val fromFull6 = fromFullFlow(IdFromFlows)(full6, flow.flowId)
+    val fe = intercept[FlowException] {
+      doFolderTest(new FlowT(flow.flowId, fromFull6.steps, flowData.flowRow.flowAuditColName,
+        flowRuleGroup = fromFull6.flowRow.flowRuleGroup))
+    }
+    fe.msg should include("no matching RuleSuite was found")
   }
 
   test("merge fields with rules using fields which are not in the output") {
