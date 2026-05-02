@@ -123,9 +123,7 @@ class FlowT[FG, RP: RuleSuiteParam: RuleSuiteTypeParam](val flowId: VersionedId,
             variablesPerFunc = options.int("variablesPerFunc", 40),
             variableFuncGroup = options.int("variableFuncGroup", 20)).as(fieldName), Seq("ruleSuiteResults", "result"),
             dataRefTypeFields.orElse{
-              options.expr(startingStruct).flatMap(_ => None).orElse{
-                Some(withoutFlowAudit.toSet)
-              }
+              Some(withoutFlowAudit.toSet)
             }
           )
 
@@ -183,12 +181,12 @@ class FlowT[FG, RP: RuleSuiteParam: RuleSuiteTypeParam](val flowId: VersionedId,
       // allow early exit
       earlyExitCheck(finalDF, step, dependencies)
 
+      // $COVERAGE-OFF$
       if (isTraceEnabled() || showInterim) {
-        // $COVERAGE-OFF$
         infoLogStep(actualStep, "Result Sample")
         finalDF.show()
-        // $COVERAGE-ON$
       }
+      // $COVERAGE-ON$
 
       val timings = StepTimings(runner - processed, processed)
 
@@ -423,7 +421,6 @@ class FlowT[FG, RP: RuleSuiteParam: RuleSuiteTypeParam](val flowId: VersionedId,
       infoLogStep(step, "Views Loaded")
     }
   }
-  // $COVERAGE-ON$
 
   final def flowInfo(step: Step[RP], info: String): String =
     s"Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} $info"
@@ -452,6 +449,7 @@ class FlowT[FG, RP: RuleSuiteParam: RuleSuiteTypeParam](val flowId: VersionedId,
   final protected def errorLogStep(step: Step[RP], info: String): Unit = {
     logError(flowInfo(step,info))
   }
+  // $COVERAGE-ON$
 
   /**
    * Called before performStep, by default just returns the step, customised Flow's can override behaviour, such as

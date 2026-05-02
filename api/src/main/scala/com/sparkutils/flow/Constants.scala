@@ -125,6 +125,11 @@ trait Constants {
   val DQRunnerName = "dq"
 
   /**
+   * DQ Runner name
+   */
+  val NoOpRunnerName = "noop"
+
+  /**
    * The column name which must be returned by [[flowEarlyExitSQL]] and evaluate to either an empty dataset
    * or to a *true* boolean value on the first row to indicate the flow should continue.
    * Otherwise, if the first row with a *false* value is returned the Flow will exit with exception per

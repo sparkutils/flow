@@ -472,7 +472,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
       Tuple2("c", 1)
     )
 
-    val ir = flow.run(s, _ => Some(data.toDF("c", "d")))
+    val ir = flow.run(s, _ => Some(data.toDF("c", "d")), tolerant = true)
 
     val d = ir.stepResults("b").output.selectExpr("c", "d").as[(String, Option[Int])]
 
@@ -519,11 +519,19 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
       val ir = flow.run(s, _ => Some(data), tolerant = tolerant)
 
       if (tolerant) {
-        ir.stepResults.exists{
-          case (_, _: StepResult[RuleSuite]) => true
-          case _ => false
-        } shouldBe false
+        ir.stepResults.values.forall(_.fold(_ => true)(_ => false)) shouldBe false
+
+        intercept[FlowException]{
+          ir.stepResults.head._2.output
+        }.msg should include("did not complete")
+
+        intercept[FlowException]{
+          ir.stepResults.head._2.timings
+        }.msg should include("did not complete")
+
         throw ir.stepResults.head._2.asInstanceOf[StepException[RuleSuite]]
+      } else {
+        ir.stepResults.values.forall(_.fold(_ => true)(_ => false)) shouldBe true
       }
 
       val d = ir.stepResults("b").output.selectExpr("c", "d").as[(String, Option[Int])]

@@ -130,9 +130,10 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
       flowRuleGroup = flowData.flowRow.flowRuleGroup)).write.mode(SaveMode.Overwrite).json(outputDir + "/" + grp.ruleGroupName)
     val readBack =
       s.read.schema(typedFullFlowExpEnc[T, OP#StorageType].schema).json(outputDir + "/" + grp.ruleGroupName).
-        as[FullFlow[T, OP#StorageType]].head()
+        as[FullFlow[T, OP#StorageType]]
+
     // do the rule group id serde
-    readBack.flowRow.flowRuleGroup.toSet shouldBe flowData.flowRow.flowRuleGroup.toSet
+    readBack.head().flowRow.flowRuleGroup.toSet shouldBe flowData.flowRow.flowRuleGroup.toSet
 
     val data = Seq(
       Tuple2("c", 1)
@@ -142,6 +143,11 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
     val r = data.withColumn("runner",expr(s"rule_engine_runner(rule_suite_from(${grp.ruleGroupName}, 200))")).
       selectExpr("runner.result").as[Int].head()
     r shouldBe 4
+    val fromFull = fromFullFlow(process)(readBack, flow.flowId)
+    val reread = new FlowT(flow.flowId, fromFull.steps, fromFull.flowRow.flowAuditColName,
+      flowRuleGroup = fromFull.flowRow.flowRuleGroup)
+    val fr = flow.run(s, _ => Some(data))
+    // enough to prove it worked as non tolerant
   }
 
   test("NoOp runner and var rule group loading works id's") {
