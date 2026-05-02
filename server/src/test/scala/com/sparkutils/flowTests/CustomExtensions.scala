@@ -60,7 +60,7 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
   test("bad class name custom result approach should throw") {
     val clzz = "classOf[IStar].getName"
     // the custom should reply 1
-    val e = intercept[FlowException] {
+    val e = intercept[FlowExceptionType] {
       doFlowTest(buildFlow(CustomApproach(clzz)), answer = 1, process = identity)
     }
     e.msg should include(clzz)
@@ -69,17 +69,17 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
   test("bad custom runner name should throw") {
     val clzz = "classOf[IRun].getName"
     // custom runner only
-    val e = intercept[FlowException] {
+    val e = intercept[FlowExceptionType] {
       doFlowTest(buildFlow(runner = CustomRunnerEngine(clzz)))
     }
     e.msg should include(clzz)
   }
 
   test("custom runner throws are re-thrown") {
-    val t = intercept[FlowException] {
+    val t = intercept[FlowExceptionType] {
       doFlowTest(buildFlow(runner = CustomRunnerEngine(classOf[IRun].getName), options = Map("throw" -> "true")))
     }
-    t.msg shouldBe "I AM THROWING"
+    t.msg should include( "I AM THROWING")
   }
 
   test("custom result approach serialisation works") {

@@ -8,8 +8,7 @@ import com.sparkutils.quality.impl.views.ViewLoadResults
 import org.apache.spark.sql.functions.expr
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import com.sparkutils.flow.impl.util.Utils._
-import com.sparkutils.flow.impl.util.FlowExceptionConstants.{CycleDetected, DefaultViewNamesMultipleParents,
-  DuplicateNames, EmptyFlow, EmptyStepName, FlowEarlyExitException, InvalidDQResultApproach, InvalidViewNames, MissingStep}
+import com.sparkutils.flow.impl.util.FlowExceptionConstants.{CycleDetected, DefaultViewNamesMultipleParents, DuplicateNames, EmptyFlow, EmptyStepName, FlowEarlyExitException, InvalidDQResultApproach, InvalidViewNames, MissingStep}
 import com.sparkutils.quality.impl.mapLookup.MapTypes.MapLookups
 import org.apache.spark.internal.Logging
 import scalax.collection.edges.{DiEdge, DiEdgeImplicits}
@@ -18,6 +17,7 @@ import scalax.collection.immutable.Graph
 import scala.collection.parallel.CollectionConverters.ImmutableIterableIsParallelizable
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future, Promise}
+import scala.util.{Failure, Success, Try}
 
 /**
  * Represents a number of steps for processing data.  By default, views configured by token will throw not implemented,
@@ -197,13 +197,13 @@ class FlowT[FG, RP: RuleSuiteParam: RuleSuiteTypeParam](val flowId: VersionedId,
     } catch {
       case f: FlowException =>
         errorLogStep(step, f.msg)
-        throw f
+        throw StepException(step, f)
       case t: Throwable =>
         // $COVERAGE-OFF$
         val info = s"An unexpected error occurred during processing the Step - ${t.getMessage}"
         errorLogStep(step, info)
         // $COVERAGE-ON$
-        throw FlowException(flowInfo(step, info), t)
+        throw StepException(step, FlowException(flowInfo(step, info), t))
     }
   }
 
@@ -309,11 +309,13 @@ class FlowT[FG, RP: RuleSuiteParam: RuleSuiteTypeParam](val flowId: VersionedId,
    * @param starting a function called for each Root Step (a Step having no dependencies), when a DataFrame is provided
    *                 it is registered as a temporary view with the name of the inputView.  When None is returned and the
    *                 inputView is not present an error is thrown, this is delegated to the FlowDataHandling.loadData function
+   * @param tolerant defaulting to false, an exception in an Step triggers an Exception from this function, a successful
+   *                 result will only have [[StepResult]]s.  Providing true will capture both successes and failures
    * @return a map of step name to tuples of end Steps with their resulting DataFrames and run statistics,
    *         note although the Step returned may have been replaced by modifyStep
    *         the name key will be the original [[Step.name]]
    */
-  def run(sparkSession: SparkSession, starting: Step[RP] => Option[DataFrame]): FlowResult[RP] = {
+  def run(sparkSession: SparkSession, starting: Step[RP] => Option[DataFrame], tolerant: Boolean = false): FlowResult[RP] = {
     val timed = Timer {
       verifySteps()
       logInfo(s"Starting Flow id: ${flowId.id}, version: ${flowId.version}")
@@ -337,14 +339,24 @@ class FlowT[FG, RP: RuleSuiteParam: RuleSuiteTypeParam](val flowId: VersionedId,
 
             p success r
           } catch {
-            case t: Throwable => p failure t
+            case t: Throwable => p failure StepException(root, t) // wrap this in an exception with the root
           }
       }
 
-      val all = Future.sequence((rootPromises ++ promises).map(_._2.future))
-      val r = Await.result(all, duration)
+      if (tolerant) {
+        val all = Future.sequence((rootPromises ++ promises).map(_._2.future.transform(Success(_))))
+        val r = Await.result(all, duration)
 
-      r.map(p => p.step.name -> p).toMap
+        r.map {
+          case Success(stepResult: StepResult[RP]) => stepResult.step.name -> stepResult
+          case Failure(stepException: StepException[RP]) => stepException.step.name -> stepException
+        }.toMap
+      } else {
+        val all = Future.sequence((rootPromises ++ promises).map(_._2.future))
+        val r = Await.result(all, duration)
+
+        r.map{stepResult => stepResult.step.name -> stepResult}.toMap
+      }
     }
     logInfo(s"Finished Flow id: ${flowId.id}, version: ${flowId.version} in ${timed._2.pretty}")
 
@@ -352,10 +364,28 @@ class FlowT[FG, RP: RuleSuiteParam: RuleSuiteTypeParam](val flowId: VersionedId,
   }
 
   /**
-   * Process using the registered views using registered views as the roots
+   * Process using the registered views using registered views as the roots, a failure in any Step
+   * throws.
    *
    * @param sparkSession
    * @param starting
+   * @param tolerant defaulting to false, an exception in an Step triggers an Exception from this function, a successful
+   *                 result will only have [[StepResult]]s.  Providing true will capture both successes and failures
+   * @return Tuples of end Steps with their resulting DataFrames and run statistics
+   */
+  def run(sparkSession: SparkSession, tolerant: Boolean): FlowResult[RP] =
+    run(sparkSession, {
+      _ => None
+    }, tolerant)
+
+  /**
+   * Process using the registered views using registered views as the roots, a failure in any Step
+   * throws.
+   *
+   * @param sparkSession
+   * @param starting
+   * @param tolerant defaulting to false, an exception in an Step triggers an Exception from this function, a successful
+   *                 result will only have [[StepResult]]s.  Providing true will capture both successes and failures
    * @return Tuples of end Steps with their resulting DataFrames and run statistics
    */
   def run(sparkSession: SparkSession): FlowResult[RP] =

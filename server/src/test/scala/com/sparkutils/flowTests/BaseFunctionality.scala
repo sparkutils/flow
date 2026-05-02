@@ -285,14 +285,14 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
 
     // from datasets using IdFromFlows but fallback to rsname as there is no group
     val flowData6 = fromDatasets(IdFromFlows)(sparkSession,
-      ogds.copy(flows = Seq.empty[FlowRow[CombinedRuleSuiteRows]].toDS), flow.flowId)
+      ogds.copy(flows = Seq.empty[FlowRow[CombinedRuleSuiteRows]].toDS()), flow.flowId)
     val flow6 = new FlowT(flow.flowId, flowData6.steps, flowData.flowRow.flowAuditColName,
       flowRuleGroup = flowData6.flowRow.flowRuleGroup)
     doFolderTest(flow6)
     // check fromFullRow default
     val full6 = toFullFlow(IdFromFlows)(sparkSession, flow6)
     val fromFull6 = fromFullFlow(IdFromFlows)(full6, flow.flowId)
-    val fe = intercept[FlowException] {
+    val fe = intercept[FlowExceptionType] {
       doFolderTest(new FlowT(flow.flowId, fromFull6.steps, flowData.flowRow.flowAuditColName,
         flowRuleGroup = fromFull6.flowRow.flowRuleGroup))
     }
@@ -480,9 +480,9 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
     // the test is simply does the map lookup work.
   }
 
-  test("configured flowEarlyExitSQL should appropriately run and fail") {
+  test("configured flowEarlyExitSQL should appropriately run and fail, with tolerance") {
 
-    def earlyExit(options: Map[String, String]) = {
+    def earlyExit(options: Map[String, String], tolerant: Boolean = false) = {
       val flow = new Flow(Id(1, 1), Seq(
         Step("a", Set.empty, Operation(rulesRaw(Seq(
           (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1041, 1),
@@ -516,7 +516,15 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
         Tuple2("c", 1)
       ).toDF("c", "d")
 
-      val ir = flow.run(s, _ => Some(data))
+      val ir = flow.run(s, _ => Some(data), tolerant = tolerant)
+
+      if (tolerant) {
+        ir.stepResults.exists{
+          case (_, _: StepResult[RuleSuite]) => true
+          case _ => false
+        } shouldBe false
+        throw ir.stepResults.head._2.asInstanceOf[StepException[RuleSuite]]
+      }
 
       val d = ir.stepResults("b").output.selectExpr("c", "d").as[(String, Option[Int])]
 
@@ -526,14 +534,14 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
 
     // no flow, same case as all the other tests but control for the ones below
 
-    def shouldExit(sql: String, stepName: String = "", msg: Option[String] = None): Unit = {
-      val thrown = intercept[FlowException] {
+    def shouldExit(sql: String, stepName: String = "", msg: Option[String] = None, tolerant: Boolean = false): Unit = {
+      val thrown = intercept[FlowExceptionType] {
         earlyExit(Map(flowEarlyExitSQL -> sql) ++ msg.fold(Map.empty[String,String])(
           m => Map( flowEarlyExitException -> m )
-        ))
+        ), tolerant = tolerant)
       }
       val expected = msg.getOrElse(FlowEarlyExitException(stepName))
-      thrown.msg shouldBe expected
+      thrown.msg should include( expected )
     }
 
     // false so should exit
@@ -542,6 +550,15 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
     shouldExit(s"iIzBad")
     // bad sql so should exit, with this message
     shouldExit(s"iIzBad", msg = Some("I WAS BAD"))
+
+    // tolerants won't throw
+
+    // false so should exit
+    shouldExit(s"select false $flowEarlyExitColumn from a", tolerant = true)
+    // bad sql so should exit
+    shouldExit(s"iIzBad", tolerant = true)
+    // bad sql so should exit, with this message
+    shouldExit(s"iIzBad", msg = Some("I WAS BAD"), tolerant = true)
 
   }
 

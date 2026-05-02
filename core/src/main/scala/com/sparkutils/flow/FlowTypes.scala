@@ -5,8 +5,26 @@ import org.apache.spark.sql.DataFrame
 
 import scala.concurrent.duration.Duration
 
+trait FlowExceptionType { selfType: Exception =>
+  def msg: String
+  def cause: Throwable
+}
+
 @SerialVersionUID(1L)
-case class FlowException(msg: String, cause: Throwable = null) extends Exception(msg, cause) with Serializable
+case class FlowException(msg: String, cause: Throwable = null) extends Exception(msg, cause) with Serializable with FlowExceptionType
+
+@SerialVersionUID(1L)
+case class StepException[RP](step: Step[RP], cause: Throwable = null) extends Exception(cause) with Serializable with
+  StepResultType[RP] with FlowExceptionType {
+
+  override def fold[R](success: StepResult[RP] => R)(failure: StepException[RP] => R): R = failure(this)
+
+  override def output: DataFrame = throw FlowException(s"Step ${step.name} did not complete successfully", cause)
+
+  override def timings: StepTimings = throw FlowException(s"Step ${step.name} did not complete successfully", cause)
+
+  def msg: String = cause.getMessage
+}
 
 /**
  * Represents an operation on a dataset
@@ -136,6 +154,13 @@ case class Step[T: RuleSuiteTypeParam](name: String, dependencies: Set[String], 
 @SerialVersionUID(1L)
 case class StepTimings(runner: Duration, result: Duration) extends Serializable
 
+sealed trait StepResultType[T] {
+  def fold[R](success: StepResult[T] => R)(failure: StepException[T] => R): R
+  def step: Step[T]
+  def output: DataFrame
+  def timings: StepTimings
+}
+
 /**
  * The result of a step
  * @param step this may be a modified Step if modifyStep was overridden
@@ -143,13 +168,19 @@ case class StepTimings(runner: Duration, result: Duration) extends Serializable
  * @param timings the time taken to prepare the output
  */
 @SerialVersionUID(1L)
-case class StepResult[T: RuleSuiteTypeParam](step: Step[T], output: DataFrame, timings: StepTimings) extends Serializable
+case class StepResult[RP: RuleSuiteTypeParam](step: Step[RP], output: DataFrame, timings: StepTimings) extends
+  Serializable with StepResultType[RP] {
+
+  override def fold[R](success: StepResult[RP] => R)(failure: StepException[RP] => R): R = success(this)
+
+}
 
 /**
- * The result of a successful Flow
+ * The result of a flow, failure [[StepException]]s will be kept when using [[Flow.run]] with the tolerant parameter set to true
  * @param stepResults the original Step name mapped to it's result
  * @param duration the time taken by the entire flow
  */
 @SerialVersionUID(1L)
-case class FlowResult[T: RuleSuiteTypeParam](stepResults: Map[String, StepResult[T]], duration: Duration) extends Serializable
+case class FlowResult[T: RuleSuiteTypeParam](stepResults: Map[String, StepResultType[T]],
+                                             duration: Duration) extends Serializable
 
