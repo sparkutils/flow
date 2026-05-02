@@ -35,114 +35,116 @@
 </span>11 <span style=''>object Utils {
 </span>12 <span style=''>
 </span>13 <span style=''>  def getDataType(keyName: String, config: Map[String, String]): Option[DataType] =
-</span>14 <span style=''>    </span><span style='background: #AEF1AE'>config.get(keyName).map(s =&gt; DataType.fromDDL(s))</span><span style=''>
-</span>15 <span style=''>
-</span>16 <span style=''>  def getX[T](keyName: String, config: Map[String, String], default: T)(f: String =&gt; T): T =
-</span>17 <span style=''>    </span><span style='background: #AEF1AE'>config.get(keyName).map(s =&gt; Try{f(s)}.getOrElse(default)).getOrElse(default)</span><span style=''>
-</span>18 <span style=''>
-</span>19 <span style=''>  implicit class MapOps(val config: Map[String, String]) {
-</span>20 <span style=''>    def boolean(keyName: String, default: Boolean = false): Boolean =
-</span>21 <span style=''>      </span><span style='background: #AEF1AE'>getX(keyName, config, default)(_.toBoolean)</span><span style=''>
-</span>22 <span style=''>
-</span>23 <span style=''>    def int(keyName: String, default: Int): Int =
-</span>24 <span style=''>      </span><span style='background: #AEF1AE'>getX(keyName, config, default)(</span><span style='background: #F0ADAD'>_.toInt</span><span style='background: #AEF1AE'>)</span><span style=''>
-</span>25 <span style=''>
-</span>26 <span style=''>    def duration(keyName: String, default: Duration): Duration =
-</span>27 <span style=''>      </span><span style='background: #AEF1AE'>getX(keyName, config, default)(</span><span style='background: #F0ADAD'>Duration(_)</span><span style='background: #AEF1AE'>)</span><span style=''>
-</span>28 <span style=''>
-</span>29 <span style=''>    def dataType(keyName: String): Option[DataType] = </span><span style='background: #AEF1AE'>getDataType(keyName, config)</span><span style=''>
+</span>14 <span style=''>    </span><span style='background: #AEF1AE'>config.get(keyName).map(s =&gt; Try(DataType.fromDDL(s)).getOrElse(
+</span>15 <span style=''></span><span style='background: #AEF1AE'>      throw FlowException(s&quot;Provided DDL `$s` is invalid&quot;)
+</span>16 <span style=''></span><span style='background: #AEF1AE'>    ))</span><span style=''>
+</span>17 <span style=''>
+</span>18 <span style=''>  def getX[T](keyName: String, config: Map[String, String], default: T)(f: String =&gt; T): T =
+</span>19 <span style=''>    </span><span style='background: #AEF1AE'>config.get(keyName).map(s =&gt; Try{f(s)}.getOrElse(default)).getOrElse(default)</span><span style=''>
+</span>20 <span style=''>
+</span>21 <span style=''>  implicit class MapOps(val config: Map[String, String]) {
+</span>22 <span style=''>    def boolean(keyName: String, default: Boolean = false): Boolean =
+</span>23 <span style=''>      </span><span style='background: #AEF1AE'>getX(keyName, config, default)(_.toBoolean)</span><span style=''>
+</span>24 <span style=''>
+</span>25 <span style=''>    def int(keyName: String, default: Int): Int =
+</span>26 <span style=''>      </span><span style='background: #AEF1AE'>getX(keyName, config, default)(</span><span style='background: #F0ADAD'>_.toInt</span><span style='background: #AEF1AE'>)</span><span style=''>
+</span>27 <span style=''>
+</span>28 <span style=''>    def duration(keyName: String, default: Duration): Duration =
+</span>29 <span style=''>      </span><span style='background: #AEF1AE'>getX(keyName, config, default)(</span><span style='background: #F0ADAD'>Duration(_)</span><span style='background: #AEF1AE'>)</span><span style=''>
 </span>30 <span style=''>
-</span>31 <span style=''>    def structType(keyName: String): Option[StructType] = </span><span style='background: #AEF1AE'>dataType(keyName).map{
-</span>32 <span style=''></span><span style='background: #AEF1AE'>      case structType1: StructType =&gt; </span><span style='background: #F0ADAD'>structType1</span><span style='background: #AEF1AE'>
-</span>33 <span style=''></span><span style='background: #AEF1AE'>      case d =&gt; </span><span style='background: #F0ADAD'>throw FlowException(s&quot;DataType $d is not a StructType&quot;)</span><span style='background: #AEF1AE'>
-</span>34 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
-</span>35 <span style=''>
-</span>36 <span style=''>    def expr(keyName: String): Option[Column] = </span><span style='background: #AEF1AE'>config.get(keyName).map(s =&gt; </span><span style='background: #F0ADAD'>functions.expr(s)</span><span style='background: #AEF1AE'>)</span><span style=''>
-</span>37 <span style=''>  }
-</span>38 <span style=''>
-</span>39 <span style=''>  /**
-</span>40 <span style=''>   * Captures execution time of the thunk f
-</span>41 <span style=''>   * @param f
-</span>42 <span style=''>   * @tparam T
-</span>43 <span style=''>   * @return
-</span>44 <span style=''>   */
-</span>45 <span style=''>  def timed[T](f: =&gt; T): (T, Duration) = {
-</span>46 <span style=''>    val start = </span><span style='background: #AEF1AE'>System.nanoTime()</span><span style=''>
-</span>47 <span style=''>    val ret = f
-</span>48 <span style=''>    val end = </span><span style='background: #AEF1AE'>System.nanoTime()</span><span style=''>
-</span>49 <span style=''>
-</span>50 <span style=''>    </span><span style='background: #AEF1AE'>(ret, Duration(end - start, NANOSECONDS))</span><span style=''>
-</span>51 <span style=''>  }
-</span>52 <span style=''>
-</span>53 <span style=''>  /**
-</span>54 <span style=''>   * Adds default folder logic
-</span>55 <span style=''>   * @param step
-</span>56 <span style=''>   * @param ruleSuite
-</span>57 <span style=''>   * @return
-</span>58 <span style=''>   */
-</span>59 <span style=''>  def defaultFolder(step: StepLike, ruleSuite: RuleSuite): RuleSuite =
-</span>60 <span style=''>    </span><span style='background: #AEF1AE'>defaultFolder(ruleSuite, step)(_.defaultProcessor == NoOpDefaultProcessor.noOp)(
-</span>61 <span style=''></span><span style='background: #AEF1AE'>      _.copy(defaultProcessor = DefaultProcessor(Id(-1,-1), OutputExpression(&quot;row -&gt; row&quot;))))</span><span style=''>
-</span>62 <span style=''>
-</span>63 <span style=''>  /**
-</span>64 <span style=''>   * Adds default folder logic
-</span>65 <span style=''>   *
-</span>66 <span style=''>   * @param step
-</span>67 <span style=''>   * @param ruleSuite
-</span>68 <span style=''>   * @return
-</span>69 <span style=''>   */
-</span>70 <span style=''>  def defaultFolder(step: StepLike, ruleSuite: CombinedRuleSuiteRows): CombinedRuleSuiteRows =
-</span>71 <span style=''>    </span><span style='background: #AEF1AE'>defaultFolder(ruleSuite, step)(r =&gt; r.defaultProcessor.isEmpty || r.defaultProcessor.forall {
-</span>72 <span style=''></span><span style='background: #AEF1AE'>        d =&gt; Id(d.functionId, d.functionVersion) == NoOpDefaultProcessor.noOp.id
-</span>73 <span style=''></span><span style='background: #AEF1AE'>      }){ r =&gt; r.copy( defaultProcessor =
-</span>74 <span style=''></span><span style='background: #AEF1AE'>        Some(OutputExpressionRow(&quot;row -&gt; row&quot;, -1, -1, r.ruleSuiteId, r.ruleSuiteVersion)))
-</span>75 <span style=''></span><span style='background: #AEF1AE'>      }</span><span style=''>
-</span>76 <span style=''>
-</span>77 <span style=''>  /**
-</span>78 <span style=''>   * Only adds default for RuleSuite, when loading from a serialised Flow the rule may already be defaulted
-</span>79 <span style=''>   *
-</span>80 <span style=''>   * @param step
-</span>81 <span style=''>   * @param t
-</span>82 <span style=''>   * @param ev
-</span>83 <span style=''>   * @tparam T
-</span>84 <span style=''>   * @return
-</span>85 <span style=''>   */
-</span>86 <span style=''>  def defaultFolderT[T](step: StepLike, t: T)(implicit ev: RuleSuiteTypeParam[T]): T =
-</span>87 <span style=''>    t match {
-</span>88 <span style=''>      case r: RuleSuite =&gt; </span><span style='background: #AEF1AE'>defaultFolder(step, r).asInstanceOf[T]</span><span style=''>
-</span>89 <span style=''>      case _ =&gt; </span><span style='background: #AEF1AE'>t</span><span style=''>
-</span>90 <span style=''>    }
-</span>91 <span style=''>
-</span>92 <span style=''>  /**
-</span>93 <span style=''>   * Creates a map function for combined rows
-</span>94 <span style=''>   * @param stepIds
-</span>95 <span style=''>   * @return
-</span>96 <span style=''>   */
-</span>97 <span style=''>  def defaultCombinedFolder(stepIds: Map[Id, StepRow]): (CombinedRuleSuiteRows =&gt; CombinedRuleSuiteRows) =  {
-</span>98 <span style=''>    row =&gt;
-</span>99 <span style=''>      </span><span style='background: #AEF1AE'>stepIds.get(Id(row.ruleSuiteId, row.ruleSuiteVersion)).map{ s =&gt;
-</span>100 <span style=''></span><span style='background: #AEF1AE'>        defaultFolder(s, row)
-</span>101 <span style=''></span><span style='background: #AEF1AE'>      }.getOrElse(row)</span><span style=''>
-</span>102 <span style=''>  }
-</span>103 <span style=''>
-</span>104 <span style=''>  /**
-</span>105 <span style=''>   * Adds default folder logic
-</span>106 <span style=''>   * @param step
-</span>107 <span style=''>   * @param ruleSuite
-</span>108 <span style=''>   * @return
-</span>109 <span style=''>   */
-</span>110 <span style=''>  def defaultFolder[T](t: T, step: StepLike)( isDefault: T =&gt; Boolean )( replace: T =&gt; T): T =
-</span>111 <span style=''>    (step.function, step.options.boolean(doNotAddFolderDefault, false)) match {
-</span>112 <span style=''>      case (Folder, false) =&gt;
-</span>113 <span style=''>        if (</span><span style='background: #AEF1AE'>isDefault(t)</span><span style=''>)
-</span>114 <span style=''>          </span><span style='background: #AEF1AE'>replace(t)</span><span style=''>
-</span>115 <span style=''>        else
-</span>116 <span style=''>          </span><span style='background: #AEF1AE'>t</span><span style=''>
-</span>117 <span style=''>      case _ =&gt;
-</span>118 <span style=''>        t
-</span>119 <span style=''>    }
-</span>120 <span style=''>
-</span>121 <span style=''>}
+</span>31 <span style=''>    def dataType(keyName: String): Option[DataType] = </span><span style='background: #AEF1AE'>getDataType(keyName, config)</span><span style=''>
+</span>32 <span style=''>
+</span>33 <span style=''>    def structType(keyName: String): Option[StructType] = </span><span style='background: #AEF1AE'>dataType(keyName).map{
+</span>34 <span style=''></span><span style='background: #AEF1AE'>      case structType1: StructType =&gt; structType1
+</span>35 <span style=''></span><span style='background: #AEF1AE'>      case d =&gt; throw FlowException(s&quot;DataType $d is not a StructType&quot;)
+</span>36 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>37 <span style=''>
+</span>38 <span style=''>    def expr(keyName: String): Option[Column] = </span><span style='background: #AEF1AE'>config.get(keyName).map(s =&gt; </span><span style='background: #F0ADAD'>functions.expr(s)</span><span style='background: #AEF1AE'>)</span><span style=''>
+</span>39 <span style=''>  }
+</span>40 <span style=''>
+</span>41 <span style=''>  /**
+</span>42 <span style=''>   * Captures execution time of the thunk f
+</span>43 <span style=''>   * @param f
+</span>44 <span style=''>   * @tparam T
+</span>45 <span style=''>   * @return
+</span>46 <span style=''>   */
+</span>47 <span style=''>  def timed[T](f: =&gt; T): (T, Duration) = {
+</span>48 <span style=''>    val start = </span><span style='background: #AEF1AE'>System.nanoTime()</span><span style=''>
+</span>49 <span style=''>    val ret = f
+</span>50 <span style=''>    val end = </span><span style='background: #AEF1AE'>System.nanoTime()</span><span style=''>
+</span>51 <span style=''>
+</span>52 <span style=''>    </span><span style='background: #AEF1AE'>(ret, Duration(end - start, NANOSECONDS))</span><span style=''>
+</span>53 <span style=''>  }
+</span>54 <span style=''>
+</span>55 <span style=''>  /**
+</span>56 <span style=''>   * Adds default folder logic
+</span>57 <span style=''>   * @param step
+</span>58 <span style=''>   * @param ruleSuite
+</span>59 <span style=''>   * @return
+</span>60 <span style=''>   */
+</span>61 <span style=''>  def defaultFolder(step: StepLike, ruleSuite: RuleSuite): RuleSuite =
+</span>62 <span style=''>    </span><span style='background: #AEF1AE'>defaultFolder(ruleSuite, step)(_.defaultProcessor == NoOpDefaultProcessor.noOp)(
+</span>63 <span style=''></span><span style='background: #AEF1AE'>      _.copy(defaultProcessor = DefaultProcessor(Id(-1,-1), OutputExpression(&quot;row -&gt; row&quot;))))</span><span style=''>
+</span>64 <span style=''>
+</span>65 <span style=''>  /**
+</span>66 <span style=''>   * Adds default folder logic
+</span>67 <span style=''>   *
+</span>68 <span style=''>   * @param step
+</span>69 <span style=''>   * @param ruleSuite
+</span>70 <span style=''>   * @return
+</span>71 <span style=''>   */
+</span>72 <span style=''>  def defaultFolder(step: StepLike, ruleSuite: CombinedRuleSuiteRows): CombinedRuleSuiteRows =
+</span>73 <span style=''>    </span><span style='background: #AEF1AE'>defaultFolder(ruleSuite, step)(r =&gt; r.defaultProcessor.isEmpty || r.defaultProcessor.forall {
+</span>74 <span style=''></span><span style='background: #AEF1AE'>        d =&gt; Id(d.functionId, d.functionVersion) == NoOpDefaultProcessor.noOp.id
+</span>75 <span style=''></span><span style='background: #AEF1AE'>      }){ r =&gt; r.copy( defaultProcessor =
+</span>76 <span style=''></span><span style='background: #AEF1AE'>        Some(OutputExpressionRow(&quot;row -&gt; row&quot;, -1, -1, r.ruleSuiteId, r.ruleSuiteVersion)))
+</span>77 <span style=''></span><span style='background: #AEF1AE'>      }</span><span style=''>
+</span>78 <span style=''>
+</span>79 <span style=''>  /**
+</span>80 <span style=''>   * Only adds default for RuleSuite, when loading from a serialised Flow the rule may already be defaulted
+</span>81 <span style=''>   *
+</span>82 <span style=''>   * @param step
+</span>83 <span style=''>   * @param t
+</span>84 <span style=''>   * @param ev
+</span>85 <span style=''>   * @tparam T
+</span>86 <span style=''>   * @return
+</span>87 <span style=''>   */
+</span>88 <span style=''>  def defaultFolderT[T](step: StepLike, t: T)(implicit ev: RuleSuiteTypeParam[T]): T =
+</span>89 <span style=''>    t match {
+</span>90 <span style=''>      case r: RuleSuite =&gt; </span><span style='background: #AEF1AE'>defaultFolder(step, r).asInstanceOf[T]</span><span style=''>
+</span>91 <span style=''>      case _ =&gt; </span><span style='background: #AEF1AE'>t</span><span style=''>
+</span>92 <span style=''>    }
+</span>93 <span style=''>
+</span>94 <span style=''>  /**
+</span>95 <span style=''>   * Creates a map function for combined rows
+</span>96 <span style=''>   * @param stepIds
+</span>97 <span style=''>   * @return
+</span>98 <span style=''>   */
+</span>99 <span style=''>  def defaultCombinedFolder(stepIds: Map[Id, StepRow]): (CombinedRuleSuiteRows =&gt; CombinedRuleSuiteRows) =  {
+</span>100 <span style=''>    row =&gt;
+</span>101 <span style=''>      </span><span style='background: #AEF1AE'>stepIds.get(Id(row.ruleSuiteId, row.ruleSuiteVersion)).map{ s =&gt;
+</span>102 <span style=''></span><span style='background: #AEF1AE'>        defaultFolder(s, row)
+</span>103 <span style=''></span><span style='background: #AEF1AE'>      }.getOrElse(row)</span><span style=''>
+</span>104 <span style=''>  }
+</span>105 <span style=''>
+</span>106 <span style=''>  /**
+</span>107 <span style=''>   * Adds default folder logic
+</span>108 <span style=''>   * @param step
+</span>109 <span style=''>   * @param ruleSuite
+</span>110 <span style=''>   * @return
+</span>111 <span style=''>   */
+</span>112 <span style=''>  def defaultFolder[T](t: T, step: StepLike)( isDefault: T =&gt; Boolean )( replace: T =&gt; T): T =
+</span>113 <span style=''>    (step.function, step.options.boolean(doNotAddFolderDefault, false)) match {
+</span>114 <span style=''>      case (Folder, false) =&gt;
+</span>115 <span style=''>        if (</span><span style='background: #AEF1AE'>isDefault(t)</span><span style=''>)
+</span>116 <span style=''>          </span><span style='background: #AEF1AE'>replace(t)</span><span style=''>
+</span>117 <span style=''>        else
+</span>118 <span style=''>          </span><span style='background: #AEF1AE'>t</span><span style=''>
+</span>119 <span style=''>      case _ =&gt;
+</span>120 <span style=''>        t
+</span>121 <span style=''>    }
+</span>122 <span style=''>
+</span>123 <span style=''>}
 </span></pre>
           </div>
           <div class="tab-pane" id="statementlist">
@@ -160,12 +162,12 @@
           14
         </td>
         <td>
-          806
+          796
         </td>
         <td>
-          619
+          623
           -
-          638
+          642
         </td>
         <td>
           Apply
@@ -184,12 +186,36 @@
           14
         </td>
         <td>
-          807
+          798
+        </td>
+        <td>
+          619
+          -
+          719
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.util.Try.getOrElse
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.util.Try.apply[org.apache.spark.sql.types.DataType](org.apache.spark.sql.types.DataType.fromDDL(s)).getOrElse[org.apache.spark.sql.types.DataType](throw com.sparkutils.flow.FlowException.apply(&quot;Provided DDL `&quot;.+(s).+(&quot;` is invalid&quot;), com.sparkutils.flow.FlowException.apply$default$2))
+        </td>
+      </tr><tr>
+        <td>
+          14
+        </td>
+        <td>
+          799
         </td>
         <td>
           590
           -
-          639
+          720
         </td>
         <td>
           Apply
@@ -201,19 +227,43 @@
           
         </td>
         <td style="background: #AEF1AE">
-          config.get(keyName).map[org.apache.spark.sql.types.DataType](((s: String) =&gt; org.apache.spark.sql.types.DataType.fromDDL(s)))
+          config.get(keyName).map[org.apache.spark.sql.types.DataType](((s: String) =&gt; scala.util.Try.apply[org.apache.spark.sql.types.DataType](org.apache.spark.sql.types.DataType.fromDDL(s)).getOrElse[org.apache.spark.sql.types.DataType](throw com.sparkutils.flow.FlowException.apply(&quot;Provided DDL `&quot;.+(s).+(&quot;` is invalid&quot;), com.sparkutils.flow.FlowException.apply$default$2))))
         </td>
       </tr><tr>
         <td>
-          17
+          15
         </td>
         <td>
-          808
+          797
         </td>
         <td>
-          738
+          661
           -
-          815
+          713
+        </td>
+        <td>
+          Throw
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          throw com.sparkutils.flow.FlowException.apply(&quot;Provided DDL `&quot;.+(s).+(&quot;` is invalid&quot;), com.sparkutils.flow.FlowException.apply$default$2)
+        </td>
+      </tr><tr>
+        <td>
+          19
+        </td>
+        <td>
+          800
+        </td>
+        <td>
+          819
+          -
+          896
         </td>
         <td>
           Apply
@@ -229,15 +279,15 @@
         </td>
       </tr><tr>
         <td>
-          21
+          23
         </td>
         <td>
-          809
+          801
         </td>
         <td>
-          966
+          1047
           -
-          972
+          1053
         </td>
         <td>
           Select
@@ -253,15 +303,15 @@
         </td>
       </tr><tr>
         <td>
-          21
+          23
         </td>
         <td>
-          810
+          802
         </td>
         <td>
-          983
+          1064
           -
-          994
+          1075
         </td>
         <td>
           Select
@@ -277,15 +327,15 @@
         </td>
       </tr><tr>
         <td>
-          21
+          23
         </td>
         <td>
-          811
+          803
         </td>
         <td>
-          952
+          1033
           -
-          995
+          1076
         </td>
         <td>
           Apply
@@ -301,15 +351,15 @@
         </td>
       </tr><tr>
         <td>
-          24
+          26
         </td>
         <td>
-          812
+          804
         </td>
         <td>
-          1067
+          1148
           -
-          1073
+          1154
         </td>
         <td>
           Select
@@ -325,15 +375,15 @@
         </td>
       </tr><tr>
         <td>
-          24
+          26
         </td>
         <td>
-          813
+          805
         </td>
         <td>
-          1084
+          1165
           -
-          1091
+          1172
         </td>
         <td>
           Select
@@ -349,15 +399,15 @@
         </td>
       </tr><tr>
         <td>
-          24
+          26
         </td>
         <td>
-          814
+          806
         </td>
         <td>
-          1053
+          1134
           -
-          1092
+          1173
         </td>
         <td>
           Apply
@@ -373,15 +423,15 @@
         </td>
       </tr><tr>
         <td>
-          27
+          29
         </td>
         <td>
-          815
+          807
         </td>
         <td>
-          1179
+          1260
           -
-          1185
+          1266
         </td>
         <td>
           Select
@@ -397,15 +447,15 @@
         </td>
       </tr><tr>
         <td>
-          27
+          29
         </td>
         <td>
-          816
+          808
         </td>
         <td>
-          1196
+          1277
           -
-          1207
+          1288
         </td>
         <td>
           Apply
@@ -421,15 +471,15 @@
         </td>
       </tr><tr>
         <td>
-          27
+          29
         </td>
         <td>
-          817
+          809
         </td>
         <td>
-          1165
+          1246
           -
-          1208
+          1289
         </td>
         <td>
           Apply
@@ -445,15 +495,15 @@
         </td>
       </tr><tr>
         <td>
-          29
+          31
         </td>
         <td>
-          818
+          810
         </td>
         <td>
-          1285
+          1366
           -
-          1291
+          1372
         </td>
         <td>
           Select
@@ -469,15 +519,15 @@
         </td>
       </tr><tr>
         <td>
-          29
+          31
         </td>
         <td>
-          819
+          811
         </td>
         <td>
-          1264
+          1345
           -
-          1292
+          1373
         </td>
         <td>
           Apply
@@ -493,15 +543,15 @@
         </td>
       </tr><tr>
         <td>
-          31
+          33
         </td>
         <td>
-          823
+          815
         </td>
         <td>
-          1352
+          1433
           -
-          1502
+          1583
         </td>
         <td>
           Apply
@@ -520,15 +570,15 @@
         </td>
       </tr><tr>
         <td>
-          32
+          34
         </td>
         <td>
-          820
+          812
         </td>
         <td>
-          1413
+          1494
           -
-          1424
+          1505
         </td>
         <td>
           Ident
@@ -539,20 +589,20 @@
         <td>
           
         </td>
-        <td style="background: #F0ADAD">
+        <td style="background: #AEF1AE">
           structType1
         </td>
       </tr><tr>
         <td>
-          33
+          35
         </td>
         <td>
-          821
+          813
         </td>
         <td>
-          1441
+          1522
           -
-          1496
+          1577
         </td>
         <td>
           Throw
@@ -563,20 +613,20 @@
         <td>
           
         </td>
-        <td style="background: #F0ADAD">
+        <td style="background: #AEF1AE">
           throw com.sparkutils.flow.FlowException.apply(&quot;DataType &quot;.+(d).+(&quot; is not a StructType&quot;), com.sparkutils.flow.FlowException.apply$default$2)
         </td>
       </tr><tr>
         <td>
-          33
+          35
         </td>
         <td>
-          822
+          814
         </td>
         <td>
-          1441
+          1522
           -
-          1496
+          1577
         </td>
         <td>
           Block
@@ -587,20 +637,20 @@
         <td>
           
         </td>
-        <td style="background: #F0ADAD">
+        <td style="background: #AEF1AE">
           throw com.sparkutils.flow.FlowException.apply(&quot;DataType &quot;.+(d).+(&quot; is not a StructType&quot;), com.sparkutils.flow.FlowException.apply$default$2)
         </td>
       </tr><tr>
         <td>
-          36
+          38
         </td>
         <td>
-          824
+          816
         </td>
         <td>
-          1581
+          1662
           -
-          1598
+          1679
         </td>
         <td>
           Apply
@@ -616,15 +666,15 @@
         </td>
       </tr><tr>
         <td>
-          36
+          38
         </td>
         <td>
-          825
+          817
         </td>
         <td>
-          1552
+          1633
           -
-          1599
+          1680
         </td>
         <td>
           Apply
@@ -640,39 +690,15 @@
         </td>
       </tr><tr>
         <td>
-          46
-        </td>
-        <td>
-          826
-        </td>
-        <td>
-          1762
-          -
-          1779
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          java.lang.System.nanoTime
-        </td>
-        <td>
-          
-        </td>
-        <td style="background: #AEF1AE">
-          java.lang.System.nanoTime()
-        </td>
-      </tr><tr>
-        <td>
           48
         </td>
         <td>
-          827
+          818
         </td>
         <td>
-          1810
+          1843
           -
-          1827
+          1860
         </td>
         <td>
           Apply
@@ -691,12 +717,36 @@
           50
         </td>
         <td>
-          828
+          819
         </td>
         <td>
-          1848
+          1891
           -
-          1859
+          1908
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.System.nanoTime
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          java.lang.System.nanoTime()
+        </td>
+      </tr><tr>
+        <td>
+          52
+        </td>
+        <td>
+          820
+        </td>
+        <td>
+          1929
+          -
+          1940
         </td>
         <td>
           Apply
@@ -712,15 +762,15 @@
         </td>
       </tr><tr>
         <td>
-          50
+          52
         </td>
         <td>
-          829
+          821
         </td>
         <td>
-          1861
+          1942
           -
-          1872
+          1953
         </td>
         <td>
           Literal
@@ -736,15 +786,15 @@
         </td>
       </tr><tr>
         <td>
-          50
+          52
         </td>
         <td>
-          830
+          822
         </td>
         <td>
-          1839
+          1920
           -
-          1873
+          1954
         </td>
         <td>
           Apply
@@ -760,15 +810,15 @@
         </td>
       </tr><tr>
         <td>
-          50
+          52
         </td>
         <td>
-          831
+          823
         </td>
         <td>
-          1833
+          1914
           -
-          1874
+          1955
         </td>
         <td>
           Apply
@@ -784,15 +834,15 @@
         </td>
       </tr><tr>
         <td>
-          60
+          62
         </td>
         <td>
-          832
+          824
         </td>
         <td>
-          2103
+          2184
           -
-          2128
+          2209
         </td>
         <td>
           Select
@@ -808,15 +858,15 @@
         </td>
       </tr><tr>
         <td>
-          60
+          62
         </td>
         <td>
-          833
+          825
         </td>
         <td>
-          2081
+          2162
           -
-          2128
+          2209
         </td>
         <td>
           Apply
@@ -832,15 +882,15 @@
         </td>
       </tr><tr>
         <td>
-          60
+          62
         </td>
         <td>
-          838
+          830
         </td>
         <td>
-          2050
+          2131
           -
-          2224
+          2305
         </td>
         <td>
           Apply
@@ -863,15 +913,15 @@
         </td>
       </tr><tr>
         <td>
-          61
+          63
         </td>
         <td>
-          834
+          826
         </td>
         <td>
-          2180
+          2261
           -
-          2189
+          2270
         </td>
         <td>
           Apply
@@ -887,15 +937,15 @@
         </td>
       </tr><tr>
         <td>
-          61
+          63
         </td>
         <td>
-          835
+          827
         </td>
         <td>
-          2191
+          2272
           -
-          2221
+          2302
         </td>
         <td>
           Apply
@@ -911,15 +961,15 @@
         </td>
       </tr><tr>
         <td>
-          61
+          63
         </td>
         <td>
-          836
+          828
         </td>
         <td>
-          2163
+          2244
           -
-          2222
+          2303
         </td>
         <td>
           Apply
@@ -935,15 +985,15 @@
         </td>
       </tr><tr>
         <td>
-          61
+          63
         </td>
         <td>
-          837
+          829
         </td>
         <td>
-          2137
+          2218
           -
-          2223
+          2304
         </td>
         <td>
           Apply
@@ -959,15 +1009,15 @@
         </td>
       </tr><tr>
         <td>
-          71
+          73
         </td>
         <td>
-          843
+          835
         </td>
         <td>
-          2491
+          2572
           -
-          2607
+          2688
         </td>
         <td>
           Apply
@@ -983,15 +1033,15 @@
         </td>
       </tr><tr>
         <td>
-          71
+          73
         </td>
         <td>
-          844
+          836
         </td>
         <td>
-          2461
+          2542
           -
-          2607
+          2688
         </td>
         <td>
           Apply
@@ -1007,15 +1057,15 @@
         </td>
       </tr><tr>
         <td>
-          72
+          74
         </td>
         <td>
-          839
+          831
         </td>
         <td>
-          2535
+          2616
           -
-          2547
+          2628
         </td>
         <td>
           Select
@@ -1031,15 +1081,15 @@
         </td>
       </tr><tr>
         <td>
-          72
+          74
         </td>
         <td>
-          840
+          832
         </td>
         <td>
-          2549
+          2630
           -
-          2566
+          2647
         </td>
         <td>
           Select
@@ -1055,15 +1105,15 @@
         </td>
       </tr><tr>
         <td>
-          72
+          74
         </td>
         <td>
-          841
+          833
         </td>
         <td>
-          2571
+          2652
           -
-          2599
+          2680
         </td>
         <td>
           Select
@@ -1079,15 +1129,15 @@
         </td>
       </tr><tr>
         <td>
-          72
+          74
         </td>
         <td>
-          842
+          834
         </td>
         <td>
-          2532
+          2613
           -
-          2599
+          2680
         </td>
         <td>
           Apply
@@ -1103,15 +1153,15 @@
         </td>
       </tr><tr>
         <td>
-          73
+          75
         </td>
         <td>
-          852
+          844
         </td>
         <td>
-          2615
+          2696
           -
-          2733
+          2814
         </td>
         <td>
           Apply
@@ -1127,15 +1177,15 @@
         </td>
       </tr><tr>
         <td>
-          73
+          75
         </td>
         <td>
-          853
+          845
         </td>
         <td>
-          2425
+          2506
           -
-          2741
+          2822
         </td>
         <td>
           Apply
@@ -1159,15 +1209,15 @@
         </td>
       </tr><tr>
         <td>
-          74
+          76
         </td>
         <td>
-          845
+          837
         </td>
         <td>
-          2675
+          2756
           -
-          2687
+          2768
         </td>
         <td>
           Literal
@@ -1183,15 +1233,15 @@
         </td>
       </tr><tr>
         <td>
-          74
+          76
         </td>
         <td>
-          846
+          838
         </td>
         <td>
-          2689
+          2770
           -
-          2691
+          2772
         </td>
         <td>
           Literal
@@ -1207,15 +1257,15 @@
         </td>
       </tr><tr>
         <td>
-          74
+          76
         </td>
         <td>
-          847
+          839
         </td>
         <td>
-          2693
+          2774
           -
-          2695
+          2776
         </td>
         <td>
           Literal
@@ -1231,15 +1281,15 @@
         </td>
       </tr><tr>
         <td>
-          74
+          76
         </td>
         <td>
-          848
+          840
         </td>
         <td>
-          2697
+          2778
           -
-          2710
+          2791
         </td>
         <td>
           Select
@@ -1255,15 +1305,15 @@
         </td>
       </tr><tr>
         <td>
-          74
+          76
         </td>
         <td>
-          849
+          841
         </td>
         <td>
-          2712
+          2793
           -
-          2730
+          2811
         </td>
         <td>
           Select
@@ -1279,15 +1329,15 @@
         </td>
       </tr><tr>
         <td>
-          74
+          76
         </td>
         <td>
-          850
+          842
         </td>
         <td>
-          2655
+          2736
           -
-          2731
+          2812
         </td>
         <td>
           Apply
@@ -1303,15 +1353,15 @@
         </td>
       </tr><tr>
         <td>
-          74
+          76
         </td>
         <td>
-          851
+          843
         </td>
         <td>
-          2650
+          2731
           -
-          2732
+          2813
         </td>
         <td>
           Apply
@@ -1327,15 +1377,15 @@
         </td>
       </tr><tr>
         <td>
-          88
+          90
         </td>
         <td>
-          854
+          846
         </td>
         <td>
-          3070
+          3151
           -
-          3108
+          3189
         </td>
         <td>
           TypeApply
@@ -1351,15 +1401,15 @@
         </td>
       </tr><tr>
         <td>
-          88
+          90
         </td>
         <td>
-          855
+          847
         </td>
         <td>
-          3070
+          3151
           -
-          3108
+          3189
         </td>
         <td>
           Block
@@ -1375,15 +1425,15 @@
         </td>
       </tr><tr>
         <td>
-          89
+          91
         </td>
         <td>
-          856
+          848
         </td>
         <td>
-          3125
+          3206
           -
-          3126
+          3207
         </td>
         <td>
           Ident
@@ -1399,15 +1449,15 @@
         </td>
       </tr><tr>
         <td>
-          101
+          103
         </td>
         <td>
-          857
+          849
         </td>
         <td>
-          3352
+          3433
           -
-          3469
+          3550
         </td>
         <td>
           Apply
@@ -1423,15 +1473,15 @@
         </td>
       </tr><tr>
         <td>
-          113
+          115
         </td>
         <td>
-          858
+          850
         </td>
         <td>
-          3787
+          3868
           -
-          3799
+          3880
         </td>
         <td>
           Apply
@@ -1447,15 +1497,15 @@
         </td>
       </tr><tr>
         <td>
-          114
+          116
         </td>
         <td>
-          859
+          851
         </td>
         <td>
-          3811
+          3892
           -
-          3821
+          3902
         </td>
         <td>
           Apply
@@ -1471,15 +1521,15 @@
         </td>
       </tr><tr>
         <td>
-          114
+          116
         </td>
         <td>
-          860
+          852
         </td>
         <td>
-          3811
+          3892
           -
-          3821
+          3902
         </td>
         <td>
           Block
@@ -1495,15 +1545,15 @@
         </td>
       </tr><tr>
         <td>
-          116
+          118
         </td>
         <td>
-          861
+          853
         </td>
         <td>
-          3845
+          3926
           -
-          3846
+          3927
         </td>
         <td>
           Ident

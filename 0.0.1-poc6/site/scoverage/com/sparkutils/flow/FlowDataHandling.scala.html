@@ -75,50 +75,52 @@
 </span>51 <span style=''></span><span style='background: #AEF1AE'>      }
 </span>52 <span style=''></span><span style='background: #AEF1AE'>      val allowed = step.options.duration(inputSchemaTimeTakenWarning, inputSchemaTimeTakenDefault)
 </span>53 <span style=''></span><span style='background: #AEF1AE'>      if (allowed.lt(t)) {
-</span>54 <span style=''></span><span style='background: #AEF1AE'>        </span><span style='background: #F0ADAD'>warnLogStep(step,s&quot;, input.schema took $t, which is ${t - allowed} longer than the configured $allowed .&quot;)</span><span style='background: #AEF1AE'>
-</span>55 <span style=''></span><span style='background: #AEF1AE'>      }
-</span>56 <span style=''></span><span style='background: #AEF1AE'>      s
-</span>57 <span style=''></span><span style='background: #AEF1AE'>    } { prop =&gt;
-</span>58 <span style=''></span><span style='background: #AEF1AE'>      </span><span style='background: #F0ADAD'>DataType.fromDDL(prop).asInstanceOf[StructType]</span><span style='background: #AEF1AE'>
-</span>59 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
-</span>60 <span style=''>
-</span>61 <span style=''>  /**
-</span>62 <span style=''>   * For a root step derive the token to use when loading data
-</span>63 <span style=''>   * @param step only called for root tokens
-</span>64 <span style=''>   * @return when an inputView is provided it's used, otherwise {{step.name + rootInputSuffix}}
-</span>65 <span style=''>   */
-</span>66 <span style=''>  protected def rootToken(step: Step[RP]): String = </span><span style='background: #AEF1AE'>step.data.inputView.getOrElse(step.name + rootInputSuffix)</span><span style=''>
-</span>67 <span style=''>
-</span>68 <span style=''>  /**
-</span>69 <span style=''>   * By default, logs and returns input a dataframe using loadData with the token Step.inputViewName
-</span>70 <span style=''>   *
-</span>71 <span style=''>   * @param input either an empty dataset or the previous steps dataframe
-</span>72 <span style=''>   * @param step the current Step
-</span>73 <span style=''>   * @param previousSteps previous Steps, can be empty if this is a root step
-</span>74 <span style=''>   * @return the actual dataset used as input to the set
-</span>75 <span style=''>   */
-</span>76 <span style=''>  protected def startStep(input: DataFrame, step: Step[RP], previousSteps: Set[StepResult[RP]]): DataFrame
-</span>77 <span style=''>
-</span>78 <span style=''>  /**
-</span>79 <span style=''>   * The default implementation optionally caches (cacheStepResults) and uses the outputViewName to register a temp view
-</span>80 <span style=''>   * @param step the current Step
-</span>81 <span style=''>   * @param previousSteps previous Steps, can be empty if this is a root step
-</span>82 <span style=''>   * @return a, by default, optionally cached dataFrame
-</span>83 <span style=''>   */
-</span>84 <span style=''>  protected def stepCompleted(result: DataFrame, step: Step[RP], previousSteps: Set[StepResult[RP]]): DataFrame
-</span>85 <span style=''>
-</span>86 <span style=''>  /**
-</span>87 <span style=''>   * Called after stepCompleted, by default [[Constants.flowEarlyExitSQL]] logic is run, any [[Step.defaultOutputViewName]]
-</span>88 <span style=''>   * are run and available for use within the [[Step.options]] SQL configuration.
-</span>89 <span style=''>   *
-</span>90 <span style=''>   * It's results are not used by the Flow
+</span>54 <span style=''></span><span style='background: #AEF1AE'>        // $COVERAGE-OFF$
+</span>55 <span style=''></span><span style='background: #AEF1AE'>        warnLogStep(step,s&quot;, input.schema took $t, which is ${t - allowed} longer than the configured $allowed .&quot;)
+</span>56 <span style=''></span><span style='background: #AEF1AE'>        // $COVERAGE-ON$
+</span>57 <span style=''></span><span style='background: #AEF1AE'>      }
+</span>58 <span style=''></span><span style='background: #AEF1AE'>      s
+</span>59 <span style=''></span><span style='background: #AEF1AE'>    } { prop =&gt;
+</span>60 <span style=''></span><span style='background: #AEF1AE'>      DataType.fromDDL(prop).asInstanceOf[StructType]
+</span>61 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>62 <span style=''>
+</span>63 <span style=''>  /**
+</span>64 <span style=''>   * For a root step derive the token to use when loading data
+</span>65 <span style=''>   * @param step only called for root tokens
+</span>66 <span style=''>   * @return when an inputView is provided it's used, otherwise {{step.name + rootInputSuffix}}
+</span>67 <span style=''>   */
+</span>68 <span style=''>  protected def rootToken(step: Step[RP]): String = </span><span style='background: #AEF1AE'>step.data.inputView.getOrElse(step.name + rootInputSuffix)</span><span style=''>
+</span>69 <span style=''>
+</span>70 <span style=''>  /**
+</span>71 <span style=''>   * By default, logs and returns input a dataframe using loadData with the token Step.inputViewName
+</span>72 <span style=''>   *
+</span>73 <span style=''>   * @param input either an empty dataset or the previous steps dataframe
+</span>74 <span style=''>   * @param step the current Step
+</span>75 <span style=''>   * @param previousSteps previous Steps, can be empty if this is a root step
+</span>76 <span style=''>   * @return the actual dataset used as input to the set
+</span>77 <span style=''>   */
+</span>78 <span style=''>  protected def startStep(input: DataFrame, step: Step[RP], previousSteps: Set[StepResult[RP]]): DataFrame
+</span>79 <span style=''>
+</span>80 <span style=''>  /**
+</span>81 <span style=''>   * The default implementation optionally caches (cacheStepResults) and uses the outputViewName to register a temp view
+</span>82 <span style=''>   * @param step the current Step
+</span>83 <span style=''>   * @param previousSteps previous Steps, can be empty if this is a root step
+</span>84 <span style=''>   * @return a, by default, optionally cached dataFrame
+</span>85 <span style=''>   */
+</span>86 <span style=''>  protected def stepCompleted(result: DataFrame, step: Step[RP], previousSteps: Set[StepResult[RP]]): DataFrame
+</span>87 <span style=''>
+</span>88 <span style=''>  /**
+</span>89 <span style=''>   * Called after stepCompleted, by default [[Constants.flowEarlyExitSQL]] logic is run, any [[Step.defaultOutputViewName]]
+</span>90 <span style=''>   * are run and available for use within the [[Step.options]] SQL configuration.
 </span>91 <span style=''>   *
-</span>92 <span style=''>   * @param result
-</span>93 <span style=''>   * @param step
-</span>94 <span style=''>   * @param previousSteps
-</span>95 <span style=''>   */
-</span>96 <span style=''>  protected def earlyExitCheck(result: DataFrame, step: Step[RP], previousSteps: Set[StepResult[RP]]): Unit
-</span>97 <span style=''>}
+</span>92 <span style=''>   * It's results are not used by the Flow
+</span>93 <span style=''>   *
+</span>94 <span style=''>   * @param result
+</span>95 <span style=''>   * @param step
+</span>96 <span style=''>   * @param previousSteps
+</span>97 <span style=''>   */
+</span>98 <span style=''>  protected def earlyExitCheck(result: DataFrame, step: Step[RP], previousSteps: Set[StepResult[RP]]): Unit
+</span>99 <span style=''>}
 </span></pre>
           </div>
           <div class="tab-pane" id="statementlist">
@@ -136,7 +138,7 @@
           34
         </td>
         <td>
-          343
+          338
         </td>
         <td>
           1087
@@ -160,7 +162,7 @@
           34
         </td>
         <td>
-          345
+          340
         </td>
         <td>
           1083
@@ -184,7 +186,7 @@
           35
         </td>
         <td>
-          344
+          339
         </td>
         <td>
           1152
@@ -208,7 +210,7 @@
           48
         </td>
         <td>
-          346
+          341
         </td>
         <td>
           1529
@@ -232,7 +234,7 @@
           49
         </td>
         <td>
-          348
+          343
         </td>
         <td>
           1573
@@ -256,7 +258,7 @@
           49
         </td>
         <td>
-          349
+          344
         </td>
         <td>
           1564
@@ -280,7 +282,7 @@
           49
         </td>
         <td>
-          350
+          345
         </td>
         <td>
           1564
@@ -304,7 +306,7 @@
           49
         </td>
         <td>
-          351
+          346
         </td>
         <td>
           1565
@@ -328,7 +330,7 @@
           49
         </td>
         <td>
-          352
+          347
         </td>
         <td>
           1568
@@ -352,7 +354,7 @@
           50
         </td>
         <td>
-          347
+          342
         </td>
         <td>
           1595
@@ -376,7 +378,7 @@
           52
         </td>
         <td>
-          353
+          348
         </td>
         <td>
           1636
@@ -400,7 +402,7 @@
           52
         </td>
         <td>
-          354
+          349
         </td>
         <td>
           1658
@@ -424,7 +426,7 @@
           52
         </td>
         <td>
-          355
+          350
         </td>
         <td>
           1687
@@ -448,7 +450,7 @@
           52
         </td>
         <td>
-          356
+          351
         </td>
         <td>
           1636
@@ -472,7 +474,7 @@
           53
         </td>
         <td>
-          357
+          352
         </td>
         <td>
           1726
@@ -496,7 +498,7 @@
           53
         </td>
         <td>
-          360
+          353
         </td>
         <td>
           1722
@@ -520,7 +522,7 @@
           53
         </td>
         <td>
-          361
+          354
         </td>
         <td>
           1722
@@ -541,63 +543,15 @@
         </td>
       </tr><tr>
         <td>
-          54
+          59
         </td>
         <td>
-          358
-        </td>
-        <td>
-          1751
-          -
-          1857
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          com.sparkutils.flow.FlowT.warnLogStep
-        </td>
-        <td>
-          
-        </td>
-        <td style="background: #F0ADAD">
-          FlowDataHandling.this.warnLogStep(step, &quot;, input.schema took &quot;.+(t).+(&quot;, which is &quot;).+(t.-(allowed)).+(&quot; longer than the configured &quot;).+(allowed).+(&quot; .&quot;))
-        </td>
-      </tr><tr>
-        <td>
-          54
-        </td>
-        <td>
-          359
-        </td>
-        <td>
-          1751
-          -
-          1857
-        </td>
-        <td>
-          Block
-        </td>
-        <td>
-          com.sparkutils.flow.FlowT.warnLogStep
-        </td>
-        <td>
-          
-        </td>
-        <td style="background: #F0ADAD">
-          FlowDataHandling.this.warnLogStep(step, &quot;, input.schema took &quot;.+(t).+(&quot;, which is &quot;).+(t.-(allowed)).+(&quot; longer than the configured &quot;).+(allowed).+(&quot; .&quot;))
-        </td>
-      </tr><tr>
-        <td>
-          57
-        </td>
-        <td>
-          363
+          356
         </td>
         <td>
           1512
           -
-          1949
+          2000
         </td>
         <td>
           Apply
@@ -625,15 +579,15 @@
         </td>
       </tr><tr>
         <td>
-          58
+          60
         </td>
         <td>
-          362
+          355
         </td>
         <td>
-          1896
+          1947
           -
-          1943
+          1994
         </td>
         <td>
           TypeApply
@@ -644,20 +598,20 @@
         <td>
           
         </td>
-        <td style="background: #F0ADAD">
+        <td style="background: #AEF1AE">
           org.apache.spark.sql.types.DataType.fromDDL(prop).asInstanceOf[org.apache.spark.sql.types.StructType]
         </td>
       </tr><tr>
         <td>
-          66
+          68
         </td>
         <td>
-          364
+          357
         </td>
         <td>
-          2261
+          2312
           -
-          2276
+          2327
         </td>
         <td>
           Select
@@ -673,15 +627,15 @@
         </td>
       </tr><tr>
         <td>
-          66
+          68
         </td>
         <td>
-          365
+          358
         </td>
         <td>
-          2249
+          2300
           -
-          2276
+          2327
         </td>
         <td>
           Apply
@@ -697,15 +651,15 @@
         </td>
       </tr><tr>
         <td>
-          66
+          68
         </td>
         <td>
-          366
+          359
         </td>
         <td>
-          2219
+          2270
           -
-          2277
+          2328
         </td>
         <td>
           Apply
