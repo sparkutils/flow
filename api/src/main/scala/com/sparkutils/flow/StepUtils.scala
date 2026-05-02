@@ -39,6 +39,34 @@ object StepUtils {
           scol(s"$fieldName.result.$n").as(n)
         } :_*)
 
+  /**
+   * Ueed by MergeFields and OutputFieldsOnly to add the runner, group_audit, and extra columns and the children of
+   * the runner.  This requires at least a single .schema action, but still only processes the remaining data in a single
+   * projection.
+   *
+   * In the MergeFields case extra is the original fields - the children of the runner and requires an additional .schema call.
+   *
+   *
+   * @param fieldName
+   * @param runner
+   * @param group_audit
+   * @param input
+   * @param extra
+   * @return
+   */
+  def withoutOutputFields(fieldName: String, runner: Column, group_audit: Column, input: DataFrame,
+                          extra: Set[String] => Set[String] = _ => Set.empty): DataFrame = {
+
+    val starter = input.select(runner)
+    val childrenNames = starter.schema.fields.head.dataType.asInstanceOf[StructType].
+      fields.find(_.name == "result").map(f => f.dataType.asInstanceOf[StructType].
+        fields.map(f => f.name).toSet).getOrElse(Set.empty[String])
+    val children = childrenNames.map(name => expr(s"$fieldName.result.${name}").as(name))
+
+    input.select(Seq(runner, group_audit) ++ extra(childrenNames).map(scol).toSeq ++ children: _*)
+
+  }
+
   protected[flow] def resultProcessInputs[RP: RuleSuiteParam](step: Step[RP], runner: Column, childrenRaw: Seq[String],
                                                               outputFieldsI: Option[Set[String]], ei: RunnerInputs,
                                                               flow: FlowT[_,_], starterColumnsForLCA: Boolean = false): ResultProcessInputs = {
@@ -188,33 +216,30 @@ object StepUtils {
 
       case MergeFields =>
 
-        val starter = dataFrame.select(Seq(expr("*")) ++ starterColumns: _*)
         outputFields.fold {
 
-          val og = starter.columns.toSet
-          val nested = starter.selectExpr(s"$fieldName.result.*").columns
-          starter.select((og -- nested).map(scol).toSeq ++ Seq(expr(s"$fieldName.result.*"), group_auditF): _*)
+          withoutOutputFields(fieldName, runner, group_auditF, dataFrame, extra = childrenNames => {
+            val og = dataFrame.columns.toSet
+            og -- childrenNames // only remove the result fields
+          })
 
         } { outputFields =>
 
           val fields = struct.map(_.name).toSet -- outputFields - flowAuditColName
-          withOutputFields(fieldName, runner, group_auditF, starter, outputFields, extraFields = fields.map(scol))
+          withOutputFields(fieldName, runner, group_auditF, dataFrame, outputFields, extraFields = fields.map(scol),
+            useRunnerColumn = true)
 
         }
 
       case OutputFieldsOnly =>
 
-        val starter = dataFrame.select(Seq(expr("*")) ++ starterColumns: _*)
-
         outputFields.fold {
 
-          val og = dataFrame.columns.toSet
-          val startCols = starter.columns.toSet
-          starter.select((og -- startCols).map(scol).toSeq ++
-            Seq(scol(fieldName), group_auditF, expr(s"$fieldName.result.*")): _*)
+          withoutOutputFields(fieldName, runner, group_auditF, dataFrame)
 
         } { o =>
-          withOutputFields(fieldName, runner, group_auditF, starter, outputFields = o)
+          withOutputFields(fieldName, runner, group_auditF, dataFrame, outputFields = o,
+            useRunnerColumn = true)
         }
 
       case StarOnly => dataFrame.select(Seq(runner) ++ children: _*)
