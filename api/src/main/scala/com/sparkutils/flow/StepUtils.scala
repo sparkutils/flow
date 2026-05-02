@@ -46,12 +46,6 @@ object StepUtils {
    *
    * In the MergeFields case extra is the original fields - the children of the runner and requires an additional .schema call.
    *
-   *
-   * @param fieldName
-   * @param runner
-   * @param group_audit
-   * @param input
-   * @param extra
    * @return
    */
   def withoutOutputFields(fieldName: String, runner: Column, group_audit: Column, input: DataFrame,
@@ -69,7 +63,7 @@ object StepUtils {
 
   protected[flow] def resultProcessInputs[RP: RuleSuiteParam](step: Step[RP], runner: Column, childrenRaw: Seq[String],
                                                               outputFieldsI: Option[Set[String]], ei: RunnerInputs,
-                                                              flow: FlowT[_,_], starterColumnsForLCA: Boolean = false): ResultProcessInputs = {
+                                                              flow: FlowT[_,_]): ResultProcessInputs = {
     import flow._
 
     val outputFields: Option[Set[String]] =
@@ -84,11 +78,7 @@ object StepUtils {
       // if flowAuditColName is present and the correct type, select all the others, assuming via having a parent step
       // isn't enough if StarOnly or OutputFieldOnly is provided
       //
-      (
-        if (starterColumnsForLCA)
-          Seq(runner)
-        else
-          Seq(expr("*"), runner),
+      (Seq(runner),
         ei.hasAudit(flowAuditColName)(
           Seq(scol(flowAuditColName))
         )(
@@ -128,70 +118,6 @@ object StepUtils {
    * For cases which require a pre-resolved field such as LCA and row_number another projection is required.  It
    * is always a correct result
    */
-  protected[flow] def processProjectionResult[RP: RuleSuiteParam](dataFrame: DataFrame, step: Step[RP], engine: RunnerOutput,
-                                                  flow: FlowT[_,RP]): DataFrame = {
-    import flow._
-    import step.operation._
-    import step.options
-
-    val RunnerOutput(runner, childrenRaw, outputFieldsI) = engine
-
-    val ei@RunnerInputs(struct, withoutFlowAudit, _) = runnerInputs(options, dataFrame, step, flow)
-
-    val ri@ResultProcessInputs(outputFields, starterColumns, fieldName, children, group_auditF) =
-      resultProcessInputs(step, runner, childrenRaw, outputFieldsI, ei, flow)
-
-    resultApproach match {
-      case AsIs =>
-        dataFrame.select(starterColumns: _*).select(
-          ei.hasAudit(flowAuditColName)(
-            withoutFlowAudit.map(scol) ++ Seq(scol(fieldName), group_auditF)
-          )(
-            Seq(expr("*"), group_auditF)
-          ): _*)
-
-      case MergeFields =>
-
-        val starter = dataFrame.select(starterColumns: _*)
-        outputFields.fold {
-
-          val og = starter.columns.toSet
-          val nested = starter.selectExpr(s"$fieldName.result.*").columns
-          starter.select((og -- nested).map(scol).toSeq ++ Seq(expr(s"$fieldName.result.*"), group_auditF): _*)
-
-        } { outputFields =>
-
-          val fields = struct.map(_.name).toSet -- outputFields - flowAuditColName
-          withOutputFields(fieldName, runner, group_auditF, starter, outputFields, extraFields = fields.map(scol))
-
-        }
-
-      case OutputFieldsOnly =>
-
-        val starter = dataFrame.select(starterColumns: _*)
-
-        outputFields.fold {
-
-          val og = dataFrame.columns.toSet
-          val startCols = starter.columns.toSet
-          starter.select((og -- startCols).map(scol).toSeq ++
-            Seq(scol(fieldName), group_auditF, expr(s"$fieldName.result.*")): _*)
-
-        } { o =>
-          withOutputFields(fieldName, runner, group_auditF, starter, outputFields = o)
-        }
-
-      case StarOnly => dataFrame.select(runner).select(children: _*)
-      case OutputFieldOnly => dataFrame.select(runner)
-      case c: CustomApproach => c.customResultApproach(dataFrame, runner, ei, ri, step)
-    }
-  }
-
-
-  /**
-   * For cases which require a pre-resolved field such as LCA and row_number another projection is required.  It
-   * is always a correct result
-   */
   protected[flow] def processResult[RP: RuleSuiteParam](dataFrame: DataFrame, step: Step[RP], engine: RunnerOutput,
                                                                   flow: FlowT[_,RP]): DataFrame = {
     import flow._
@@ -203,7 +129,7 @@ object StepUtils {
     val ei@RunnerInputs(struct, withoutFlowAudit, _) = runnerInputs(options, dataFrame, step, flow)
 
     val ri@ResultProcessInputs(outputFields, starterColumns, fieldName, children, group_auditF) =
-      resultProcessInputs(step, runner, childrenRaw, outputFieldsI, ei, flow, starterColumnsForLCA = true)
+      resultProcessInputs(step, runner, childrenRaw, outputFieldsI, ei, flow)
 
     resultApproach match {
       case AsIs =>
