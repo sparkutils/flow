@@ -1,30 +1,21 @@
 package com.sparkutils.flow
 
 import com.sparkutils.flow.impl.util.Utils.{MapOps, defaultCombinedFolder, defaultFolder}
-import com.sparkutils.quality
 import com.sparkutils.quality.{CombinedRuleSuiteRows, GroupRuleId, Id, RuleSuite, VersionedId, combined_rows, register_rule_suite_group_variable, rule_suite, rule_suite_group}
 import org.apache.spark.sql.{Dataset, ShimUtils}
 import org.apache.spark.sql.functions.{col, lit, struct}
-
-import scala.util.Try
 
 /**
  * Which types are allowed to be stored in [[FullStep]]
  * instance exists.
  */
-sealed trait RuleSuiteStorageType[T] {
-  def id(t: T): Id
-}
+sealed trait RuleSuiteStorageType[T] {}
 
 object RuleSuiteStorageType {
 
-  implicit val rsParam: RuleSuiteStorageType[CombinedRuleSuiteRows] = new RuleSuiteStorageType[CombinedRuleSuiteRows] {
-    override def id(t: CombinedRuleSuiteRows): Id = Id(t.ruleSuiteId, t.ruleSuiteVersion)
-  }
+  implicit val rsParam: RuleSuiteStorageType[CombinedRuleSuiteRows] = new RuleSuiteStorageType[CombinedRuleSuiteRows] {}
 
-  implicit val idNameParam: RuleSuiteStorageType[Id] = new RuleSuiteStorageType[Id] {
-    override def id(t: Id): Id = t
-  }
+  implicit val idNameParam: RuleSuiteStorageType[Id] = new RuleSuiteStorageType[Id] {}
 
 }
 

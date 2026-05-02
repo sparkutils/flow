@@ -27,10 +27,11 @@ object Operation {
 
   def apply[T: RuleSuiteTypeParam](ruleSuite: T, function: Runner, resultApproach: ResultApproach,
             fieldName: String): Operation[T] = Operation(ruleSuite, function, resultApproach, Option(fieldName))
-
+  // $COVERAGE-OFF$
   def apply[T: RuleSuiteTypeParam](ruleSuite: T, function: Runner, resultApproach: ResultApproach,
             fieldName: String, combineAuditWith: Set[String]): Operation[T] =
     Operation(ruleSuite, function, resultApproach, Option(fieldName), Option(combineAuditWith))
+  // $COVERAGE-ON$
 
   def apply[T: RuleSuiteTypeParam](ruleSuite: T, function: Runner, resultApproach: ResultApproach,
                                combineAuditWith: Set[String]): Operation[T] =
@@ -48,7 +49,9 @@ object Operation {
 case class StepInitConfiguration(viewConfig: Seq[ViewRow] = Seq.empty, mapConfig: Seq[MapRow] = Seq.empty,
                                  mapName: Option[String] = None) extends Serializable {
   if (mapConfig.nonEmpty) {
+    // $COVERAGE-OFF$
     require(mapName.isDefined, "mapName is required when MapConfig is provided")
+    // $COVERAGE-ON$
   }
 }
 

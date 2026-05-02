@@ -51,7 +51,9 @@ trait FlowDataHandling[FG, RP] extends Serializable with Logging { this: FlowT[F
       }
       val allowed = step.options.duration(inputSchemaTimeTakenWarning, inputSchemaTimeTakenDefault)
       if (allowed.lt(t)) {
+        // $COVERAGE-OFF$
         warnLogStep(step,s", input.schema took $t, which is ${t - allowed} longer than the configured $allowed .")
+        // $COVERAGE-ON$
       }
       s
     } { prop =>

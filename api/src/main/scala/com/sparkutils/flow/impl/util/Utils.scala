@@ -11,7 +11,9 @@ import scala.util.Try
 object Utils {
 
   def getDataType(keyName: String, config: Map[String, String]): Option[DataType] =
-    config.get(keyName).map(s => DataType.fromDDL(s))
+    config.get(keyName).map(s => Try(DataType.fromDDL(s)).getOrElse(
+      throw FlowException(s"Provided DDL `$s` is invalid")
+    ))
 
   def getX[T](keyName: String, config: Map[String, String], default: T)(f: String => T): T =
     config.get(keyName).map(s => Try{f(s)}.getOrElse(default)).getOrElse(default)

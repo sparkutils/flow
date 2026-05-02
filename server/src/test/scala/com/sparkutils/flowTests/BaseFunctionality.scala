@@ -2,6 +2,7 @@ package com.sparkutils.flowTests
 
 import com.sparkutils.flow.{OperationProcessing, _}
 import com.sparkutils.flow.impl.util.FlowExceptionConstants.FlowEarlyExitException
+import com.sparkutils.flow.impl.util.Utils.MapOps
 import com.sparkutils.flowTests.RulesGen.{rulesRaw, testData}
 import com.sparkutils.flowTests.utils.SharedPureConnectTests
 import com.sparkutils.quality._
@@ -426,12 +427,26 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
     lca(view1, MergeFields, forceStar = true)
   }
 
+  test("bad ddl") {
+    val e = intercept[FlowException] {
+      Map("s" -> "*").dataType("s")
+    }
+    e.msg should include("is invalid")
+  }
+
+  test("bad struct type") {
+    val e = intercept[FlowException] {
+      Map("s" -> "string").structType("s")
+    }
+    e.msg should include("is not a StructType")
+  }
+
   test("maps should load and run") {
     val flow = new Flow(Id(1, 1), Seq(
       Step("a", Set.empty, Operation(rulesRaw(Seq(
         (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1041, 1),
           OutputExpression(s"set(c = if(d = 2, 'a', 'b'))")))
-      )), Folder, MergeFields)
+      )), Folder, MergeFields), options = Map(inputSchema -> "struct<c: String, d: Int>", resultDataType -> "struct<c: String, d: Int>")
       ),
       Step("b", Set("a"), Operation(rulesRaw(Seq(
         (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1041, 1),
@@ -441,8 +456,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
           MapRow(Id(1,1), "thed", token = None, filter = None, sql = Some(s"select * from a$rootInputSuffix"), key = "c", value = "d")
         ),
         mapName = Some("themaps")
-      )
-      )
+      ))
     ))
 
     val s = sparkSession
