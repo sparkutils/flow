@@ -41,11 +41,11 @@
 </span>17 <span style=''>case class StepException[RP](step: Step[RP], cause: Throwable = null) extends Exception(cause) with Serializable with
 </span>18 <span style=''>  StepResultType[RP] with FlowExceptionType {
 </span>19 <span style=''>
-</span>20 <span style=''>  override def fold[R](success: StepResult[RP] =&gt; R)(failure: StepException[RP] =&gt; R): R = </span><span style='background: #F0ADAD'>failure(this)</span><span style=''>
+</span>20 <span style=''>  override def fold[R](success: StepResult[RP] =&gt; R)(failure: StepException[RP] =&gt; R): R = </span><span style='background: #AEF1AE'>failure(this)</span><span style=''>
 </span>21 <span style=''>
-</span>22 <span style=''>  override def output: DataFrame = </span><span style='background: #F0ADAD'>throw FlowException(s&quot;Step ${step.name} did not complete successfully&quot;, cause)</span><span style=''>
+</span>22 <span style=''>  override def output: DataFrame = </span><span style='background: #AEF1AE'>throw FlowException(s&quot;Step ${step.name} did not complete successfully&quot;, cause)</span><span style=''>
 </span>23 <span style=''>
-</span>24 <span style=''>  override def timings: StepTimings = </span><span style='background: #F0ADAD'>throw FlowException(s&quot;Step ${step.name} did not complete successfully&quot;, cause)</span><span style=''>
+</span>24 <span style=''>  override def timings: StepTimings = </span><span style='background: #AEF1AE'>throw FlowException(s&quot;Step ${step.name} did not complete successfully&quot;, cause)</span><span style=''>
 </span>25 <span style=''>
 </span>26 <span style=''>  def msg: String = </span><span style='background: #AEF1AE'>cause.getMessage</span><span style=''>
 </span>27 <span style=''>}
@@ -240,7 +240,7 @@
         <td>
           
         </td>
-        <td style="background: #F0ADAD">
+        <td style="background: #AEF1AE">
           failure.apply(this)
         </td>
       </tr><tr>
@@ -264,7 +264,7 @@
         <td>
           
         </td>
-        <td style="background: #F0ADAD">
+        <td style="background: #AEF1AE">
           throw FlowException.apply(&quot;Step &quot;.+(StepException.this.step.name).+(&quot; did not complete successfully&quot;), StepException.this.cause)
         </td>
       </tr><tr>
@@ -288,7 +288,7 @@
         <td>
           
         </td>
-        <td style="background: #F0ADAD">
+        <td style="background: #AEF1AE">
           throw FlowException.apply(&quot;Step &quot;.+(StepException.this.step.name).+(&quot; did not complete successfully&quot;), StepException.this.cause)
         </td>
       </tr><tr>

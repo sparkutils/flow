@@ -149,76 +149,81 @@
 </span>125 <span style=''>  val DQRunnerName = </span><span style='background: #AEF1AE'>&quot;dq&quot;</span><span style=''>
 </span>126 <span style=''>
 </span>127 <span style=''>  /**
-</span>128 <span style=''>   * The column name which must be returned by [[flowEarlyExitSQL]] and evaluate to either an empty dataset
-</span>129 <span style=''>   * or to a *true* boolean value on the first row to indicate the flow should continue.
-</span>130 <span style=''>   * Otherwise, if the first row with a *false* value is returned the Flow will exit with exception per
-</span>131 <span style=''>   * [[flowEarlyExitException]]
-</span>132 <span style=''>   */
-</span>133 <span style=''>  val flowEarlyExitColumn = </span><span style='background: #AEF1AE'>&quot;flowEarlyExitColumn&quot;</span><span style=''>
-</span>134 <span style=''>
-</span>135 <span style=''>  /**
-</span>136 <span style=''>   * Optional [[Step.options]] to specify the Name for a step to run an SQL to decide if the flow should be exited.
-</span>137 <span style=''>   *
-</span>138 <span style=''>   * The SQL is evaluated after the Steps result view is created, by default the [[Step.name]].
-</span>139 <span style=''>   *
-</span>140 <span style=''>   * When present the SQL will be evaluated after a step is completed, it should return [[flowEarlyExitColumn]]
-</span>141 <span style=''>   * with it's associated semantics.
+</span>128 <span style=''>   * DQ Runner name
+</span>129 <span style=''>   */
+</span>130 <span style=''>  val NoOpRunnerName = </span><span style='background: #AEF1AE'>&quot;noop&quot;</span><span style=''>
+</span>131 <span style=''>
+</span>132 <span style=''>  /**
+</span>133 <span style=''>   * The column name which must be returned by [[flowEarlyExitSQL]] and evaluate to either an empty dataset
+</span>134 <span style=''>   * or to a *true* boolean value on the first row to indicate the flow should continue.
+</span>135 <span style=''>   * Otherwise, if the first row with a *false* value is returned the Flow will exit with exception per
+</span>136 <span style=''>   * [[flowEarlyExitException]]
+</span>137 <span style=''>   */
+</span>138 <span style=''>  val flowEarlyExitColumn = </span><span style='background: #AEF1AE'>&quot;flowEarlyExitColumn&quot;</span><span style=''>
+</span>139 <span style=''>
+</span>140 <span style=''>  /**
+</span>141 <span style=''>   * Optional [[Step.options]] to specify the Name for a step to run an SQL to decide if the flow should be exited.
 </span>142 <span style=''>   *
-</span>143 <span style=''>   * NOTE - The graph runs in parallel, if any Steps must perform &quot;safe&quot; actions such as saving a data frame these checks
-</span>144 <span style=''>   * are recommended to be done as dependencies of those Steps
-</span>145 <span style=''>   */
-</span>146 <span style=''>  val flowEarlyExitSQL = </span><span style='background: #AEF1AE'>&quot;flowEarlyExitSQL&quot;</span><span style=''>
-</span>147 <span style=''>
-</span>148 <span style=''>  /**
-</span>149 <span style=''>   * Optional [[Step.options]] to specify a user Exception text if [[flowEarlyExitSQL]] returns a false
-</span>150 <span style=''>   * [[flowEarlyExitColumn]] result.
-</span>151 <span style=''>   *
-</span>152 <span style=''>   * When not present a default text is used:
-</span>153 <span style=''>   * {{{
-</span>154 <span style=''>   * Step ${step.name} had flowEarlyExitSQL configured which returned false - the Flow will be stopped
-</span>155 <span style=''>   * }}}
-</span>156 <span style=''>   */
-</span>157 <span style=''>  val flowEarlyExitException = </span><span style='background: #AEF1AE'>&quot;flowEarlyExitException&quot;</span><span style=''>
-</span>158 <span style=''>
-</span>159 <span style=''>  /**
-</span>160 <span style=''>   * The suffix used for root Steps if, as is default, no inputViewName is defined
+</span>143 <span style=''>   * The SQL is evaluated after the Steps result view is created, by default the [[Step.name]].
+</span>144 <span style=''>   *
+</span>145 <span style=''>   * When present the SQL will be evaluated after a step is completed, it should return [[flowEarlyExitColumn]]
+</span>146 <span style=''>   * with it's associated semantics.
+</span>147 <span style=''>   *
+</span>148 <span style=''>   * NOTE - The graph runs in parallel, if any Steps must perform &quot;safe&quot; actions such as saving a data frame these checks
+</span>149 <span style=''>   * are recommended to be done as dependencies of those Steps
+</span>150 <span style=''>   */
+</span>151 <span style=''>  val flowEarlyExitSQL = </span><span style='background: #AEF1AE'>&quot;flowEarlyExitSQL&quot;</span><span style=''>
+</span>152 <span style=''>
+</span>153 <span style=''>  /**
+</span>154 <span style=''>   * Optional [[Step.options]] to specify a user Exception text if [[flowEarlyExitSQL]] returns a false
+</span>155 <span style=''>   * [[flowEarlyExitColumn]] result.
+</span>156 <span style=''>   *
+</span>157 <span style=''>   * When not present a default text is used:
+</span>158 <span style=''>   * {{{
+</span>159 <span style=''>   * Step ${step.name} had flowEarlyExitSQL configured which returned false - the Flow will be stopped
+</span>160 <span style=''>   * }}}
 </span>161 <span style=''>   */
-</span>162 <span style=''>  val rootInputSuffix = </span><span style='background: #AEF1AE'>&quot;_root_input&quot;</span><span style=''>
+</span>162 <span style=''>  val flowEarlyExitException = </span><span style='background: #AEF1AE'>&quot;flowEarlyExitException&quot;</span><span style=''>
 </span>163 <span style=''>
 </span>164 <span style=''>  /**
-</span>165 <span style=''>   * By default, the duration a low lasts for is 1hr
+</span>165 <span style=''>   * The suffix used for root Steps if, as is default, no inputViewName is defined
 </span>166 <span style=''>   */
-</span>167 <span style=''>  val defaultFlowDuration: Duration = </span><span style='background: #AEF1AE'>Duration(1L, HOURS)</span><span style=''>
+</span>167 <span style=''>  val rootInputSuffix = </span><span style='background: #AEF1AE'>&quot;_root_input&quot;</span><span style=''>
 </span>168 <span style=''>
 </span>169 <span style=''>  /**
-</span>170 <span style=''>   * This optional [[Step.options]] configuration, defaulting to true, takes effect when the [[Step]]'s
-</span>171 <span style=''>   * [[Operation.ruleSuite]] type is [[com.sparkutils.quality.Id]] and [[FlowRuleGroup.ruleGroup]] type is
-</span>172 <span style=''>   * [[com.sparkutils.quality.CombinedRuleSuiteRows]].  In this case the [[FlowRuleGroup.ruleGroupName]]
-</span>173 <span style=''>   * is used and data is taken from [[FlowRuleGroup.ruleGroup]].
-</span>174 <span style=''>   *
-</span>175 <span style=''>   * This setting on a Step forces a filter on the provided RuleSuite dataset to be used for the RuleSuite Id and uses
-</span>176 <span style=''>   * this name to register it.
-</span>177 <span style=''>   */
-</span>178 <span style=''>  val useFlowRuleGroupLevelRows = </span><span style='background: #AEF1AE'>&quot;useFlowRuleGroupLevelRows&quot;</span><span style=''>
-</span>179 <span style=''>
-</span>180 <span style=''>  /**
-</span>181 <span style=''>   * This optional [[Step.options]] configuration, takes effect when the [[Step]]'s
-</span>182 <span style=''>   * [[Operation.ruleSuite]] type is [[com.sparkutils.quality.Id]].  It overrides whatever logic is used by
-</span>183 <span style=''>   * [[OperationProcessing]] with Id including [[useFlowRuleGroupLevelRows]]
-</span>184 <span style=''>   */
-</span>185 <span style=''>  val useRuleGroupName = </span><span style='background: #AEF1AE'>&quot;useRuleGroupName&quot;</span><span style=''>
-</span>186 <span style=''>
-</span>187 <span style=''>  /**
-</span>188 <span style=''>   * This optional [[Step.options]] configuration, defaulting to false, stops modifying [[Operation.ruleSuite]]'s
-</span>189 <span style=''>   * defaultProcessor when [[Operation.function]] is [[FolderRunnerName]] to introduce a default {{row -&gt; row}}.
-</span>190 <span style=''>   */
-</span>191 <span style=''>  val doNotAddFolderDefault = </span><span style='background: #AEF1AE'>&quot;doNotAddFolderDefault&quot;</span><span style=''>
-</span>192 <span style=''>
-</span>193 <span style=''>  /**
-</span>194 <span style=''>   * The defaultGroup value is used when calling [[convertToIds]] should there be no flowRuleGroup present
+</span>170 <span style=''>   * By default, the duration a low lasts for is 1hr
+</span>171 <span style=''>   */
+</span>172 <span style=''>  val defaultFlowDuration: Duration = </span><span style='background: #AEF1AE'>Duration(1L, HOURS)</span><span style=''>
+</span>173 <span style=''>
+</span>174 <span style=''>  /**
+</span>175 <span style=''>   * This optional [[Step.options]] configuration, defaulting to true, takes effect when the [[Step]]'s
+</span>176 <span style=''>   * [[Operation.ruleSuite]] type is [[com.sparkutils.quality.Id]] and [[FlowRuleGroup.ruleGroup]] type is
+</span>177 <span style=''>   * [[com.sparkutils.quality.CombinedRuleSuiteRows]].  In this case the [[FlowRuleGroup.ruleGroupName]]
+</span>178 <span style=''>   * is used and data is taken from [[FlowRuleGroup.ruleGroup]].
+</span>179 <span style=''>   *
+</span>180 <span style=''>   * This setting on a Step forces a filter on the provided RuleSuite dataset to be used for the RuleSuite Id and uses
+</span>181 <span style=''>   * this name to register it.
+</span>182 <span style=''>   */
+</span>183 <span style=''>  val useFlowRuleGroupLevelRows = </span><span style='background: #AEF1AE'>&quot;useFlowRuleGroupLevelRows&quot;</span><span style=''>
+</span>184 <span style=''>
+</span>185 <span style=''>  /**
+</span>186 <span style=''>   * This optional [[Step.options]] configuration, takes effect when the [[Step]]'s
+</span>187 <span style=''>   * [[Operation.ruleSuite]] type is [[com.sparkutils.quality.Id]].  It overrides whatever logic is used by
+</span>188 <span style=''>   * [[OperationProcessing]] with Id including [[useFlowRuleGroupLevelRows]]
+</span>189 <span style=''>   */
+</span>190 <span style=''>  val useRuleGroupName = </span><span style='background: #AEF1AE'>&quot;useRuleGroupName&quot;</span><span style=''>
+</span>191 <span style=''>
+</span>192 <span style=''>  /**
+</span>193 <span style=''>   * This optional [[Step.options]] configuration, defaulting to false, stops modifying [[Operation.ruleSuite]]'s
+</span>194 <span style=''>   * defaultProcessor when [[Operation.function]] is [[FolderRunnerName]] to introduce a default {{row -&gt; row}}.
 </span>195 <span style=''>   */
-</span>196 <span style=''>  val defaultConvertGroupName = </span><span style='background: #AEF1AE'>&quot;defaultGroup&quot;</span><span style=''>
-</span>197 <span style=''>}
+</span>196 <span style=''>  val doNotAddFolderDefault = </span><span style='background: #AEF1AE'>&quot;doNotAddFolderDefault&quot;</span><span style=''>
+</span>197 <span style=''>
+</span>198 <span style=''>  /**
+</span>199 <span style=''>   * The defaultGroup value is used when calling [[convertToIds]] should there be no flowRuleGroup present
+</span>200 <span style=''>   */
+</span>201 <span style=''>  val defaultConvertGroupName = </span><span style='background: #AEF1AE'>&quot;defaultGroup&quot;</span><span style=''>
+</span>202 <span style=''>}
 </span></pre>
           </div>
           <div class="tab-pane" id="statementlist">
@@ -641,15 +646,39 @@
         </td>
       </tr><tr>
         <td>
-          133
+          130
         </td>
         <td>
           69
         </td>
         <td>
-          4487
+          4169
           -
-          4508
+          4175
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;noop&quot;
+        </td>
+      </tr><tr>
+        <td>
+          138
+        </td>
+        <td>
+          70
+        </td>
+        <td>
+          4550
+          -
+          4571
         </td>
         <td>
           Literal
@@ -665,15 +694,15 @@
         </td>
       </tr><tr>
         <td>
-          146
+          151
         </td>
         <td>
-          70
+          71
         </td>
         <td>
-          5108
+          5171
           -
-          5126
+          5189
         </td>
         <td>
           Literal
@@ -689,15 +718,15 @@
         </td>
       </tr><tr>
         <td>
-          157
+          162
         </td>
         <td>
-          71
+          72
         </td>
         <td>
-          5484
+          5547
           -
-          5508
+          5571
         </td>
         <td>
           Literal
@@ -713,15 +742,15 @@
         </td>
       </tr><tr>
         <td>
-          162
+          167
         </td>
         <td>
-          72
+          73
         </td>
         <td>
-          5629
+          5692
           -
-          5642
+          5705
         </td>
         <td>
           Literal
@@ -737,15 +766,15 @@
         </td>
       </tr><tr>
         <td>
-          167
+          172
         </td>
         <td>
-          73
+          74
         </td>
         <td>
-          5747
+          5810
           -
-          5766
+          5829
         </td>
         <td>
           Apply
@@ -761,15 +790,15 @@
         </td>
       </tr><tr>
         <td>
-          178
+          183
         </td>
         <td>
-          74
+          75
         </td>
         <td>
-          6350
+          6413
           -
-          6377
+          6440
         </td>
         <td>
           Literal
@@ -785,15 +814,15 @@
         </td>
       </tr><tr>
         <td>
-          185
+          190
         </td>
         <td>
-          75
+          76
         </td>
         <td>
-          6685
+          6748
           -
-          6703
+          6766
         </td>
         <td>
           Literal
@@ -809,15 +838,15 @@
         </td>
       </tr><tr>
         <td>
-          191
+          196
         </td>
         <td>
-          76
+          77
         </td>
         <td>
-          6974
+          7037
           -
-          6997
+          7060
         </td>
         <td>
           Literal
@@ -833,15 +862,15 @@
         </td>
       </tr><tr>
         <td>
-          196
+          201
         </td>
         <td>
-          77
+          78
         </td>
         <td>
-          7150
+          7213
           -
-          7164
+          7227
         </td>
         <td>
           Literal
