@@ -24,40 +24,180 @@
           <div class="tab-pane active" id="codegrid">
             <pre style='font-size: 12pt; font-family: courier, monospace;'>1 <span style=''>package com.sparkutils.flow
 </span>2 <span style=''>
-</span>3 <span style=''>import org.apache.spark.sql.{Column, DataFrame}
-</span>4 <span style=''>import org.apache.spark.sql.functions.{col =&gt; scol}
-</span>5 <span style=''>
-</span>6 <span style=''>/**
-</span>7 <span style=''> * Utility functions for processing Steps
-</span>8 <span style=''> */
-</span>9 <span style=''>object StepUtils {
-</span>10 <span style=''>
-</span>11 <span style=''>  // if fields are present, either by default in the folder case or by providing a result type that is not an
-</span>12 <span style=''>  // array we can remove two calls to columns action, 632.73ms vs 554.88ms on using 14 chained engines 1 rule each
-</span>13 <span style=''>  // forceMergeProjection on 200,000 rows
+</span>3 <span style=''>import com.sparkutils.flow.impl.util.Utils.MapOps
+</span>4 <span style=''>import com.sparkutils.quality.RuleSuiteParam
+</span>5 <span style=''>import org.apache.spark.sql.{Column, DataFrame}
+</span>6 <span style=''>import org.apache.spark.sql.functions.{expr, col =&gt; scol}
+</span>7 <span style=''>import org.apache.spark.sql.types.StructType
+</span>8 <span style=''>import com.sparkutils.quality.functions.group_audit
+</span>9 <span style=''>
+</span>10 <span style=''>/**
+</span>11 <span style=''> * Utility functions for processing Steps
+</span>12 <span style=''> */
+</span>13 <span style=''>object StepUtils {
 </span>14 <span style=''>
-</span>15 <span style=''>  /**
-</span>16 <span style=''>   * Processes output fields for [[MergeFields]] and [[OutputFieldsOnly]]
-</span>17 <span style=''>   *
-</span>18 <span style=''>   * @param fieldName the field name to be used by the runner column
-</span>19 <span style=''>   * @param runner the runnerColumn for interface completeness - this is reserved for future use
-</span>20 <span style=''>   * @param group_audit the group_audit column
-</span>21 <span style=''>   * @param input the dataframe to add the output fields to
-</span>22 <span style=''>   * @param outputFields a set of output fields which will be mapped to {{{s&quot;$fieldName.result.$n&quot;}}}
-</span>23 <span style=''>   * @param extraFields any extra columns to be added
-</span>24 <span style=''>   * @return
-</span>25 <span style=''>   */
-</span>26 <span style=''>  def withOutputFields(fieldName: String, runner: Column, group_audit: Column, input: DataFrame, outputFields: Set[String], extraFields: Set[Column] = Set.empty) =
-</span>27 <span style=''>    // cannot be run directly on dataFrame as otherwise an lca will be added to any repetitive expressions
-</span>28 <span style=''>    // this stops row number plus another of other queries running correctly in all circumstances
-</span>29 <span style=''>    </span><span style='background: #AEF1AE'>input.select(
-</span>30 <span style=''></span><span style='background: #AEF1AE'>      Seq(scol(fieldName), group_audit)
-</span>31 <span style=''></span><span style='background: #AEF1AE'>        ++ extraFields ++
-</span>32 <span style=''></span><span style='background: #AEF1AE'>        outputFields.map{n =&gt;
-</span>33 <span style=''></span><span style='background: #AEF1AE'>          scol(s&quot;$fieldName.result.$n&quot;).as(n)
-</span>34 <span style=''></span><span style='background: #AEF1AE'>        } :_*)</span><span style=''>
-</span>35 <span style=''>
-</span>36 <span style=''>}
+</span>15 <span style=''>  // if fields are present, either by default in the folder case or by providing a result type that is not an
+</span>16 <span style=''>  // array we can remove two calls to columns action, 632.73ms vs 554.88ms on using 14 chained engines 1 rule each
+</span>17 <span style=''>  // forceMergeProjection on 200,000 rows
+</span>18 <span style=''>
+</span>19 <span style=''>  /**
+</span>20 <span style=''>   * Processes output fields for [[MergeFields]] and [[OutputFieldsOnly]]
+</span>21 <span style=''>   *
+</span>22 <span style=''>   * @param fieldName the field name to be used by the runner column
+</span>23 <span style=''>   * @param runner the runnerColumn for interface completeness
+</span>24 <span style=''>   * @param group_audit the group_audit column
+</span>25 <span style=''>   * @param input the dataframe to add the output fields to
+</span>26 <span style=''>   * @param outputFields a set of output fields which will be mapped to {{{s&quot;$fieldName.result.$n&quot;}}}
+</span>27 <span style=''>   * @param extraFields any extra columns to be added
+</span>28 <span style=''>   * @return
+</span>29 <span style=''>   */
+</span>30 <span style=''>  def withOutputFields(fieldName: String, runner: Column, group_audit: Column, input: DataFrame,
+</span>31 <span style=''>                       outputFields: Set[String], extraFields: Set[Column] = Set.empty,
+</span>32 <span style=''>                       useRunnerColumn: Boolean = false): DataFrame =
+</span>33 <span style=''>    // cannot be run directly on dataFrame as otherwise an lca will be added to any repetitive expressions
+</span>34 <span style=''>    // this stops row number plus another of other queries running correctly in all circumstances
+</span>35 <span style=''>    </span><span style='background: #AEF1AE'>input.select(
+</span>36 <span style=''></span><span style='background: #AEF1AE'>      Seq(if (useRunnerColumn) runner else </span><span style='background: #F0ADAD'>scol(fieldName)</span><span style='background: #AEF1AE'>, group_audit)
+</span>37 <span style=''></span><span style='background: #AEF1AE'>        ++ extraFields ++
+</span>38 <span style=''></span><span style='background: #AEF1AE'>        outputFields.map{n =&gt;
+</span>39 <span style=''></span><span style='background: #AEF1AE'>          scol(s&quot;$fieldName.result.$n&quot;).as(n)
+</span>40 <span style=''></span><span style='background: #AEF1AE'>        } :_*)</span><span style=''>
+</span>41 <span style=''>
+</span>42 <span style=''>  /**
+</span>43 <span style=''>   * Ueed by MergeFields and OutputFieldsOnly to add the runner, group_audit, and extra columns and the children of
+</span>44 <span style=''>   * the runner.  This requires at least a single .schema action, but still only processes the remaining data in a single
+</span>45 <span style=''>   * projection.
+</span>46 <span style=''>   *
+</span>47 <span style=''>   * In the MergeFields case extra is the original fields - the children of the runner and requires an additional .schema call.
+</span>48 <span style=''>   *
+</span>49 <span style=''>   * @return
+</span>50 <span style=''>   */
+</span>51 <span style=''>  def withoutOutputFields(fieldName: String, runner: Column, group_audit: Column, input: DataFrame,
+</span>52 <span style=''>                          extra: Set[String] =&gt; Set[String] = _ =&gt; Set.empty): DataFrame = {
+</span>53 <span style=''>
+</span>54 <span style=''>    val starter = </span><span style='background: #AEF1AE'>input.select(runner)</span><span style=''>
+</span>55 <span style=''>    val childrenNames = </span><span style='background: #AEF1AE'>starter.schema.fields.head.dataType.asInstanceOf[StructType].
+</span>56 <span style=''></span><span style='background: #AEF1AE'>      fields.find(_.name == &quot;result&quot;).map(f =&gt; f.dataType.asInstanceOf[StructType].
+</span>57 <span style=''></span><span style='background: #AEF1AE'>        fields.map(f =&gt; f.name).toSet).getOrElse(</span><span style='background: #F0ADAD'>Set.empty[String]</span><span style='background: #AEF1AE'>)</span><span style=''>
+</span>58 <span style=''>    val children = </span><span style='background: #AEF1AE'>childrenNames.map(name =&gt; expr(s&quot;$fieldName.result.${name}&quot;).as(name))</span><span style=''>
+</span>59 <span style=''>
+</span>60 <span style=''>    </span><span style='background: #AEF1AE'>input.select(Seq(runner, group_audit) ++ extra(childrenNames).map(scol).toSeq ++ children: _*)</span><span style=''>
+</span>61 <span style=''>
+</span>62 <span style=''>  }
+</span>63 <span style=''>
+</span>64 <span style=''>  protected[flow] def resultProcessInputs[RP: RuleSuiteParam](step: Step[RP], runner: Column, childrenRaw: Seq[String],
+</span>65 <span style=''>                                                              outputFieldsI: Option[Set[String]], ei: RunnerInputs,
+</span>66 <span style=''>                                                              flow: FlowT[_,_]): ResultProcessInputs = {
+</span>67 <span style=''>    import flow._
+</span>68 <span style=''>
+</span>69 <span style=''>    val outputFields: Option[Set[String]] =
+</span>70 <span style=''>      </span><span style='background: #AEF1AE'>outputFieldsI.flatMap { s =&gt;
+</span>71 <span style=''></span><span style='background: #AEF1AE'>        if (step.options.boolean(forceMergeProjection))
+</span>72 <span style=''></span><span style='background: #AEF1AE'>          None
+</span>73 <span style=''></span><span style='background: #AEF1AE'>        else
+</span>74 <span style=''></span><span style='background: #AEF1AE'>          Some(s)
+</span>75 <span style=''></span><span style='background: #AEF1AE'>      }.map(_ - flowAuditColName)</span><span style=''>
+</span>76 <span style=''>
+</span>77 <span style=''>    val </span><span style='background: #AEF1AE'>(starterColumns, existingAudit)</span><span style=''> =
+</span>78 <span style=''>      // if flowAuditColName is present and the correct type, select all the others, assuming via having a parent step
+</span>79 <span style=''>      // isn't enough if StarOnly or OutputFieldOnly is provided
+</span>80 <span style=''>      //
+</span>81 <span style=''>      </span><span style='background: #AEF1AE'>(Seq(runner),
+</span>82 <span style=''></span><span style='background: #AEF1AE'>        ei.hasAudit(flowAuditColName)(
+</span>83 <span style=''></span><span style='background: #AEF1AE'>          Seq(scol(flowAuditColName))
+</span>84 <span style=''></span><span style='background: #AEF1AE'>        )(
+</span>85 <span style=''></span><span style='background: #AEF1AE'>          Seq.empty
+</span>86 <span style=''></span><span style='background: #AEF1AE'>        )
+</span>87 <span style=''></span><span style='background: #AEF1AE'>      )</span><span style=''>
+</span>88 <span style=''>
+</span>89 <span style=''>    val fieldName = </span><span style='background: #AEF1AE'>step.defaultFieldName</span><span style=''>
+</span>90 <span style=''>
+</span>91 <span style=''>    val children = </span><span style='background: #AEF1AE'>childrenRaw.map(n =&gt; scol(fieldName).getField(n).as(n))</span><span style=''>
+</span>92 <span style=''>
+</span>93 <span style=''>    val group_auditF =
+</span>94 <span style=''>      </span><span style='background: #AEF1AE'>group_audit(scol(fieldName),
+</span>95 <span style=''></span><span style='background: #AEF1AE'>        step.operation.combineAuditWith.map { fnames =&gt;
+</span>96 <span style=''></span><span style='background: #AEF1AE'>          fnames.map { fname =&gt; expr(fname) }.toSeq
+</span>97 <span style=''></span><span style='background: #AEF1AE'>        }.getOrElse(Seq.empty) ++ existingAudit
+</span>98 <span style=''></span><span style='background: #AEF1AE'>          : _*).as(flowAuditColName)</span><span style=''>
+</span>99 <span style=''>
+</span>100 <span style=''>    </span><span style='background: #AEF1AE'>ResultProcessInputs(outputFields, starterColumns, fieldName, children, group_auditF)</span><span style=''>
+</span>101 <span style=''>  }
+</span>102 <span style=''>
+</span>103 <span style=''>  protected[flow] def runnerInputs[RP: RuleSuiteParam](options: Map[String, String], dataFrame: DataFrame,
+</span>104 <span style=''>                                                       step: Step[RP], flow: FlowT[_,RP]): RunnerInputs = {
+</span>105 <span style=''>    import flow._
+</span>106 <span style=''>    val struct = </span><span style='background: #AEF1AE'>flow.inputSchema(dataFrame, step)</span><span style=''>
+</span>107 <span style=''>    val withoutFlowAudit = </span><span style='background: #AEF1AE'>struct.filterNot(_.name == flowAuditColName).map(_.name)</span><span style=''>
+</span>108 <span style=''>
+</span>109 <span style=''>    val dataRefTypeFields =
+</span>110 <span style=''>      </span><span style='background: #AEF1AE'>options.dataType(resultDataType)</span><span style=''> match {
+</span>111 <span style=''>        case Some(s: StructType) =&gt; </span><span style='background: #AEF1AE'>Some(s.fields.map(_.name).filterNot(_ == flowAuditColName).toSet)</span><span style=''>
+</span>112 <span style=''>        case _ =&gt; </span><span style='background: #AEF1AE'>None</span><span style=''>
+</span>113 <span style=''>      }
+</span>114 <span style=''>    </span><span style='background: #AEF1AE'>RunnerInputs(struct, withoutFlowAudit, dataRefTypeFields)</span><span style=''>
+</span>115 <span style=''>  }
+</span>116 <span style=''>
+</span>117 <span style=''>  /**
+</span>118 <span style=''>   * For cases which require a pre-resolved field such as LCA and row_number another projection is required.  It
+</span>119 <span style=''>   * is always a correct result
+</span>120 <span style=''>   */
+</span>121 <span style=''>  protected[flow] def processResult[RP: RuleSuiteParam](dataFrame: DataFrame, step: Step[RP], engine: RunnerOutput,
+</span>122 <span style=''>                                                                  flow: FlowT[_,RP]): DataFrame = {
+</span>123 <span style=''>    import flow._
+</span>124 <span style=''>    import step.operation._
+</span>125 <span style=''>    import step.options
+</span>126 <span style=''>
+</span>127 <span style=''>    val </span><span style='background: #AEF1AE'>RunnerOutput(runner, childrenRaw, outputFieldsI)</span><span style=''> = engine
+</span>128 <span style=''>
+</span>129 <span style=''>    val </span><span style='background: #AEF1AE'>ei@RunnerInputs(struct, withoutFlowAudit, _)</span><span style=''> = </span><span style='background: #AEF1AE'>runnerInputs(options, dataFrame, step, flow)</span><span style=''>
+</span>130 <span style=''>
+</span>131 <span style=''>    val </span><span style='background: #AEF1AE'>ri@ResultProcessInputs(outputFields, starterColumns, fieldName, children, group_auditF)</span><span style=''> =
+</span>132 <span style=''>      </span><span style='background: #AEF1AE'>resultProcessInputs(step, runner, childrenRaw, outputFieldsI, ei, flow)</span><span style=''>
+</span>133 <span style=''>
+</span>134 <span style=''>    </span><span style='background: #AEF1AE'>resultApproach</span><span style=''> match {
+</span>135 <span style=''>      case AsIs =&gt;
+</span>136 <span style=''>        </span><span style='background: #AEF1AE'>dataFrame.select(starterColumns ++
+</span>137 <span style=''></span><span style='background: #AEF1AE'>          ei.hasAudit(flowAuditColName)(
+</span>138 <span style=''></span><span style='background: #AEF1AE'>            withoutFlowAudit.map(scol) ++ Seq(group_auditF)
+</span>139 <span style=''></span><span style='background: #AEF1AE'>          )(
+</span>140 <span style=''></span><span style='background: #AEF1AE'>            Seq(expr(&quot;*&quot;), group_auditF)
+</span>141 <span style=''></span><span style='background: #AEF1AE'>          ): _*)</span><span style=''>
+</span>142 <span style=''>
+</span>143 <span style=''>      case MergeFields =&gt;
+</span>144 <span style=''>
+</span>145 <span style=''>        </span><span style='background: #AEF1AE'>outputFields.fold {
+</span>146 <span style=''></span><span style='background: #AEF1AE'>
+</span>147 <span style=''></span><span style='background: #AEF1AE'>          withoutOutputFields(fieldName, runner, group_auditF, dataFrame, extra = childrenNames =&gt; {
+</span>148 <span style=''></span><span style='background: #AEF1AE'>            val og = dataFrame.columns.toSet
+</span>149 <span style=''></span><span style='background: #AEF1AE'>            og -- childrenNames // only remove the result fields
+</span>150 <span style=''></span><span style='background: #AEF1AE'>          })
+</span>151 <span style=''></span><span style='background: #AEF1AE'>
+</span>152 <span style=''></span><span style='background: #AEF1AE'>        } { outputFields =&gt;
+</span>153 <span style=''></span><span style='background: #AEF1AE'>
+</span>154 <span style=''></span><span style='background: #AEF1AE'>          val fields = struct.map(_.name).toSet -- outputFields - flowAuditColName
+</span>155 <span style=''></span><span style='background: #AEF1AE'>          withOutputFields(fieldName, runner, group_auditF, dataFrame, outputFields, extraFields = fields.map(scol),
+</span>156 <span style=''></span><span style='background: #AEF1AE'>            useRunnerColumn = true)
+</span>157 <span style=''></span><span style='background: #AEF1AE'>
+</span>158 <span style=''></span><span style='background: #AEF1AE'>        }</span><span style=''>
+</span>159 <span style=''>
+</span>160 <span style=''>      case OutputFieldsOnly =&gt;
+</span>161 <span style=''>
+</span>162 <span style=''>        </span><span style='background: #AEF1AE'>outputFields.fold {
+</span>163 <span style=''></span><span style='background: #AEF1AE'>
+</span>164 <span style=''></span><span style='background: #AEF1AE'>          withoutOutputFields(fieldName, runner, group_auditF, dataFrame)
+</span>165 <span style=''></span><span style='background: #AEF1AE'>
+</span>166 <span style=''></span><span style='background: #AEF1AE'>        } { o =&gt;
+</span>167 <span style=''></span><span style='background: #AEF1AE'>          withOutputFields(fieldName, runner, group_auditF, dataFrame, outputFields = o,
+</span>168 <span style=''></span><span style='background: #AEF1AE'>            useRunnerColumn = true)
+</span>169 <span style=''></span><span style='background: #AEF1AE'>        }</span><span style=''>
+</span>170 <span style=''>
+</span>171 <span style=''>      case StarOnly =&gt; </span><span style='background: #AEF1AE'>dataFrame.select(Seq(runner) ++ children: _*)</span><span style=''>
+</span>172 <span style=''>      case OutputFieldOnly =&gt; </span><span style='background: #AEF1AE'>dataFrame.select(runner)</span><span style=''>
+</span>173 <span style=''>      case c: CustomApproach =&gt; </span><span style='background: #AEF1AE'>c.customResultApproach(dataFrame, runner, ei, ri, step)</span><span style=''>
+</span>174 <span style=''>    }
+</span>175 <span style=''>  }
+</span>176 <span style=''>}
 </span></pre>
           </div>
           <div class="tab-pane" id="statementlist">
@@ -72,15 +212,15 @@
         <th>Code</th>
       </tr><tr>
         <td>
-          29
+          35
         </td>
         <td>
-          797
+          679
         </td>
         <td>
-          1374
+          1629
           -
-          1544
+          1832
         </td>
         <td>
           Apply
@@ -92,19 +232,46 @@
           
         </td>
         <td style="background: #AEF1AE">
-          input.select((scala.`package`.Seq.apply[org.apache.spark.sql.Column](org.apache.spark.sql.functions.col(fieldName), group_audit).++[org.apache.spark.sql.Column](extraFields).++[org.apache.spark.sql.Column](outputFields.map[org.apache.spark.sql.Column](((n: String) =&gt; org.apache.spark.sql.functions.col(&quot;&quot;.+(fieldName).+(&quot;.result.&quot;).+(n)).as(n)))): _*))
+          input.select((scala.`package`.Seq.apply[org.apache.spark.sql.Column](if (useRunnerColumn)
+  runner
+else
+  org.apache.spark.sql.functions.col(fieldName), group_audit).++[org.apache.spark.sql.Column](extraFields).++[org.apache.spark.sql.Column](outputFields.map[org.apache.spark.sql.Column](((n: String) =&gt; org.apache.spark.sql.functions.col(&quot;&quot;.+(fieldName).+(&quot;.result.&quot;).+(n)).as(n)))): _*))
         </td>
       </tr><tr>
         <td>
-          30
+          36
         </td>
         <td>
-          793
+          673
         </td>
         <td>
-          1398
+          1674
           -
-          1413
+          1680
+        </td>
+        <td>
+          Ident
+        </td>
+        <td>
+          com.sparkutils.flow.StepUtils.runner
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          runner
+        </td>
+      </tr><tr>
+        <td>
+          36
+        </td>
+        <td>
+          674
+        </td>
+        <td>
+          1686
+          -
+          1701
         </td>
         <td>
           Apply
@@ -115,20 +282,44 @@
         <td>
           
         </td>
-        <td style="background: #AEF1AE">
+        <td style="background: #F0ADAD">
           org.apache.spark.sql.functions.col(fieldName)
         </td>
       </tr><tr>
         <td>
-          31
+          36
         </td>
         <td>
-          796
+          675
         </td>
         <td>
-          1394
+          1686
           -
-          1539
+          1701
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          org.apache.spark.sql.functions.col
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #F0ADAD">
+          org.apache.spark.sql.functions.col(fieldName)
+        </td>
+      </tr><tr>
+        <td>
+          37
+        </td>
+        <td>
+          678
+        </td>
+        <td>
+          1649
+          -
+          1827
         </td>
         <td>
           Apply
@@ -140,19 +331,22 @@
           
         </td>
         <td style="background: #AEF1AE">
-          scala.`package`.Seq.apply[org.apache.spark.sql.Column](org.apache.spark.sql.functions.col(fieldName), group_audit).++[org.apache.spark.sql.Column](extraFields).++[org.apache.spark.sql.Column](outputFields.map[org.apache.spark.sql.Column](((n: String) =&gt; org.apache.spark.sql.functions.col(&quot;&quot;.+(fieldName).+(&quot;.result.&quot;).+(n)).as(n))))
+          scala.`package`.Seq.apply[org.apache.spark.sql.Column](if (useRunnerColumn)
+  runner
+else
+  org.apache.spark.sql.functions.col(fieldName), group_audit).++[org.apache.spark.sql.Column](extraFields).++[org.apache.spark.sql.Column](outputFields.map[org.apache.spark.sql.Column](((n: String) =&gt; org.apache.spark.sql.functions.col(&quot;&quot;.+(fieldName).+(&quot;.result.&quot;).+(n)).as(n))))
         </td>
       </tr><tr>
         <td>
-          32
+          38
         </td>
         <td>
-          795
+          677
         </td>
         <td>
-          1462
+          1750
           -
-          1539
+          1827
         </td>
         <td>
           Apply
@@ -168,15 +362,15 @@
         </td>
       </tr><tr>
         <td>
-          33
+          39
         </td>
         <td>
-          794
+          676
         </td>
         <td>
-          1494
+          1782
           -
-          1529
+          1817
         </td>
         <td>
           Apply
@@ -189,6 +383,2927 @@
         </td>
         <td style="background: #AEF1AE">
           org.apache.spark.sql.functions.col(&quot;&quot;.+(fieldName).+(&quot;.result.&quot;).+(n)).as(n)
+        </td>
+      </tr><tr>
+        <td>
+          54
+        </td>
+        <td>
+          680
+        </td>
+        <td>
+          2464
+          -
+          2484
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.select
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          input.select(runner)
+        </td>
+      </tr><tr>
+        <td>
+          55
+        </td>
+        <td>
+          681
+        </td>
+        <td>
+          2509
+          -
+          2530
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          org.apache.spark.sql.types.StructType.fields
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          starter.schema.fields
+        </td>
+      </tr><tr>
+        <td>
+          56
+        </td>
+        <td>
+          682
+        </td>
+        <td>
+          2509
+          -
+          2583
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          org.apache.spark.sql.types.StructType.fields
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Predef.refArrayOps[org.apache.spark.sql.types.StructField](starter.schema.fields).head.dataType.asInstanceOf[org.apache.spark.sql.types.StructType].fields
+        </td>
+      </tr><tr>
+        <td>
+          56
+        </td>
+        <td>
+          683
+        </td>
+        <td>
+          2589
+          -
+          2607
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          x$2.name.==(&quot;result&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          57
+        </td>
+        <td>
+          684
+        </td>
+        <td>
+          2618
+          -
+          2669
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          org.apache.spark.sql.types.StructType.fields
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          f.dataType.asInstanceOf[org.apache.spark.sql.types.StructType].fields
+        </td>
+      </tr><tr>
+        <td>
+          57
+        </td>
+        <td>
+          685
+        </td>
+        <td>
+          2679
+          -
+          2685
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          org.apache.spark.sql.types.StructField.name
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          f.name
+        </td>
+      </tr><tr>
+        <td>
+          57
+        </td>
+        <td>
+          686
+        </td>
+        <td>
+          2618
+          -
+          2686
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          scala.collection.ArrayOps.map
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Predef.refArrayOps[org.apache.spark.sql.types.StructField](f.dataType.asInstanceOf[org.apache.spark.sql.types.StructType].fields).map[String](((f: org.apache.spark.sql.types.StructField) =&gt; f.name))((ClassTag.apply[String](classOf[java.lang.String]): scala.reflect.ClassTag[String]))
+        </td>
+      </tr><tr>
+        <td>
+          57
+        </td>
+        <td>
+          687
+        </td>
+        <td>
+          2618
+          -
+          2692
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.collection.IterableOnceOps.toSet
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Predef.wrapRefArray[String](scala.Predef.refArrayOps[org.apache.spark.sql.types.StructField](f.dataType.asInstanceOf[org.apache.spark.sql.types.StructType].fields).map[String](((f: org.apache.spark.sql.types.StructField) =&gt; f.name))((ClassTag.apply[String](classOf[java.lang.String]): scala.reflect.ClassTag[String]))).toSet[String]
+        </td>
+      </tr><tr>
+        <td>
+          57
+        </td>
+        <td>
+          688
+        </td>
+        <td>
+          2704
+          -
+          2721
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.collection.immutable.Set.empty
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Predef.Set.empty[String]
+        </td>
+      </tr><tr>
+        <td>
+          57
+        </td>
+        <td>
+          689
+        </td>
+        <td>
+          2509
+          -
+          2722
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Predef.refArrayOps[org.apache.spark.sql.types.StructField](scala.Predef.refArrayOps[org.apache.spark.sql.types.StructField](starter.schema.fields).head.dataType.asInstanceOf[org.apache.spark.sql.types.StructType].fields).find(((x$2: org.apache.spark.sql.types.StructField) =&gt; x$2.name.==(&quot;result&quot;))).map[scala.collection.immutable.Set[String]](((f: org.apache.spark.sql.types.StructField) =&gt; scala.Predef.wrapRefArray[String](scala.Predef.refArrayOps[org.apache.spark.sql.types.StructField](f.dataType.asInstanceOf[org.apache.spark.sql.types.StructType].fields).map[String](((f: org.apache.spark.sql.types.StructField) =&gt; f.name))((ClassTag.apply[String](classOf[java.lang.String]): scala.reflect.ClassTag[String]))).toSet[String])).getOrElse[scala.collection.immutable.Set[String]](scala.Predef.Set.empty[String])
+        </td>
+      </tr><tr>
+        <td>
+          58
+        </td>
+        <td>
+          690
+        </td>
+        <td>
+          2768
+          -
+          2811
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Column.as
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          org.apache.spark.sql.functions.expr(&quot;&quot;.+(fieldName).+(&quot;.result.&quot;).+(name)).as(name)
+        </td>
+      </tr><tr>
+        <td>
+          58
+        </td>
+        <td>
+          691
+        </td>
+        <td>
+          2742
+          -
+          2812
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableOps.map
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          childrenNames.map[org.apache.spark.sql.Column](((name: String) =&gt; org.apache.spark.sql.functions.expr(&quot;&quot;.+(fieldName).+(&quot;.result.&quot;).+(name)).as(name)))
+        </td>
+      </tr><tr>
+        <td>
+          60
+        </td>
+        <td>
+          692
+        </td>
+        <td>
+          2831
+          -
+          2907
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableOps.++
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.`package`.Seq.apply[org.apache.spark.sql.Column](runner, group_audit).++[org.apache.spark.sql.Column](extra.apply(childrenNames).map[org.apache.spark.sql.Column](((colName: String) =&gt; org.apache.spark.sql.functions.col(colName))).toSeq).++[org.apache.spark.sql.Column](children)
+        </td>
+      </tr><tr>
+        <td>
+          60
+        </td>
+        <td>
+          693
+        </td>
+        <td>
+          2818
+          -
+          2912
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.select
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          input.select((scala.`package`.Seq.apply[org.apache.spark.sql.Column](runner, group_audit).++[org.apache.spark.sql.Column](extra.apply(childrenNames).map[org.apache.spark.sql.Column](((colName: String) =&gt; org.apache.spark.sql.functions.col(colName))).toSeq).++[org.apache.spark.sql.Column](children): _*))
+        </td>
+      </tr><tr>
+        <td>
+          71
+        </td>
+        <td>
+          694
+        </td>
+        <td>
+          3370
+          -
+          3382
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.Step.options
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          step.options
+        </td>
+      </tr><tr>
+        <td>
+          71
+        </td>
+        <td>
+          695
+        </td>
+        <td>
+          3370
+          -
+          3382
+        </td>
+        <td>
+          ApplyImplicitView
+        </td>
+        <td>
+          com.sparkutils.flow.impl.util.Utils.MapOps
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          com.sparkutils.flow.impl.util.Utils.MapOps(step.options)
+        </td>
+      </tr><tr>
+        <td>
+          71
+        </td>
+        <td>
+          696
+        </td>
+        <td>
+          3391
+          -
+          3411
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.Constants.forceMergeProjection
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.this.`package`.forceMergeProjection
+        </td>
+      </tr><tr>
+        <td>
+          71
+        </td>
+        <td>
+          697
+        </td>
+        <td>
+          3370
+          -
+          3412
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.impl.util.Utils.MapOps.boolean
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          qual$1.boolean(x$1, x$2)
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          698
+        </td>
+        <td>
+          3424
+          -
+          3428
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          699
+        </td>
+        <td>
+          3424
+          -
+          3428
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          700
+        </td>
+        <td>
+          3452
+          -
+          3459
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[Set[String]](s)
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          701
+        </td>
+        <td>
+          3452
+          -
+          3459
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[Set[String]](s)
+        </td>
+      </tr><tr>
+        <td>
+          75
+        </td>
+        <td>
+          702
+        </td>
+        <td>
+          3476
+          -
+          3492
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FlowT.flowAuditColName
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.flowAuditColName
+        </td>
+      </tr><tr>
+        <td>
+          75
+        </td>
+        <td>
+          703
+        </td>
+        <td>
+          3472
+          -
+          3492
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.immutable.SetOps.-
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          x$3.-(flow.flowAuditColName)
+        </td>
+      </tr><tr>
+        <td>
+          75
+        </td>
+        <td>
+          704
+        </td>
+        <td>
+          3329
+          -
+          3493
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.map
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          outputFieldsI.flatMap[Set[String]](((s: Set[String]) =&gt; if ({
+  &lt;artifact&gt; val qual$1: com.sparkutils.flow.impl.util.Utils.MapOps = com.sparkutils.flow.impl.util.Utils.MapOps(step.options);
+  &lt;artifact&gt; val x$1: String = flow.this.`package`.forceMergeProjection;
+  &lt;artifact&gt; val x$2: Boolean = qual$1.boolean$default$2;
+  qual$1.boolean(x$1, x$2)
+})
+  scala.None
+else
+  scala.Some.apply[Set[String]](s))).map[scala.collection.immutable.Set[String]](((x$3: Set[String]) =&gt; x$3.-(flow.flowAuditColName)))
+        </td>
+      </tr><tr>
+        <td>
+          77
+        </td>
+        <td>
+          713
+        </td>
+        <td>
+          3503
+          -
+          3534
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Tuple2.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Tuple2.apply[Seq[org.apache.spark.sql.Column], Seq[org.apache.spark.sql.Column]](starterColumns, existingAudit)
+        </td>
+      </tr><tr>
+        <td>
+          77
+        </td>
+        <td>
+          714
+        </td>
+        <td>
+          3503
+          -
+          3534
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          scala.Tuple2.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Tuple2.apply[Seq[org.apache.spark.sql.Column], Seq[org.apache.spark.sql.Column]](starterColumns, existingAudit)
+        </td>
+      </tr><tr>
+        <td>
+          77
+        </td>
+        <td>
+          715
+        </td>
+        <td>
+          3504
+          -
+          3504
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Tuple2._1
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          x$4._1
+        </td>
+      </tr><tr>
+        <td>
+          77
+        </td>
+        <td>
+          716
+        </td>
+        <td>
+          3520
+          -
+          3520
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Tuple2._2
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          x$4._2
+        </td>
+      </tr><tr>
+        <td>
+          81
+        </td>
+        <td>
+          705
+        </td>
+        <td>
+          3737
+          -
+          3748
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.SeqFactory.Delegate.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.`package`.Seq.apply[org.apache.spark.sql.Column](runner)
+        </td>
+      </tr><tr>
+        <td>
+          81
+        </td>
+        <td>
+          712
+        </td>
+        <td>
+          3736
+          -
+          3875
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Tuple2.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Tuple2.apply[Seq[org.apache.spark.sql.Column], Seq[org.apache.spark.sql.Column]](scala.`package`.Seq.apply[org.apache.spark.sql.Column](runner), ei.hasAudit[Seq[org.apache.spark.sql.Column]](flow.flowAuditColName)(scala.`package`.Seq.apply[org.apache.spark.sql.Column](org.apache.spark.sql.functions.col(flow.flowAuditColName)))(scala.`package`.Seq.empty[Nothing]))
+        </td>
+      </tr><tr>
+        <td>
+          82
+        </td>
+        <td>
+          706
+        </td>
+        <td>
+          3770
+          -
+          3786
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FlowT.flowAuditColName
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.flowAuditColName
+        </td>
+      </tr><tr>
+        <td>
+          83
+        </td>
+        <td>
+          707
+        </td>
+        <td>
+          3808
+          -
+          3824
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FlowT.flowAuditColName
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.flowAuditColName
+        </td>
+      </tr><tr>
+        <td>
+          83
+        </td>
+        <td>
+          708
+        </td>
+        <td>
+          3803
+          -
+          3825
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.functions.col
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          org.apache.spark.sql.functions.col(flow.flowAuditColName)
+        </td>
+      </tr><tr>
+        <td>
+          83
+        </td>
+        <td>
+          709
+        </td>
+        <td>
+          3799
+          -
+          3826
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.SeqFactory.Delegate.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.`package`.Seq.apply[org.apache.spark.sql.Column](org.apache.spark.sql.functions.col(flow.flowAuditColName))
+        </td>
+      </tr><tr>
+        <td>
+          84
+        </td>
+        <td>
+          711
+        </td>
+        <td>
+          3758
+          -
+          3867
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.RunnerInputs.hasAudit
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          ei.hasAudit[Seq[org.apache.spark.sql.Column]](flow.flowAuditColName)(scala.`package`.Seq.apply[org.apache.spark.sql.Column](org.apache.spark.sql.functions.col(flow.flowAuditColName)))(scala.`package`.Seq.empty[Nothing])
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          710
+        </td>
+        <td>
+          3848
+          -
+          3857
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.collection.SeqFactory.Delegate.empty
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.`package`.Seq.empty[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          89
+        </td>
+        <td>
+          717
+        </td>
+        <td>
+          3897
+          -
+          3918
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.Step.defaultFieldName
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          step.defaultFieldName
+        </td>
+      </tr><tr>
+        <td>
+          91
+        </td>
+        <td>
+          718
+        </td>
+        <td>
+          3960
+          -
+          3993
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Column.as
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          org.apache.spark.sql.functions.col(fieldName).getField(n).as(n)
+        </td>
+      </tr><tr>
+        <td>
+          91
+        </td>
+        <td>
+          719
+        </td>
+        <td>
+          3939
+          -
+          3994
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableOps.map
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          childrenRaw.map[org.apache.spark.sql.Column](((n: String) =&gt; org.apache.spark.sql.functions.col(fieldName).getField(n).as(n)))
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          720
+        </td>
+        <td>
+          4037
+          -
+          4052
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.functions.col
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          org.apache.spark.sql.functions.col(fieldName)
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          721
+        </td>
+        <td>
+          4062
+          -
+          4209
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableOps.++
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          step.operation.combineAuditWith.map[Seq[org.apache.spark.sql.Column]](((fnames: Set[String]) =&gt; fnames.map[org.apache.spark.sql.Column](((fname: String) =&gt; org.apache.spark.sql.functions.expr(fname))).toSeq)).getOrElse[Seq[org.apache.spark.sql.Column]](scala.`package`.Seq.empty[Nothing]).++[org.apache.spark.sql.Column](existingAudit)
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          722
+        </td>
+        <td>
+          4229
+          -
+          4245
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FlowT.flowAuditColName
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.flowAuditColName
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          723
+        </td>
+        <td>
+          4025
+          -
+          4246
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Column.as
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          com.sparkutils.quality.functions.`package`.group_audit(org.apache.spark.sql.functions.col(fieldName), (step.operation.combineAuditWith.map[Seq[org.apache.spark.sql.Column]](((fnames: Set[String]) =&gt; fnames.map[org.apache.spark.sql.Column](((fname: String) =&gt; org.apache.spark.sql.functions.expr(fname))).toSeq)).getOrElse[Seq[org.apache.spark.sql.Column]](scala.`package`.Seq.empty[Nothing]).++[org.apache.spark.sql.Column](existingAudit): _*)).as(flow.flowAuditColName)
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          724
+        </td>
+        <td>
+          4252
+          -
+          4336
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.ResultProcessInputs.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          ResultProcessInputs.apply(outputFields, starterColumns, fieldName, children, group_auditF)
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          725
+        </td>
+        <td>
+          4592
+          -
+          4625
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.FlowDataHandling.inputSchema
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.inputSchema(dataFrame, step)
+        </td>
+      </tr><tr>
+        <td>
+          107
+        </td>
+        <td>
+          726
+        </td>
+        <td>
+          4680
+          -
+          4696
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FlowT.flowAuditColName
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.flowAuditColName
+        </td>
+      </tr><tr>
+        <td>
+          107
+        </td>
+        <td>
+          727
+        </td>
+        <td>
+          4670
+          -
+          4696
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          x$5.name.==(flow.flowAuditColName)
+        </td>
+      </tr><tr>
+        <td>
+          107
+        </td>
+        <td>
+          728
+        </td>
+        <td>
+          4702
+          -
+          4708
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          org.apache.spark.sql.types.StructField.name
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          x$6.name
+        </td>
+      </tr><tr>
+        <td>
+          107
+        </td>
+        <td>
+          729
+        </td>
+        <td>
+          4653
+          -
+          4709
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableOps.map
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          struct.filterNot(((x$5: org.apache.spark.sql.types.StructField) =&gt; x$5.name.==(flow.flowAuditColName))).map[String](((x$6: org.apache.spark.sql.types.StructField) =&gt; x$6.name))
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          730
+        </td>
+        <td>
+          4762
+          -
+          4776
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.Constants.resultDataType
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.this.`package`.resultDataType
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          731
+        </td>
+        <td>
+          4745
+          -
+          4777
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.impl.util.Utils.MapOps.dataType
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          com.sparkutils.flow.impl.util.Utils.MapOps(options).dataType(flow.this.`package`.resultDataType)
+        </td>
+      </tr><tr>
+        <td>
+          111
+        </td>
+        <td>
+          732
+        </td>
+        <td>
+          4827
+          -
+          4835
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          org.apache.spark.sql.types.StructType.fields
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          s.fields
+        </td>
+      </tr><tr>
+        <td>
+          111
+        </td>
+        <td>
+          733
+        </td>
+        <td>
+          4840
+          -
+          4846
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          org.apache.spark.sql.types.StructField.name
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          x$7.name
+        </td>
+      </tr><tr>
+        <td>
+          111
+        </td>
+        <td>
+          734
+        </td>
+        <td>
+          4827
+          -
+          4847
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          scala.collection.ArrayOps.map
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Predef.refArrayOps[org.apache.spark.sql.types.StructField](s.fields).map[String](((x$7: org.apache.spark.sql.types.StructField) =&gt; x$7.name))((ClassTag.apply[String](classOf[java.lang.String]): scala.reflect.ClassTag[String]))
+        </td>
+      </tr><tr>
+        <td>
+          111
+        </td>
+        <td>
+          735
+        </td>
+        <td>
+          4863
+          -
+          4879
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FlowT.flowAuditColName
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.flowAuditColName
+        </td>
+      </tr><tr>
+        <td>
+          111
+        </td>
+        <td>
+          736
+        </td>
+        <td>
+          4858
+          -
+          4879
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          x$8.==(flow.flowAuditColName)
+        </td>
+      </tr><tr>
+        <td>
+          111
+        </td>
+        <td>
+          737
+        </td>
+        <td>
+          4827
+          -
+          4880
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.ArrayOps.filterNot
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Predef.refArrayOps[String](scala.Predef.refArrayOps[org.apache.spark.sql.types.StructField](s.fields).map[String](((x$7: org.apache.spark.sql.types.StructField) =&gt; x$7.name))((ClassTag.apply[String](classOf[java.lang.String]): scala.reflect.ClassTag[String]))).filterNot(((x$8: String) =&gt; x$8.==(flow.flowAuditColName)))
+        </td>
+      </tr><tr>
+        <td>
+          111
+        </td>
+        <td>
+          738
+        </td>
+        <td>
+          4827
+          -
+          4886
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.collection.IterableOnceOps.toSet
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Predef.wrapRefArray[String](scala.Predef.refArrayOps[String](scala.Predef.refArrayOps[org.apache.spark.sql.types.StructField](s.fields).map[String](((x$7: org.apache.spark.sql.types.StructField) =&gt; x$7.name))((ClassTag.apply[String](classOf[java.lang.String]): scala.reflect.ClassTag[String]))).filterNot(((x$8: String) =&gt; x$8.==(flow.flowAuditColName)))).toSet[String]
+        </td>
+      </tr><tr>
+        <td>
+          111
+        </td>
+        <td>
+          739
+        </td>
+        <td>
+          4822
+          -
+          4887
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[scala.collection.immutable.Set[String]](scala.Predef.wrapRefArray[String](scala.Predef.refArrayOps[String](scala.Predef.refArrayOps[org.apache.spark.sql.types.StructField](s.fields).map[String](((x$7: org.apache.spark.sql.types.StructField) =&gt; x$7.name))((ClassTag.apply[String](classOf[java.lang.String]): scala.reflect.ClassTag[String]))).filterNot(((x$8: String) =&gt; x$8.==(flow.flowAuditColName)))).toSet[String])
+        </td>
+      </tr><tr>
+        <td>
+          111
+        </td>
+        <td>
+          740
+        </td>
+        <td>
+          4822
+          -
+          4887
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[scala.collection.immutable.Set[String]](scala.Predef.wrapRefArray[String](scala.Predef.refArrayOps[String](scala.Predef.refArrayOps[org.apache.spark.sql.types.StructField](s.fields).map[String](((x$7: org.apache.spark.sql.types.StructField) =&gt; x$7.name))((ClassTag.apply[String](classOf[java.lang.String]): scala.reflect.ClassTag[String]))).filterNot(((x$8: String) =&gt; x$8.==(flow.flowAuditColName)))).toSet[String])
+        </td>
+      </tr><tr>
+        <td>
+          112
+        </td>
+        <td>
+          741
+        </td>
+        <td>
+          4906
+          -
+          4910
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          112
+        </td>
+        <td>
+          742
+        </td>
+        <td>
+          4906
+          -
+          4910
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          114
+        </td>
+        <td>
+          743
+        </td>
+        <td>
+          4923
+          -
+          4980
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.RunnerInputs.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          RunnerInputs.apply(struct, withoutFlowAudit, dataRefTypeFields)
+        </td>
+      </tr><tr>
+        <td>
+          127
+        </td>
+        <td>
+          744
+        </td>
+        <td>
+          5438
+          -
+          5486
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Tuple3.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Tuple3.apply[org.apache.spark.sql.Column, Seq[String], Option[Set[String]]](runner, childrenRaw, outputFieldsI)
+        </td>
+      </tr><tr>
+        <td>
+          127
+        </td>
+        <td>
+          745
+        </td>
+        <td>
+          5438
+          -
+          5486
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          scala.Tuple3.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Tuple3.apply[org.apache.spark.sql.Column, Seq[String], Option[Set[String]]](runner, childrenRaw, outputFieldsI)
+        </td>
+      </tr><tr>
+        <td>
+          127
+        </td>
+        <td>
+          746
+        </td>
+        <td>
+          5451
+          -
+          5451
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Tuple3._1
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          x$9._1
+        </td>
+      </tr><tr>
+        <td>
+          127
+        </td>
+        <td>
+          747
+        </td>
+        <td>
+          5459
+          -
+          5459
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Tuple3._2
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          x$9._2
+        </td>
+      </tr><tr>
+        <td>
+          127
+        </td>
+        <td>
+          748
+        </td>
+        <td>
+          5472
+          -
+          5472
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Tuple3._3
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          x$9._3
+        </td>
+      </tr><tr>
+        <td>
+          129
+        </td>
+        <td>
+          749
+        </td>
+        <td>
+          5552
+          -
+          5596
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          com.sparkutils.flow.StepUtils.runnerInputs
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          StepUtils.this.runnerInputs[RP](step.options, dataFrame, step, flow)(evidence$3)
+        </td>
+      </tr><tr>
+        <td>
+          129
+        </td>
+        <td>
+          750
+        </td>
+        <td>
+          5505
+          -
+          5549
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Tuple3.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Tuple3.apply[com.sparkutils.flow.RunnerInputs, org.apache.spark.sql.types.StructType, Seq[String]](ei, struct, withoutFlowAudit)
+        </td>
+      </tr><tr>
+        <td>
+          129
+        </td>
+        <td>
+          751
+        </td>
+        <td>
+          5505
+          -
+          5549
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          scala.Tuple3.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Tuple3.apply[com.sparkutils.flow.RunnerInputs, org.apache.spark.sql.types.StructType, Seq[String]](ei, struct, withoutFlowAudit)
+        </td>
+      </tr><tr>
+        <td>
+          129
+        </td>
+        <td>
+          752
+        </td>
+        <td>
+          5505
+          -
+          5505
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Tuple3._1
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          x$10._1
+        </td>
+      </tr><tr>
+        <td>
+          129
+        </td>
+        <td>
+          753
+        </td>
+        <td>
+          5521
+          -
+          5521
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Tuple3._2
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          x$10._2
+        </td>
+      </tr><tr>
+        <td>
+          129
+        </td>
+        <td>
+          754
+        </td>
+        <td>
+          5529
+          -
+          5529
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Tuple3._3
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          x$10._3
+        </td>
+      </tr><tr>
+        <td>
+          131
+        </td>
+        <td>
+          756
+        </td>
+        <td>
+          5606
+          -
+          5693
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Tuple6.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Tuple6.apply[com.sparkutils.flow.ResultProcessInputs, Option[Set[String]], Seq[org.apache.spark.sql.Column], String, Seq[org.apache.spark.sql.Column], org.apache.spark.sql.Column](ri, outputFields, starterColumns, fieldName, children, group_auditF)
+        </td>
+      </tr><tr>
+        <td>
+          131
+        </td>
+        <td>
+          757
+        </td>
+        <td>
+          5606
+          -
+          5693
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          scala.Tuple6.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Tuple6.apply[com.sparkutils.flow.ResultProcessInputs, Option[Set[String]], Seq[org.apache.spark.sql.Column], String, Seq[org.apache.spark.sql.Column], org.apache.spark.sql.Column](ri, outputFields, starterColumns, fieldName, children, group_auditF)
+        </td>
+      </tr><tr>
+        <td>
+          131
+        </td>
+        <td>
+          758
+        </td>
+        <td>
+          5606
+          -
+          5606
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Tuple6._1
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          x$11._1
+        </td>
+      </tr><tr>
+        <td>
+          131
+        </td>
+        <td>
+          759
+        </td>
+        <td>
+          5629
+          -
+          5629
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Tuple6._2
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          x$11._2
+        </td>
+      </tr><tr>
+        <td>
+          131
+        </td>
+        <td>
+          760
+        </td>
+        <td>
+          5643
+          -
+          5643
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Tuple6._3
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          x$11._3
+        </td>
+      </tr><tr>
+        <td>
+          131
+        </td>
+        <td>
+          761
+        </td>
+        <td>
+          5659
+          -
+          5659
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Tuple6._4
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          x$11._4
+        </td>
+      </tr><tr>
+        <td>
+          131
+        </td>
+        <td>
+          762
+        </td>
+        <td>
+          5670
+          -
+          5670
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Tuple6._5
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          x$11._5
+        </td>
+      </tr><tr>
+        <td>
+          131
+        </td>
+        <td>
+          763
+        </td>
+        <td>
+          5680
+          -
+          5680
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Tuple6._6
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          x$11._6
+        </td>
+      </tr><tr>
+        <td>
+          132
+        </td>
+        <td>
+          755
+        </td>
+        <td>
+          5702
+          -
+          5773
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          com.sparkutils.flow.StepUtils.resultProcessInputs
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          StepUtils.this.resultProcessInputs[RP](step, runner, childrenRaw, outputFieldsI, ei, flow)(evidence$3)
+        </td>
+      </tr><tr>
+        <td>
+          134
+        </td>
+        <td>
+          764
+        </td>
+        <td>
+          5779
+          -
+          5793
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.Operation.resultApproach
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          step.operation.resultApproach
+        </td>
+      </tr><tr>
+        <td>
+          136
+        </td>
+        <td>
+          772
+        </td>
+        <td>
+          5846
+          -
+          6030
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableOps.++
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          starterColumns.++[org.apache.spark.sql.Column](ei.hasAudit[Seq[org.apache.spark.sql.Column]](flow.flowAuditColName)(withoutFlowAudit.map[org.apache.spark.sql.Column](((colName: String) =&gt; org.apache.spark.sql.functions.col(colName))).++[org.apache.spark.sql.Column](scala.`package`.Seq.apply[org.apache.spark.sql.Column](group_auditF)))(scala.`package`.Seq.apply[org.apache.spark.sql.Column](org.apache.spark.sql.functions.expr(&quot;*&quot;), group_auditF)))
+        </td>
+      </tr><tr>
+        <td>
+          136
+        </td>
+        <td>
+          773
+        </td>
+        <td>
+          5829
+          -
+          6035
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.select
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          dataFrame.select((starterColumns.++[org.apache.spark.sql.Column](ei.hasAudit[Seq[org.apache.spark.sql.Column]](flow.flowAuditColName)(withoutFlowAudit.map[org.apache.spark.sql.Column](((colName: String) =&gt; org.apache.spark.sql.functions.col(colName))).++[org.apache.spark.sql.Column](scala.`package`.Seq.apply[org.apache.spark.sql.Column](group_auditF)))(scala.`package`.Seq.apply[org.apache.spark.sql.Column](org.apache.spark.sql.functions.expr(&quot;*&quot;), group_auditF))): _*))
+        </td>
+      </tr><tr>
+        <td>
+          136
+        </td>
+        <td>
+          774
+        </td>
+        <td>
+          5829
+          -
+          6035
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.select
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          dataFrame.select((starterColumns.++[org.apache.spark.sql.Column](ei.hasAudit[Seq[org.apache.spark.sql.Column]](flow.flowAuditColName)(withoutFlowAudit.map[org.apache.spark.sql.Column](((colName: String) =&gt; org.apache.spark.sql.functions.col(colName))).++[org.apache.spark.sql.Column](scala.`package`.Seq.apply[org.apache.spark.sql.Column](group_auditF)))(scala.`package`.Seq.apply[org.apache.spark.sql.Column](org.apache.spark.sql.functions.expr(&quot;*&quot;), group_auditF))): _*))
+        </td>
+      </tr><tr>
+        <td>
+          137
+        </td>
+        <td>
+          765
+        </td>
+        <td>
+          5886
+          -
+          5902
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FlowT.flowAuditColName
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.flowAuditColName
+        </td>
+      </tr><tr>
+        <td>
+          138
+        </td>
+        <td>
+          766
+        </td>
+        <td>
+          5938
+          -
+          5942
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.functions.col
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          org.apache.spark.sql.functions.col(colName)
+        </td>
+      </tr><tr>
+        <td>
+          138
+        </td>
+        <td>
+          767
+        </td>
+        <td>
+          5947
+          -
+          5964
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.SeqFactory.Delegate.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.`package`.Seq.apply[org.apache.spark.sql.Column](group_auditF)
+        </td>
+      </tr><tr>
+        <td>
+          138
+        </td>
+        <td>
+          768
+        </td>
+        <td>
+          5917
+          -
+          5964
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableOps.++
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          withoutFlowAudit.map[org.apache.spark.sql.Column](((colName: String) =&gt; org.apache.spark.sql.functions.col(colName))).++[org.apache.spark.sql.Column](scala.`package`.Seq.apply[org.apache.spark.sql.Column](group_auditF))
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          771
+        </td>
+        <td>
+          5874
+          -
+          6030
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.RunnerInputs.hasAudit
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          ei.hasAudit[Seq[org.apache.spark.sql.Column]](flow.flowAuditColName)(withoutFlowAudit.map[org.apache.spark.sql.Column](((colName: String) =&gt; org.apache.spark.sql.functions.col(colName))).++[org.apache.spark.sql.Column](scala.`package`.Seq.apply[org.apache.spark.sql.Column](group_auditF)))(scala.`package`.Seq.apply[org.apache.spark.sql.Column](org.apache.spark.sql.functions.expr(&quot;*&quot;), group_auditF))
+        </td>
+      </tr><tr>
+        <td>
+          140
+        </td>
+        <td>
+          769
+        </td>
+        <td>
+          5994
+          -
+          6003
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.functions.expr
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          org.apache.spark.sql.functions.expr(&quot;*&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          140
+        </td>
+        <td>
+          770
+        </td>
+        <td>
+          5990
+          -
+          6018
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.SeqFactory.Delegate.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.`package`.Seq.apply[org.apache.spark.sql.Column](org.apache.spark.sql.functions.expr(&quot;*&quot;), group_auditF)
+        </td>
+      </tr><tr>
+        <td>
+          147
+        </td>
+        <td>
+          778
+        </td>
+        <td>
+          6103
+          -
+          6316
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.StepUtils.withoutOutputFields
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          StepUtils.this.withoutOutputFields(fieldName, runner, group_auditF, dataFrame, ((childrenNames: Set[String]) =&gt; {
+  val og: scala.collection.immutable.Set[String] = scala.Predef.wrapRefArray[String](dataFrame.columns).toSet[String];
+  og.--(childrenNames)
+}))
+        </td>
+      </tr><tr>
+        <td>
+          148
+        </td>
+        <td>
+          775
+        </td>
+        <td>
+          6215
+          -
+          6232
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.columns
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          dataFrame.columns
+        </td>
+      </tr><tr>
+        <td>
+          148
+        </td>
+        <td>
+          776
+        </td>
+        <td>
+          6215
+          -
+          6238
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.collection.IterableOnceOps.toSet
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Predef.wrapRefArray[String](dataFrame.columns).toSet[String]
+        </td>
+      </tr><tr>
+        <td>
+          149
+        </td>
+        <td>
+          777
+        </td>
+        <td>
+          6251
+          -
+          6270
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.immutable.SetOps.--
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          og.--(childrenNames)
+        </td>
+      </tr><tr>
+        <td>
+          152
+        </td>
+        <td>
+          786
+        </td>
+        <td>
+          6072
+          -
+          6593
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.fold
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          outputFields.fold[org.apache.spark.sql.DataFrame](StepUtils.this.withoutOutputFields(fieldName, runner, group_auditF, dataFrame, ((childrenNames: Set[String]) =&gt; {
+  val og: scala.collection.immutable.Set[String] = scala.Predef.wrapRefArray[String](dataFrame.columns).toSet[String];
+  og.--(childrenNames)
+})))(((outputFields: Set[String]) =&gt; {
+  val fields: scala.collection.immutable.Set[String] = struct.map[String](((x$12: org.apache.spark.sql.types.StructField) =&gt; x$12.name)).toSet[String].--(outputFields).-(flow.flowAuditColName);
+  StepUtils.this.withOutputFields(fieldName, runner, group_auditF, dataFrame, outputFields, fields.map[org.apache.spark.sql.Column](((colName: String) =&gt; org.apache.spark.sql.functions.col(colName))), true)
+}))
+        </td>
+      </tr><tr>
+        <td>
+          152
+        </td>
+        <td>
+          787
+        </td>
+        <td>
+          6072
+          -
+          6593
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          scala.Option.fold
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          outputFields.fold[org.apache.spark.sql.DataFrame](StepUtils.this.withoutOutputFields(fieldName, runner, group_auditF, dataFrame, ((childrenNames: Set[String]) =&gt; {
+  val og: scala.collection.immutable.Set[String] = scala.Predef.wrapRefArray[String](dataFrame.columns).toSet[String];
+  og.--(childrenNames)
+})))(((outputFields: Set[String]) =&gt; {
+  val fields: scala.collection.immutable.Set[String] = struct.map[String](((x$12: org.apache.spark.sql.types.StructField) =&gt; x$12.name)).toSet[String].--(outputFields).-(flow.flowAuditColName);
+  StepUtils.this.withOutputFields(fieldName, runner, group_auditF, dataFrame, outputFields, fields.map[org.apache.spark.sql.Column](((colName: String) =&gt; org.apache.spark.sql.functions.col(colName))), true)
+}))
+        </td>
+      </tr><tr>
+        <td>
+          154
+        </td>
+        <td>
+          779
+        </td>
+        <td>
+          6381
+          -
+          6387
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          org.apache.spark.sql.types.StructField.name
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          x$12.name
+        </td>
+      </tr><tr>
+        <td>
+          154
+        </td>
+        <td>
+          780
+        </td>
+        <td>
+          6413
+          -
+          6429
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FlowT.flowAuditColName
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.flowAuditColName
+        </td>
+      </tr><tr>
+        <td>
+          154
+        </td>
+        <td>
+          781
+        </td>
+        <td>
+          6370
+          -
+          6429
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.immutable.SetOps.-
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          struct.map[String](((x$12: org.apache.spark.sql.types.StructField) =&gt; x$12.name)).toSet[String].--(outputFields).-(flow.flowAuditColName)
+        </td>
+      </tr><tr>
+        <td>
+          155
+        </td>
+        <td>
+          782
+        </td>
+        <td>
+          6540
+          -
+          6544
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.functions.col
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          org.apache.spark.sql.functions.col(colName)
+        </td>
+      </tr><tr>
+        <td>
+          155
+        </td>
+        <td>
+          783
+        </td>
+        <td>
+          6529
+          -
+          6545
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableOps.map
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          fields.map[org.apache.spark.sql.Column](((colName: String) =&gt; org.apache.spark.sql.functions.col(colName)))
+        </td>
+      </tr><tr>
+        <td>
+          155
+        </td>
+        <td>
+          785
+        </td>
+        <td>
+          6440
+          -
+          6582
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.StepUtils.withOutputFields
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          StepUtils.this.withOutputFields(fieldName, runner, group_auditF, dataFrame, outputFields, fields.map[org.apache.spark.sql.Column](((colName: String) =&gt; org.apache.spark.sql.functions.col(colName))), true)
+        </td>
+      </tr><tr>
+        <td>
+          156
+        </td>
+        <td>
+          784
+        </td>
+        <td>
+          6577
+          -
+          6581
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          true
+        </td>
+      </tr><tr>
+        <td>
+          164
+        </td>
+        <td>
+          788
+        </td>
+        <td>
+          6666
+          -
+          6729
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.StepUtils.withoutOutputFields
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          StepUtils.this.withoutOutputFields(fieldName, runner, group_auditF, dataFrame, StepUtils.this.withoutOutputFields$default$5)
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          791
+        </td>
+        <td>
+          6635
+          -
+          6882
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.fold
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          outputFields.fold[org.apache.spark.sql.DataFrame](StepUtils.this.withoutOutputFields(fieldName, runner, group_auditF, dataFrame, StepUtils.this.withoutOutputFields$default$5))(((o: Set[String]) =&gt; {
+  &lt;artifact&gt; val x$1: String = fieldName;
+  &lt;artifact&gt; val x$2: org.apache.spark.sql.Column = runner;
+  &lt;artifact&gt; val x$3: org.apache.spark.sql.Column = group_auditF;
+  &lt;artifact&gt; val x$4: org.apache.spark.sql.DataFrame = dataFrame;
+  &lt;artifact&gt; val x$5: Set[String] @scala.reflect.internal.annotations.uncheckedBounds = o;
+  &lt;artifact&gt; val x$6: Boolean(true) = true;
+  &lt;artifact&gt; val x$7: Set[org.apache.spark.sql.Column] @scala.reflect.internal.annotations.uncheckedBounds = StepUtils.this.withOutputFields$default$6;
+  StepUtils.this.withOutputFields(x$1, x$2, x$3, x$4, x$5, x$7, true)
+}))
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          792
+        </td>
+        <td>
+          6635
+          -
+          6882
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          scala.Option.fold
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          outputFields.fold[org.apache.spark.sql.DataFrame](StepUtils.this.withoutOutputFields(fieldName, runner, group_auditF, dataFrame, StepUtils.this.withoutOutputFields$default$5))(((o: Set[String]) =&gt; {
+  &lt;artifact&gt; val x$1: String = fieldName;
+  &lt;artifact&gt; val x$2: org.apache.spark.sql.Column = runner;
+  &lt;artifact&gt; val x$3: org.apache.spark.sql.Column = group_auditF;
+  &lt;artifact&gt; val x$4: org.apache.spark.sql.DataFrame = dataFrame;
+  &lt;artifact&gt; val x$5: Set[String] @scala.reflect.internal.annotations.uncheckedBounds = o;
+  &lt;artifact&gt; val x$6: Boolean(true) = true;
+  &lt;artifact&gt; val x$7: Set[org.apache.spark.sql.Column] @scala.reflect.internal.annotations.uncheckedBounds = StepUtils.this.withOutputFields$default$6;
+  StepUtils.this.withOutputFields(x$1, x$2, x$3, x$4, x$5, x$7, true)
+}))
+        </td>
+      </tr><tr>
+        <td>
+          167
+        </td>
+        <td>
+          790
+        </td>
+        <td>
+          6758
+          -
+          6872
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.StepUtils.withOutputFields
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          StepUtils.this.withOutputFields(x$1, x$2, x$3, x$4, x$5, x$7, true)
+        </td>
+      </tr><tr>
+        <td>
+          168
+        </td>
+        <td>
+          789
+        </td>
+        <td>
+          6867
+          -
+          6871
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          true
+        </td>
+      </tr><tr>
+        <td>
+          171
+        </td>
+        <td>
+          793
+        </td>
+        <td>
+          6924
+          -
+          6947
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableOps.++
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.`package`.Seq.apply[org.apache.spark.sql.Column](runner).++[org.apache.spark.sql.Column](children)
+        </td>
+      </tr><tr>
+        <td>
+          171
+        </td>
+        <td>
+          794
+        </td>
+        <td>
+          6907
+          -
+          6952
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.select
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          dataFrame.select((scala.`package`.Seq.apply[org.apache.spark.sql.Column](runner).++[org.apache.spark.sql.Column](children): _*))
+        </td>
+      </tr><tr>
+        <td>
+          171
+        </td>
+        <td>
+          795
+        </td>
+        <td>
+          6907
+          -
+          6952
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.select
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          dataFrame.select((scala.`package`.Seq.apply[org.apache.spark.sql.Column](runner).++[org.apache.spark.sql.Column](children): _*))
+        </td>
+      </tr><tr>
+        <td>
+          172
+        </td>
+        <td>
+          796
+        </td>
+        <td>
+          6983
+          -
+          7007
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.select
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          dataFrame.select(runner)
+        </td>
+      </tr><tr>
+        <td>
+          172
+        </td>
+        <td>
+          797
+        </td>
+        <td>
+          6983
+          -
+          7007
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.select
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          dataFrame.select(runner)
+        </td>
+      </tr><tr>
+        <td>
+          173
+        </td>
+        <td>
+          798
+        </td>
+        <td>
+          7040
+          -
+          7095
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          com.sparkutils.flow.CustomResultApproach.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          c.customResultApproach.apply[RP](dataFrame, runner, ei, ri, step)(evidence$3)
+        </td>
+      </tr><tr>
+        <td>
+          173
+        </td>
+        <td>
+          799
+        </td>
+        <td>
+          7040
+          -
+          7095
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          com.sparkutils.flow.CustomResultApproach.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          c.customResultApproach.apply[RP](dataFrame, runner, ei, ri, step)(evidence$3)
         </td>
       </tr>
     </table>

@@ -68,7 +68,7 @@
 </span>44 <span style=''>   * @param step
 </span>45 <span style=''>   * @return
 </span>46 <span style=''>   */
-</span>47 <span style=''>  protected def inputSchema(input: DataFrame, step: Step[RP]): StructType =
+</span>47 <span style=''>  protected[flow] def inputSchema(input: DataFrame, step: Step[RP]): StructType =
 </span>48 <span style=''>    </span><span style='background: #AEF1AE'>step.options.get(flow.inputSchema).fold {
 </span>49 <span style=''></span><span style='background: #AEF1AE'>      val (s, t) = Utils.timed {
 </span>50 <span style=''></span><span style='background: #AEF1AE'>        input.schema
@@ -136,7 +136,7 @@
           34
         </td>
         <td>
-          463
+          343
         </td>
         <td>
           1087
@@ -160,7 +160,7 @@
           34
         </td>
         <td>
-          465
+          345
         </td>
         <td>
           1083
@@ -184,7 +184,7 @@
           35
         </td>
         <td>
-          464
+          344
         </td>
         <td>
           1152
@@ -208,12 +208,12 @@
           48
         </td>
         <td>
-          466
+          346
         </td>
         <td>
-          1523
+          1529
           -
-          1539
+          1545
         </td>
         <td>
           Select
@@ -232,12 +232,12 @@
           49
         </td>
         <td>
-          468
+          348
         </td>
         <td>
-          1567
+          1573
           -
-          1609
+          1615
         </td>
         <td>
           Apply
@@ -256,12 +256,12 @@
           49
         </td>
         <td>
-          469
+          349
         </td>
         <td>
-          1558
-          -
           1564
+          -
+          1570
         </td>
         <td>
           Apply
@@ -280,12 +280,12 @@
           49
         </td>
         <td>
-          470
+          350
         </td>
         <td>
-          1558
-          -
           1564
+          -
+          1570
         </td>
         <td>
           Block
@@ -304,12 +304,12 @@
           49
         </td>
         <td>
-          471
+          351
         </td>
         <td>
-          1559
+          1565
           -
-          1559
+          1565
         </td>
         <td>
           Select
@@ -328,12 +328,12 @@
           49
         </td>
         <td>
-          472
+          352
         </td>
         <td>
-          1562
+          1568
           -
-          1562
+          1568
         </td>
         <td>
           Select
@@ -352,12 +352,12 @@
           50
         </td>
         <td>
-          467
+          347
         </td>
         <td>
-          1589
+          1595
           -
-          1601
+          1607
         </td>
         <td>
           Select
@@ -376,12 +376,12 @@
           52
         </td>
         <td>
-          473
+          353
         </td>
         <td>
-          1630
+          1636
           -
-          1642
+          1648
         </td>
         <td>
           Select
@@ -400,12 +400,12 @@
           52
         </td>
         <td>
-          474
+          354
         </td>
         <td>
-          1652
+          1658
           -
-          1679
+          1685
         </td>
         <td>
           Select
@@ -424,12 +424,12 @@
           52
         </td>
         <td>
-          475
+          355
         </td>
         <td>
-          1681
+          1687
           -
-          1708
+          1714
         </td>
         <td>
           Select
@@ -448,12 +448,12 @@
           52
         </td>
         <td>
-          476
+          356
         </td>
         <td>
-          1630
+          1636
           -
-          1709
+          1715
         </td>
         <td>
           Apply
@@ -472,12 +472,12 @@
           53
         </td>
         <td>
-          477
+          357
         </td>
         <td>
-          1720
+          1726
           -
-          1733
+          1739
         </td>
         <td>
           Apply
@@ -496,12 +496,12 @@
           53
         </td>
         <td>
-          480
+          360
         </td>
         <td>
-          1716
+          1722
           -
-          1716
+          1722
         </td>
         <td>
           Literal
@@ -520,12 +520,12 @@
           53
         </td>
         <td>
-          481
+          361
         </td>
         <td>
-          1716
+          1722
           -
-          1716
+          1722
         </td>
         <td>
           Block
@@ -544,12 +544,12 @@
           54
         </td>
         <td>
-          478
+          358
         </td>
         <td>
-          1745
+          1751
           -
-          1851
+          1857
         </td>
         <td>
           Apply
@@ -568,12 +568,12 @@
           54
         </td>
         <td>
-          479
+          359
         </td>
         <td>
-          1745
+          1751
           -
-          1851
+          1857
         </td>
         <td>
           Block
@@ -592,12 +592,12 @@
           57
         </td>
         <td>
-          483
+          363
         </td>
         <td>
-          1506
+          1512
           -
-          1943
+          1949
         </td>
         <td>
           Apply
@@ -628,12 +628,12 @@
           58
         </td>
         <td>
-          482
+          362
         </td>
         <td>
-          1890
+          1896
           -
-          1937
+          1943
         </td>
         <td>
           TypeApply
@@ -652,12 +652,12 @@
           66
         </td>
         <td>
-          484
+          364
         </td>
         <td>
-          2255
+          2261
           -
-          2270
+          2276
         </td>
         <td>
           Select
@@ -676,12 +676,12 @@
           66
         </td>
         <td>
-          485
+          365
         </td>
         <td>
-          2243
+          2249
           -
-          2270
+          2276
         </td>
         <td>
           Apply
@@ -700,12 +700,12 @@
           66
         </td>
         <td>
-          486
+          366
         </td>
         <td>
-          2213
+          2219
           -
-          2271
+          2277
         </td>
         <td>
           Apply
