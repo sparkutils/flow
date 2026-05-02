@@ -44,7 +44,7 @@ trait FlowDataHandling[FG, RP] extends Serializable with Logging { this: FlowT[F
    * @param step
    * @return
    */
-  protected def inputSchema(input: DataFrame, step: Step[RP]): StructType =
+  protected[flow] def inputSchema(input: DataFrame, step: Step[RP]): StructType =
     step.options.get(flow.inputSchema).fold {
       val (s, t) = Utils.timed {
         input.schema
