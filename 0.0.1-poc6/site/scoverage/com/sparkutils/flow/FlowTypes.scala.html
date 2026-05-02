@@ -29,153 +29,184 @@
 </span>5 <span style=''>
 </span>6 <span style=''>import scala.concurrent.duration.Duration
 </span>7 <span style=''>
-</span>8 <span style=''>@SerialVersionUID(1L)
-</span>9 <span style=''>case class FlowException(msg: String, cause: Throwable = null) extends Exception(msg, cause) with Serializable
-</span>10 <span style=''>
-</span>11 <span style=''>/**
-</span>12 <span style=''> * Represents an operation on a dataset
-</span>13 <span style=''> * @param ruleSuite the rulesuite used by the named [[function]]
-</span>14 <span style=''> * @param function either the quality function collect
-</span>15 <span style=''> * @param fieldName the optional expression column name, when not provided the [[Step.defaultFieldName]] is used
-</span>16 <span style=''> * @param resultApproach how should the resulting data be processed
-</span>17 <span style=''> * @param combineAuditWith provide additional expressions to group_audit e.g. group_audit( operationFieldName, audit expression 1,
-</span>18 <span style=''> *                         audit expression 2, ... )
-</span>19 <span style=''> *                         with the operation fieldName automatically provided
-</span>20 <span style=''> */
-</span>21 <span style=''>@SerialVersionUID(1L)
-</span>22 <span style=''>case class Operation[T: RuleSuiteTypeParam](ruleSuite: T, function: Runner, resultApproach: ResultApproach,
-</span>23 <span style=''>                     fieldName: Option[String] = None,
-</span>24 <span style=''>                     combineAuditWith: Option[Set[String]] = None) extends Serializable
+</span>8 <span style=''>trait FlowExceptionType { selfType: Exception =&gt;
+</span>9 <span style=''>  def msg: String
+</span>10 <span style=''>  def cause: Throwable
+</span>11 <span style=''>}
+</span>12 <span style=''>
+</span>13 <span style=''>@SerialVersionUID(1L)
+</span>14 <span style=''>case class FlowException(msg: String, cause: Throwable = null) extends Exception(msg, cause) with Serializable with FlowExceptionType
+</span>15 <span style=''>
+</span>16 <span style=''>@SerialVersionUID(1L)
+</span>17 <span style=''>case class StepException[RP](step: Step[RP], cause: Throwable = null) extends Exception(cause) with Serializable with
+</span>18 <span style=''>  StepResultType[RP] with FlowExceptionType {
+</span>19 <span style=''>
+</span>20 <span style=''>  override def fold[R](success: StepResult[RP] =&gt; R)(failure: StepException[RP] =&gt; R): R = </span><span style='background: #F0ADAD'>failure(this)</span><span style=''>
+</span>21 <span style=''>
+</span>22 <span style=''>  override def output: DataFrame = </span><span style='background: #F0ADAD'>throw FlowException(s&quot;Step ${step.name} did not complete successfully&quot;, cause)</span><span style=''>
+</span>23 <span style=''>
+</span>24 <span style=''>  override def timings: StepTimings = </span><span style='background: #F0ADAD'>throw FlowException(s&quot;Step ${step.name} did not complete successfully&quot;, cause)</span><span style=''>
 </span>25 <span style=''>
-</span>26 <span style=''>object Operation {
-</span>27 <span style=''>
-</span>28 <span style=''>  def apply[T: RuleSuiteTypeParam](ruleSuite: T, function: Runner, resultApproach: ResultApproach,
-</span>29 <span style=''>            fieldName: String): Operation[T] = </span><span style='background: #AEF1AE'>Operation(ruleSuite, function, resultApproach, Option(fieldName))</span><span style=''>
-</span>30 <span style=''>  // $COVERAGE-OFF$
-</span>31 <span style=''>  def apply[T: RuleSuiteTypeParam](ruleSuite: T, function: Runner, resultApproach: ResultApproach,
-</span>32 <span style=''>            fieldName: String, combineAuditWith: Set[String]): Operation[T] =
-</span>33 <span style=''>    Operation(ruleSuite, function, resultApproach, Option(fieldName), Option(combineAuditWith))
-</span>34 <span style=''>  // $COVERAGE-ON$
-</span>35 <span style=''>
-</span>36 <span style=''>  def apply[T: RuleSuiteTypeParam](ruleSuite: T, function: Runner, resultApproach: ResultApproach,
-</span>37 <span style=''>                               combineAuditWith: Set[String]): Operation[T] =
-</span>38 <span style=''>    </span><span style='background: #AEF1AE'>new Operation(ruleSuite, function, resultApproach, combineAuditWith = Option(combineAuditWith))</span><span style=''>
-</span>39 <span style=''>
-</span>40 <span style=''>}
-</span>41 <span style=''>
-</span>42 <span style=''>/**
-</span>43 <span style=''> * Represents configuration information for a step, views and maps.  If a map is defined a mapName must also be provided
-</span>44 <span style=''> * @param viewConfig
-</span>45 <span style=''> * @param mapConfig
-</span>46 <span style=''> * @param mapName
-</span>47 <span style=''> */
-</span>48 <span style=''>@SerialVersionUID(1L)
-</span>49 <span style=''>case class StepInitConfiguration(viewConfig: Seq[ViewRow] = Seq.empty, mapConfig: Seq[MapRow] = Seq.empty,
-</span>50 <span style=''>                                 mapName: Option[String] = None) extends Serializable {
-</span>51 <span style=''>  if (</span><span style='background: #AEF1AE'>mapConfig.nonEmpty</span><span style=''>) {
-</span>52 <span style=''>    // $COVERAGE-OFF$
-</span>53 <span style=''>    require(mapName.isDefined, &quot;mapName is required when MapConfig is provided&quot;)
-</span>54 <span style=''>    // $COVERAGE-ON$
-</span>55 <span style=''>  }
-</span>56 <span style=''>}
+</span>26 <span style=''>  def msg: String = </span><span style='background: #AEF1AE'>cause.getMessage</span><span style=''>
+</span>27 <span style=''>}
+</span>28 <span style=''>
+</span>29 <span style=''>/**
+</span>30 <span style=''> * Represents an operation on a dataset
+</span>31 <span style=''> * @param ruleSuite the rulesuite used by the named [[function]]
+</span>32 <span style=''> * @param function either the quality function collect
+</span>33 <span style=''> * @param fieldName the optional expression column name, when not provided the [[Step.defaultFieldName]] is used
+</span>34 <span style=''> * @param resultApproach how should the resulting data be processed
+</span>35 <span style=''> * @param combineAuditWith provide additional expressions to group_audit e.g. group_audit( operationFieldName, audit expression 1,
+</span>36 <span style=''> *                         audit expression 2, ... )
+</span>37 <span style=''> *                         with the operation fieldName automatically provided
+</span>38 <span style=''> */
+</span>39 <span style=''>@SerialVersionUID(1L)
+</span>40 <span style=''>case class Operation[T: RuleSuiteTypeParam](ruleSuite: T, function: Runner, resultApproach: ResultApproach,
+</span>41 <span style=''>                     fieldName: Option[String] = None,
+</span>42 <span style=''>                     combineAuditWith: Option[Set[String]] = None) extends Serializable
+</span>43 <span style=''>
+</span>44 <span style=''>object Operation {
+</span>45 <span style=''>
+</span>46 <span style=''>  def apply[T: RuleSuiteTypeParam](ruleSuite: T, function: Runner, resultApproach: ResultApproach,
+</span>47 <span style=''>            fieldName: String): Operation[T] = </span><span style='background: #AEF1AE'>Operation(ruleSuite, function, resultApproach, Option(fieldName))</span><span style=''>
+</span>48 <span style=''>  // $COVERAGE-OFF$
+</span>49 <span style=''>  def apply[T: RuleSuiteTypeParam](ruleSuite: T, function: Runner, resultApproach: ResultApproach,
+</span>50 <span style=''>            fieldName: String, combineAuditWith: Set[String]): Operation[T] =
+</span>51 <span style=''>    Operation(ruleSuite, function, resultApproach, Option(fieldName), Option(combineAuditWith))
+</span>52 <span style=''>  // $COVERAGE-ON$
+</span>53 <span style=''>
+</span>54 <span style=''>  def apply[T: RuleSuiteTypeParam](ruleSuite: T, function: Runner, resultApproach: ResultApproach,
+</span>55 <span style=''>                               combineAuditWith: Set[String]): Operation[T] =
+</span>56 <span style=''>    </span><span style='background: #AEF1AE'>new Operation(ruleSuite, function, resultApproach, combineAuditWith = Option(combineAuditWith))</span><span style=''>
 </span>57 <span style=''>
-</span>58 <span style=''>/**
-</span>59 <span style=''> * Input and output data usage for a step
-</span>60 <span style=''> * @param inputView the optional input view name, when provided it will be loaded, when not provided the output of
-</span>61 <span style=''> *                  the dependency will be used.  It is an error to not specify an input name when there are more than
-</span>62 <span style=''> *                  one dependency
-</span>63 <span style=''> * @param outputView the output view name, when not specified the step name is used.
-</span>64 <span style=''> * @param cacheResults should the resulting dataframe be cached
+</span>58 <span style=''>}
+</span>59 <span style=''>
+</span>60 <span style=''>/**
+</span>61 <span style=''> * Represents configuration information for a step, views and maps.  If a map is defined a mapName must also be provided
+</span>62 <span style=''> * @param viewConfig
+</span>63 <span style=''> * @param mapConfig
+</span>64 <span style=''> * @param mapName
 </span>65 <span style=''> */
 </span>66 <span style=''>@SerialVersionUID(1L)
-</span>67 <span style=''>case class StepData(inputView: Option[String] = None, outputView: Option[String] = None,
-</span>68 <span style=''>                    cacheResults: Boolean = false) extends Serializable
-</span>69 <span style=''>
-</span>70 <span style=''>object StepData {
-</span>71 <span style=''>  def apply(inputView: String, outputView: String, cacheResults: Boolean): StepData =
-</span>72 <span style=''>    </span><span style='background: #AEF1AE'>StepData(Option(inputView), Option(outputView), cacheResults)</span><span style=''>
-</span>73 <span style=''>  def apply(inputView: String, outputView: String): StepData =
-</span>74 <span style=''>    </span><span style='background: #AEF1AE'>StepData(Option(inputView), Option(outputView))</span><span style=''>
-</span>75 <span style=''>}
-</span>76 <span style=''>
-</span>77 <span style=''>/**
-</span>78 <span style=''> * Which types are allowed in an encoded Operation, similar to [[com.sparkutils.quality.RuleSuiteParam]] but no Column
-</span>79 <span style=''> * instance exists.
-</span>80 <span style=''> */
-</span>81 <span style=''>sealed trait RuleSuiteTypeParam[T] {
-</span>82 <span style=''>  def id(t: T): Id
-</span>83 <span style=''>}
-</span>84 <span style=''>
-</span>85 <span style=''>object RuleSuiteTypeParam {
-</span>86 <span style=''>
-</span>87 <span style=''>  implicit val rsParam: RuleSuiteTypeParam[RuleSuite] = </span><span style='background: #AEF1AE'>new</span><span style=''> RuleSuiteTypeParam[RuleSuite] {
-</span>88 <span style=''>    override def id(t: RuleSuite): Id = </span><span style='background: #AEF1AE'>t.id</span><span style=''>
-</span>89 <span style=''>  }
-</span>90 <span style=''>
-</span>91 <span style=''>  implicit val idNameParam: RuleSuiteTypeParam[GroupRuleId] = </span><span style='background: #AEF1AE'>new</span><span style=''> RuleSuiteTypeParam[GroupRuleId] {
-</span>92 <span style=''>    override def id(t: GroupRuleId): Id = </span><span style='background: #AEF1AE'>t.id</span><span style=''>
-</span>93 <span style=''>  }
+</span>67 <span style=''>case class StepInitConfiguration(viewConfig: Seq[ViewRow] = Seq.empty, mapConfig: Seq[MapRow] = Seq.empty,
+</span>68 <span style=''>                                 mapName: Option[String] = None) extends Serializable {
+</span>69 <span style=''>  if (</span><span style='background: #AEF1AE'>mapConfig.nonEmpty</span><span style=''>) {
+</span>70 <span style=''>    // $COVERAGE-OFF$
+</span>71 <span style=''>    require(mapName.isDefined, &quot;mapName is required when MapConfig is provided&quot;)
+</span>72 <span style=''>    // $COVERAGE-ON$
+</span>73 <span style=''>  }
+</span>74 <span style=''>}
+</span>75 <span style=''>
+</span>76 <span style=''>/**
+</span>77 <span style=''> * Input and output data usage for a step
+</span>78 <span style=''> * @param inputView the optional input view name, when provided it will be loaded, when not provided the output of
+</span>79 <span style=''> *                  the dependency will be used.  It is an error to not specify an input name when there are more than
+</span>80 <span style=''> *                  one dependency
+</span>81 <span style=''> * @param outputView the output view name, when not specified the step name is used.
+</span>82 <span style=''> * @param cacheResults should the resulting dataframe be cached
+</span>83 <span style=''> */
+</span>84 <span style=''>@SerialVersionUID(1L)
+</span>85 <span style=''>case class StepData(inputView: Option[String] = None, outputView: Option[String] = None,
+</span>86 <span style=''>                    cacheResults: Boolean = false) extends Serializable
+</span>87 <span style=''>
+</span>88 <span style=''>object StepData {
+</span>89 <span style=''>  def apply(inputView: String, outputView: String, cacheResults: Boolean): StepData =
+</span>90 <span style=''>    </span><span style='background: #AEF1AE'>StepData(Option(inputView), Option(outputView), cacheResults)</span><span style=''>
+</span>91 <span style=''>  def apply(inputView: String, outputView: String): StepData =
+</span>92 <span style=''>    </span><span style='background: #AEF1AE'>StepData(Option(inputView), Option(outputView))</span><span style=''>
+</span>93 <span style=''>}
 </span>94 <span style=''>
-</span>95 <span style=''>}
-</span>96 <span style=''>
-</span>97 <span style=''>trait StepLike extends Serializable {
-</span>98 <span style=''>  def function: Runner
-</span>99 <span style=''>  def options: Map[String, String]
-</span>100 <span style=''>}
-</span>101 <span style=''>
-</span>102 <span style=''>/**
-</span>103 <span style=''> * Each step represents a ruleSuite applied via an operation over a view.  This resulting dataframe is then passed to a
-</span>104 <span style=''> * callback
-</span>105 <span style=''> * @param name this steps name
-</span>106 <span style=''> * @param dependencies the set of steps which must be run before this Step can start
-</span>107 <span style=''> * @param operation the operation this step performs
-</span>108 <span style=''> * @param initConfiguration configuration items used to prepare a step such as maps or views to be loaded
-</span>109 <span style=''> * @param data the input and output views to be used by this Step.
-</span>110 <span style=''> * @param options properties associated with this step, for example filenames or id's to save results against
-</span>111 <span style=''> */
-</span>112 <span style=''>@SerialVersionUID(1L)
-</span>113 <span style=''>case class Step[T: RuleSuiteTypeParam](name: String, dependencies: Set[String], operation: Operation[T],
-</span>114 <span style=''>                initConfiguration: StepInitConfiguration = StepInitConfiguration(),
-</span>115 <span style=''>                data: StepData = StepData(), options: Map[String, String] = Map.empty) extends StepLike {
-</span>116 <span style=''>  /**
-</span>117 <span style=''>   * The default output viewname for this step
-</span>118 <span style=''>   * @return
-</span>119 <span style=''>   */
-</span>120 <span style=''>  def defaultOutputViewName: String = </span><span style='background: #AEF1AE'>data.outputView.getOrElse(name)</span><span style=''>
-</span>121 <span style=''>
-</span>122 <span style=''>  /**
-</span>123 <span style=''>   * The default field name or provided one, when present
-</span>124 <span style=''>   */
-</span>125 <span style=''>  def defaultFieldName: String = </span><span style='background: #AEF1AE'>operation.fieldName.getOrElse(name)</span><span style=''>
-</span>126 <span style=''>
-</span>127 <span style=''>  def function: Runner = </span><span style='background: #AEF1AE'>operation.function</span><span style=''>
-</span>128 <span style=''>
-</span>129 <span style=''>}
-</span>130 <span style=''>
-</span>131 <span style=''>/**
-</span>132 <span style=''> * Timings associated with Step processing
-</span>133 <span style=''> * @param runner the preparation time take by the runner processing
-</span>134 <span style=''> * @param result the preparation time take by the result processing
-</span>135 <span style=''> */
-</span>136 <span style=''>@SerialVersionUID(1L)
-</span>137 <span style=''>case class StepTimings(runner: Duration, result: Duration) extends Serializable
-</span>138 <span style=''>
-</span>139 <span style=''>/**
-</span>140 <span style=''> * The result of a step
-</span>141 <span style=''> * @param step this may be a modified Step if modifyStep was overridden
-</span>142 <span style=''> * @param output the resulting datafrome from this step
-</span>143 <span style=''> * @param timings the time taken to prepare the output
-</span>144 <span style=''> */
-</span>145 <span style=''>@SerialVersionUID(1L)
-</span>146 <span style=''>case class StepResult[T: RuleSuiteTypeParam](step: Step[T], output: DataFrame, timings: StepTimings) extends Serializable
-</span>147 <span style=''>
-</span>148 <span style=''>/**
-</span>149 <span style=''> * The result of a successful Flow
-</span>150 <span style=''> * @param stepResults the original Step name mapped to it's result
-</span>151 <span style=''> * @param duration the time taken by the entire flow
-</span>152 <span style=''> */
-</span>153 <span style=''>@SerialVersionUID(1L)
-</span>154 <span style=''>case class FlowResult[T: RuleSuiteTypeParam](stepResults: Map[String, StepResult[T]], duration: Duration) extends Serializable
+</span>95 <span style=''>/**
+</span>96 <span style=''> * Which types are allowed in an encoded Operation, similar to [[com.sparkutils.quality.RuleSuiteParam]] but no Column
+</span>97 <span style=''> * instance exists.
+</span>98 <span style=''> */
+</span>99 <span style=''>sealed trait RuleSuiteTypeParam[T] {
+</span>100 <span style=''>  def id(t: T): Id
+</span>101 <span style=''>}
+</span>102 <span style=''>
+</span>103 <span style=''>object RuleSuiteTypeParam {
+</span>104 <span style=''>
+</span>105 <span style=''>  implicit val rsParam: RuleSuiteTypeParam[RuleSuite] = </span><span style='background: #AEF1AE'>new</span><span style=''> RuleSuiteTypeParam[RuleSuite] {
+</span>106 <span style=''>    override def id(t: RuleSuite): Id = </span><span style='background: #AEF1AE'>t.id</span><span style=''>
+</span>107 <span style=''>  }
+</span>108 <span style=''>
+</span>109 <span style=''>  implicit val idNameParam: RuleSuiteTypeParam[GroupRuleId] = </span><span style='background: #AEF1AE'>new</span><span style=''> RuleSuiteTypeParam[GroupRuleId] {
+</span>110 <span style=''>    override def id(t: GroupRuleId): Id = </span><span style='background: #AEF1AE'>t.id</span><span style=''>
+</span>111 <span style=''>  }
+</span>112 <span style=''>
+</span>113 <span style=''>}
+</span>114 <span style=''>
+</span>115 <span style=''>trait StepLike extends Serializable {
+</span>116 <span style=''>  def function: Runner
+</span>117 <span style=''>  def options: Map[String, String]
+</span>118 <span style=''>}
+</span>119 <span style=''>
+</span>120 <span style=''>/**
+</span>121 <span style=''> * Each step represents a ruleSuite applied via an operation over a view.  This resulting dataframe is then passed to a
+</span>122 <span style=''> * callback
+</span>123 <span style=''> * @param name this steps name
+</span>124 <span style=''> * @param dependencies the set of steps which must be run before this Step can start
+</span>125 <span style=''> * @param operation the operation this step performs
+</span>126 <span style=''> * @param initConfiguration configuration items used to prepare a step such as maps or views to be loaded
+</span>127 <span style=''> * @param data the input and output views to be used by this Step.
+</span>128 <span style=''> * @param options properties associated with this step, for example filenames or id's to save results against
+</span>129 <span style=''> */
+</span>130 <span style=''>@SerialVersionUID(1L)
+</span>131 <span style=''>case class Step[T: RuleSuiteTypeParam](name: String, dependencies: Set[String], operation: Operation[T],
+</span>132 <span style=''>                initConfiguration: StepInitConfiguration = StepInitConfiguration(),
+</span>133 <span style=''>                data: StepData = StepData(), options: Map[String, String] = Map.empty) extends StepLike {
+</span>134 <span style=''>  /**
+</span>135 <span style=''>   * The default output viewname for this step
+</span>136 <span style=''>   * @return
+</span>137 <span style=''>   */
+</span>138 <span style=''>  def defaultOutputViewName: String = </span><span style='background: #AEF1AE'>data.outputView.getOrElse(name)</span><span style=''>
+</span>139 <span style=''>
+</span>140 <span style=''>  /**
+</span>141 <span style=''>   * The default field name or provided one, when present
+</span>142 <span style=''>   */
+</span>143 <span style=''>  def defaultFieldName: String = </span><span style='background: #AEF1AE'>operation.fieldName.getOrElse(name)</span><span style=''>
+</span>144 <span style=''>
+</span>145 <span style=''>  def function: Runner = </span><span style='background: #AEF1AE'>operation.function</span><span style=''>
+</span>146 <span style=''>
+</span>147 <span style=''>}
+</span>148 <span style=''>
+</span>149 <span style=''>/**
+</span>150 <span style=''> * Timings associated with Step processing
+</span>151 <span style=''> * @param runner the preparation time take by the runner processing
+</span>152 <span style=''> * @param result the preparation time take by the result processing
+</span>153 <span style=''> */
+</span>154 <span style=''>@SerialVersionUID(1L)
+</span>155 <span style=''>case class StepTimings(runner: Duration, result: Duration) extends Serializable
+</span>156 <span style=''>
+</span>157 <span style=''>sealed trait StepResultType[T] {
+</span>158 <span style=''>  def fold[R](success: StepResult[T] =&gt; R)(failure: StepException[T] =&gt; R): R
+</span>159 <span style=''>  def step: Step[T]
+</span>160 <span style=''>  def output: DataFrame
+</span>161 <span style=''>  def timings: StepTimings
+</span>162 <span style=''>}
+</span>163 <span style=''>
+</span>164 <span style=''>/**
+</span>165 <span style=''> * The result of a step
+</span>166 <span style=''> * @param step this may be a modified Step if modifyStep was overridden
+</span>167 <span style=''> * @param output the resulting datafrome from this step
+</span>168 <span style=''> * @param timings the time taken to prepare the output
+</span>169 <span style=''> */
+</span>170 <span style=''>@SerialVersionUID(1L)
+</span>171 <span style=''>case class StepResult[RP: RuleSuiteTypeParam](step: Step[RP], output: DataFrame, timings: StepTimings) extends
+</span>172 <span style=''>  Serializable with StepResultType[RP] {
+</span>173 <span style=''>
+</span>174 <span style=''>  override def fold[R](success: StepResult[RP] =&gt; R)(failure: StepException[RP] =&gt; R): R = </span><span style='background: #F0ADAD'>success(this)</span><span style=''>
+</span>175 <span style=''>
+</span>176 <span style=''>}
+</span>177 <span style=''>
+</span>178 <span style=''>/**
+</span>179 <span style=''> * The result of a flow, failure [[StepException]]s will be kept when using [[Flow.run]] with the tolerant parameter set to true
+</span>180 <span style=''> * @param stepResults the original Step name mapped to it's result
+</span>181 <span style=''> * @param duration the time taken by the entire flow
+</span>182 <span style=''> */
+</span>183 <span style=''>@SerialVersionUID(1L)
+</span>184 <span style=''>case class FlowResult[T: RuleSuiteTypeParam](stepResults: Map[String, StepResultType[T]],
+</span>185 <span style=''>                                             duration: Duration) extends Serializable
 </span></pre>
           </div>
           <div class="tab-pane" id="statementlist">
@@ -190,15 +221,111 @@
         <th>Code</th>
       </tr><tr>
         <td>
-          29
+          20
         </td>
         <td>
           19
         </td>
         <td>
-          1373
+          715
           -
-          1438
+          728
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Function1.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #F0ADAD">
+          failure.apply(this)
+        </td>
+      </tr><tr>
+        <td>
+          22
+        </td>
+        <td>
+          20
+        </td>
+        <td>
+          765
+          -
+          843
+        </td>
+        <td>
+          Throw
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #F0ADAD">
+          throw FlowException.apply(&quot;Step &quot;.+(StepException.this.step.name).+(&quot; did not complete successfully&quot;), StepException.this.cause)
+        </td>
+      </tr><tr>
+        <td>
+          24
+        </td>
+        <td>
+          21
+        </td>
+        <td>
+          883
+          -
+          961
+        </td>
+        <td>
+          Throw
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #F0ADAD">
+          throw FlowException.apply(&quot;Step &quot;.+(StepException.this.step.name).+(&quot; did not complete successfully&quot;), StepException.this.cause)
+        </td>
+      </tr><tr>
+        <td>
+          26
+        </td>
+        <td>
+          22
+        </td>
+        <td>
+          983
+          -
+          999
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Throwable.getMessage
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          StepException.this.cause.getMessage()
+        </td>
+      </tr><tr>
+        <td>
+          47
+        </td>
+        <td>
+          23
+        </td>
+        <td>
+          2055
+          -
+          2120
         </td>
         <td>
           ApplyToImplicitArgs
@@ -214,15 +341,15 @@
         </td>
       </tr><tr>
         <td>
-          38
+          56
         </td>
         <td>
-          20
+          24
         </td>
         <td>
-          2003
+          2685
           -
-          2027
+          2709
         </td>
         <td>
           Apply
@@ -238,15 +365,15 @@
         </td>
       </tr><tr>
         <td>
-          38
+          56
         </td>
         <td>
-          21
+          25
         </td>
         <td>
-          1933
+          2615
           -
-          1933
+          2615
         </td>
         <td>
           TypeApply
@@ -262,15 +389,15 @@
         </td>
       </tr><tr>
         <td>
-          38
+          56
         </td>
         <td>
-          22
+          26
         </td>
         <td>
-          1933
+          2615
           -
-          2028
+          2710
         </td>
         <td>
           ApplyToImplicitArgs
@@ -286,15 +413,15 @@
         </td>
       </tr><tr>
         <td>
-          51
+          69
         </td>
         <td>
-          23
+          27
         </td>
         <td>
-          2444
+          3126
           -
-          2462
+          3144
         </td>
         <td>
           Select
@@ -310,15 +437,15 @@
         </td>
       </tr><tr>
         <td>
-          51
+          69
         </td>
         <td>
-          24
+          28
         </td>
         <td>
-          2440
+          3122
           -
-          2440
+          3122
         </td>
         <td>
           Literal
@@ -334,15 +461,15 @@
         </td>
       </tr><tr>
         <td>
-          51
+          69
         </td>
         <td>
-          25
+          29
         </td>
         <td>
-          2440
+          3122
           -
-          2440
+          3122
         </td>
         <td>
           Block
@@ -358,15 +485,15 @@
         </td>
       </tr><tr>
         <td>
-          72
+          90
         </td>
         <td>
-          26
+          30
         </td>
         <td>
-          3366
+          4048
           -
-          3383
+          4065
         </td>
         <td>
           Apply
@@ -382,15 +509,15 @@
         </td>
       </tr><tr>
         <td>
-          72
+          90
         </td>
         <td>
-          27
+          31
         </td>
         <td>
-          3385
+          4067
           -
-          3403
+          4085
         </td>
         <td>
           Apply
@@ -406,15 +533,15 @@
         </td>
       </tr><tr>
         <td>
-          72
+          90
         </td>
         <td>
-          28
+          32
         </td>
         <td>
-          3357
+          4039
           -
-          3418
+          4100
         </td>
         <td>
           Apply
@@ -430,15 +557,15 @@
         </td>
       </tr><tr>
         <td>
-          74
+          92
         </td>
         <td>
-          29
+          33
         </td>
         <td>
-          3495
+          4177
           -
-          3512
+          4194
         </td>
         <td>
           Apply
@@ -454,15 +581,15 @@
         </td>
       </tr><tr>
         <td>
-          74
+          92
         </td>
         <td>
-          30
+          34
         </td>
         <td>
-          3514
+          4196
           -
-          3532
+          4214
         </td>
         <td>
           Apply
@@ -478,15 +605,15 @@
         </td>
       </tr><tr>
         <td>
-          74
+          92
         </td>
         <td>
-          31
+          35
         </td>
         <td>
-          3486
+          4168
           -
-          3533
+          4215
         </td>
         <td>
           Apply
@@ -502,15 +629,15 @@
         </td>
       </tr><tr>
         <td>
-          87
+          105
         </td>
         <td>
-          33
+          37
         </td>
         <td>
-          3828
+          4510
           -
-          3831
+          4513
         </td>
         <td>
           Apply
@@ -526,15 +653,15 @@
         </td>
       </tr><tr>
         <td>
-          88
+          106
         </td>
         <td>
-          32
+          36
         </td>
         <td>
-          3904
+          4586
           -
-          3908
+          4590
         </td>
         <td>
           Select
@@ -550,15 +677,15 @@
         </td>
       </tr><tr>
         <td>
-          91
+          109
         </td>
         <td>
-          35
+          39
         </td>
         <td>
-          3976
+          4658
           -
-          3979
+          4661
         </td>
         <td>
           Apply
@@ -574,15 +701,15 @@
         </td>
       </tr><tr>
         <td>
-          92
+          110
         </td>
         <td>
-          34
+          38
         </td>
         <td>
-          4056
+          4738
           -
-          4060
+          4742
         </td>
         <td>
           Select
@@ -598,15 +725,15 @@
         </td>
       </tr><tr>
         <td>
-          120
+          138
         </td>
         <td>
-          36
+          40
         </td>
         <td>
-          5213
+          5895
           -
-          5217
+          5899
         </td>
         <td>
           Select
@@ -622,15 +749,15 @@
         </td>
       </tr><tr>
         <td>
-          120
+          138
         </td>
         <td>
-          37
+          41
         </td>
         <td>
-          5187
+          5869
           -
-          5218
+          5900
         </td>
         <td>
           Apply
@@ -646,15 +773,15 @@
         </td>
       </tr><tr>
         <td>
-          125
+          143
         </td>
         <td>
-          38
+          42
         </td>
         <td>
-          5353
+          6035
           -
-          5357
+          6039
         </td>
         <td>
           Select
@@ -670,15 +797,15 @@
         </td>
       </tr><tr>
         <td>
-          125
+          143
         </td>
         <td>
-          39
+          43
         </td>
         <td>
-          5323
+          6005
           -
-          5358
+          6040
         </td>
         <td>
           Apply
@@ -694,15 +821,15 @@
         </td>
       </tr><tr>
         <td>
-          127
+          145
         </td>
         <td>
-          40
+          44
         </td>
         <td>
-          5385
+          6067
           -
-          5403
+          6085
         </td>
         <td>
           Select
@@ -715,6 +842,30 @@
         </td>
         <td style="background: #AEF1AE">
           Step.this.operation.function
+        </td>
+      </tr><tr>
+        <td>
+          174
+        </td>
+        <td>
+          45
+        </td>
+        <td>
+          7046
+          -
+          7059
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Function1.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #F0ADAD">
+          success.apply(this)
         </td>
       </tr>
     </table>
