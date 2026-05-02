@@ -1,17 +1,17 @@
 package com.sparkutils.flow
 
-import com.sparkutils.flow.StepUtils.{processProjectionResult, runnerInputs, withOutputFields}
+import com.sparkutils.flow.StepUtils.runnerInputs
 import com.sparkutils.flow.Timer.DurationOps
-import com.sparkutils.quality.{DataFrameLoader, DefaultProcessor, Id, MapConfigColumns, NoOpDefaultProcessor, OutputExpression, RuleSuiteParam, VersionedId, ViewConfigColumns}
+import com.sparkutils.quality.{DataFrameLoader, MapConfigColumns, RuleSuiteParam, VersionedId, ViewConfigColumns}
 import com.sparkutils.quality.generic.{collector, dq, engine, folder}
 import com.sparkutils.quality.impl.views.ViewLoadResults
-import org.apache.spark.sql.functions.{expr, col => scol}
-import org.apache.spark.sql.{Column, DataFrame, SparkSession}
+import org.apache.spark.sql.functions.expr
+import org.apache.spark.sql.{DataFrame, SparkSession}
 import com.sparkutils.flow.impl.util.Utils._
-import com.sparkutils.flow.impl.util.FlowExceptionConstants.{CycleDetected, DefaultViewNamesMultipleParents, DuplicateNames, EmptyFlow, EmptyStepName, FlowEarlyExitException, InvalidDQResultApproach, InvalidViewNames, MissingStep}
+import com.sparkutils.flow.impl.util.FlowExceptionConstants.{CycleDetected, DefaultViewNamesMultipleParents,
+  DuplicateNames, EmptyFlow, EmptyStepName, FlowEarlyExitException, InvalidDQResultApproach, InvalidViewNames, MissingStep}
 import com.sparkutils.quality.impl.mapLookup.MapTypes.MapLookups
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.types.StructType
 import scalax.collection.edges.{DiEdge, DiEdgeImplicits}
 import scalax.collection.immutable.Graph
 
