@@ -17,7 +17,7 @@ import scalax.collection.immutable.Graph
 import scala.collection.parallel.CollectionConverters.ImmutableIterableIsParallelizable
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future, Promise}
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Success}
 
 /**
  * Represents a number of steps for processing data.  By default, views configured by token will throw not implemented,
@@ -26,7 +26,7 @@ import scala.util.{Failure, Success, Try}
  * @param flowId overall id for this flow, same granularity as a RuleSuiteGroup
  * @param steps steps which are processed via their DAG dependencies
  * @param flowAuditColName when enabled on a step's combineAuditWith uses this column name
- * @param duration The overall timeout to wait for completion of this Flow, by default 1hr
+ * @param duration The overall timeout to wait for completion of this Flow, by default there is no timeout applied
  * @param loader The DataFrameLoader used to handle view token loading, by default throws on any token
  * @param showInterim calls show on interim results
  * @param viewColumns columns used to process a Step's ViewRows, by default the names are those of the ViewRow columns

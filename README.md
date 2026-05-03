@@ -7,8 +7,8 @@ A lightweight Spark 4.x data flow application template, with auditable projectio
 Quality provides a number of optimised rule engines but no opinion on how they should be leveraged. 
 
 Flow _is_ opinionated and, using Quality's ViewLoading and Rule Engines, provides a way to structure Steps in processing 
-data driven purely by data configuration.  Audit trails of decision-making, as with Quality, is a first class citizen, 
-allowing audit trails to be combined from all parent Steps. 
+data driven purely by data configuration.  The audit trail of decision-making, as with Quality, is a first class citizen, 
+allowing the audit trail to be combined from all parent Steps. 
 
 Flow does not aim to replace orchestration tools such as Airflow, instead it provides a generic data ingestion pipeline
 processing template and takes care of the stitching together or each step.
@@ -23,8 +23,7 @@ processing template and takes care of the stitching together or each step.
   * Input and Output view names (or tokens for loading)
   * A Quality RuleSuite with view and map support
   * An Operation of a Quality Runner with configurable result processing
-  * Audit trail columns from previous steps can be combined
- 
+  * Audit trail columns from previous steps can be combined 
 
 * Flows have several extension points:
   * Data Loading:

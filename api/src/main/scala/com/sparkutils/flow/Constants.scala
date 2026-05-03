@@ -167,9 +167,9 @@ trait Constants {
   val rootInputSuffix = "_root_input"
 
   /**
-   * By default, the duration a low lasts for is 1hr
+   * By default, flows do not have time limits imposed
    */
-  val defaultFlowDuration: Duration = Duration(1L, HOURS)
+  val defaultFlowDuration: Duration = Duration.Inf
 
   /**
    * This optional [[Step.options]] configuration, defaulting to true, takes effect when the [[Step]]'s
