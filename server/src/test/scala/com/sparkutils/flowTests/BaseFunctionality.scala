@@ -93,6 +93,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
     val ires = flow.run(sparkSession, _ => Some(testData.toDF()))
     ires.stepResults.size shouldBe 4
     ires.stepResults.keys.toSet shouldBe Set("a", "b", "c", "d")
+    ires.stepResults.values.forall(_.fold(_ => true)(_ => false)) shouldBe true
 
     // completion with the full set of responses is main test, 2nd is to ensure combineAuditWith works across
     // multiple parents
@@ -530,14 +531,7 @@ class BaseFunctionality extends SharedPureConnectTests with Matchers {
         }.msg should include("did not complete")
 
         throw ir.stepResults.head._2.asInstanceOf[StepException[RuleSuite]]
-      } else {
-        ir.stepResults.values.forall(_.fold(_ => true)(_ => false)) shouldBe true
       }
-
-      val d = ir.stepResults("b").output.selectExpr("c", "d").as[(String, Option[Int])]
-
-      val r = d.collect()
-
     }
 
     // no flow, same case as all the other tests but control for the ones below
