@@ -31,11 +31,12 @@ object implicits {
       case CustomRunnerEngine(s) => s
       case a => a.getClass.getSimpleName.dropRight(1)// drop the module $
     }, s =>
-      s.toLowerCase.replaceAll("_","") match {
+      s.toLowerCase.replaceAll("_","").replaceAll("-","") match {
         case CollectRunnerName | "collectrunner" => Collect
         case EngineRunnerName | "ruleengine" | "ruleenginerunner" => Engine
         case FolderRunnerName | "fold" | "folderrunner" => Folder
         case DQRunnerName | "dqrulerunner" | "rulerunner" => DQ
+        case NoOpRunnerName => NoOp
         case _ => CustomRunnerEngine(s)
       }
   )

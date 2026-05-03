@@ -125,6 +125,11 @@ trait Constants {
   val DQRunnerName = "dq"
 
   /**
+   * DQ Runner name
+   */
+  val NoOpRunnerName = "noop"
+
+  /**
    * The column name which must be returned by [[flowEarlyExitSQL]] and evaluate to either an empty dataset
    * or to a *true* boolean value on the first row to indicate the flow should continue.
    * Otherwise, if the first row with a *false* value is returned the Flow will exit with exception per
@@ -162,9 +167,9 @@ trait Constants {
   val rootInputSuffix = "_root_input"
 
   /**
-   * By default, the duration a low lasts for is 1hr
+   * By default, flows do not have time limits imposed
    */
-  val defaultFlowDuration: Duration = Duration(1L, HOURS)
+  val defaultFlowDuration: Duration = Duration.Inf
 
   /**
    * This optional [[Step.options]] configuration, defaulting to true, takes effect when the [[Step]]'s
@@ -194,4 +199,14 @@ trait Constants {
    * The defaultGroup value is used when calling [[convertToIds]] should there be no flowRuleGroup present
    */
   val defaultConvertGroupName = "defaultGroup"
+
+  /**
+   * When added to a [[Step.options]] configuration it specifies how long a Step will be allowed to process before
+   * a timeout is triggered, this will be signaled in [[StepException.timedOut]].  The timeout does not stop the underlying
+   * Step, but forces the dependent graph below it to fail.
+   *
+   * The failure is either a complete exit, tolerant = false, or the [[StepException.timedOut]] will be true for the
+   * source Step.
+   */
+  val stepTimeoutName = "stepTimeout"
 }

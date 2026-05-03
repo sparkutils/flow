@@ -15,10 +15,10 @@ import frameless.TypedEncoder
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.Try
 
-class CustomExtensions extends SharedPureConnectTests with Matchers {
+trait CustomExtensionsUtils { thisType: SharedPureConnectTests with Matchers =>
 
   def buildFlow[FG](resultApproach: ResultApproach = StarOnly, runner: Runner = Engine,
-                options: Map[String,String] = Map.empty, flowRuleGroup: Option[FlowRuleGroup[FG]] = None): FlowT[FG, RuleSuite] =
+                    options: Map[String,String] = Map.empty, flowRuleGroup: Option[FlowRuleGroup[FG]] = None): FlowT[FG, RuleSuite] =
     new FlowT[FG, RuleSuite](Id(1, 1), Seq(
       Step("a", Set.empty, Operation[RuleSuite](rulesRaw(Seq(
         (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1040, 1),
@@ -40,6 +40,10 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
     ir.head() shouldBe answer
   }
 
+}
+
+class CustomExtensions extends SharedPureConnectTests with Matchers with CustomExtensionsUtils {
+
   test("custom result approach should have the same behaviour") {
     // default logic
     doFlowTest(buildFlow())
@@ -60,7 +64,7 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
   test("bad class name custom result approach should throw") {
     val clzz = "classOf[IStar].getName"
     // the custom should reply 1
-    val e = intercept[FlowException] {
+    val e = intercept[FlowExceptionType] {
       doFlowTest(buildFlow(CustomApproach(clzz)), answer = 1, process = identity)
     }
     e.msg should include(clzz)
@@ -69,17 +73,17 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
   test("bad custom runner name should throw") {
     val clzz = "classOf[IRun].getName"
     // custom runner only
-    val e = intercept[FlowException] {
+    val e = intercept[FlowExceptionType] {
       doFlowTest(buildFlow(runner = CustomRunnerEngine(clzz)))
     }
     e.msg should include(clzz)
   }
 
   test("custom runner throws are re-thrown") {
-    val t = intercept[FlowException] {
+    val t = intercept[FlowExceptionType] {
       doFlowTest(buildFlow(runner = CustomRunnerEngine(classOf[IRun].getName), options = Map("throw" -> "true")))
     }
-    t.msg shouldBe "I AM THROWING"
+    t.msg should include( "I AM THROWING")
   }
 
   test("custom result approach serialisation works") {
@@ -130,9 +134,10 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
       flowRuleGroup = flowData.flowRow.flowRuleGroup)).write.mode(SaveMode.Overwrite).json(outputDir + "/" + grp.ruleGroupName)
     val readBack =
       s.read.schema(typedFullFlowExpEnc[T, OP#StorageType].schema).json(outputDir + "/" + grp.ruleGroupName).
-        as[FullFlow[T, OP#StorageType]].head()
+        as[FullFlow[T, OP#StorageType]]
+
     // do the rule group id serde
-    readBack.flowRow.flowRuleGroup.toSet shouldBe flowData.flowRow.flowRuleGroup.toSet
+    readBack.head().flowRow.flowRuleGroup.toSet shouldBe flowData.flowRow.flowRuleGroup.toSet
 
     val data = Seq(
       Tuple2("c", 1)
@@ -142,6 +147,11 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
     val r = data.withColumn("runner",expr(s"rule_engine_runner(rule_suite_from(${grp.ruleGroupName}, 200))")).
       selectExpr("runner.result").as[Int].head()
     r shouldBe 4
+    val fromFull = fromFullFlow(process)(readBack, flow.flowId)
+    val reread = new FlowT(flow.flowId, fromFull.steps, fromFull.flowRow.flowAuditColName,
+      flowRuleGroup = fromFull.flowRow.flowRuleGroup)
+    val fr = flow.run(s, _ => Some(data))
+    // enough to prove it worked as non tolerant
   }
 
   test("NoOp runner and var rule group loading works id's") {

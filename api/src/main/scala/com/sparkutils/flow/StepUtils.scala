@@ -1,11 +1,14 @@
 package com.sparkutils.flow
 
-import com.sparkutils.flow.impl.util.Utils.MapOps
+import com.sparkutils.flow.impl.util.Utils.{MapOps, PromiseOps}
 import com.sparkutils.quality.RuleSuiteParam
 import org.apache.spark.sql.{Column, DataFrame}
 import org.apache.spark.sql.functions.{expr, col => scol}
 import org.apache.spark.sql.types.StructType
 import com.sparkutils.quality.functions.group_audit
+
+import scala.concurrent.{ExecutionContext, Promise}
+import scala.concurrent.duration.Duration
 
 /**
  * Utility functions for processing Steps
@@ -172,5 +175,23 @@ object StepUtils {
       case OutputFieldOnly => dataFrame.select(runner)
       case c: CustomApproach => c.customResultApproach(dataFrame, runner, ei, ri, step)
     }
+  }
+
+  /**
+   * When no stepTimeout has been configured for a Step, {{{promise.future}}} is called, otherwise failAfter is used.
+   * @param step
+   * @param promise
+   * @tparam T
+   * @tparam P
+   * @return
+   */
+  def stepTimeout[T, P](step: Step[T], promise: Promise[P])(implicit executionContext: ExecutionContext): Promise[P] = {
+    val stepTimeout = step.options.duration(stepTimeoutName, Duration.Inf)
+    if (stepTimeout == Duration.Inf)
+      promise
+    else
+      promise.failAfter(stepTimeout) {
+        StepException(step = step, timedOut = true)
+      }
   }
 }

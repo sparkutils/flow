@@ -1,11 +1,14 @@
 package com.sparkutils.flow.impl.util
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder
 import com.sparkutils.flow.{FlowException, Folder, RuleSuiteTypeParam, StepLike, StepRow, doNotAddFolderDefault}
 import com.sparkutils.quality.{CombinedRuleSuiteRows, DefaultProcessor, Id, NoOpDefaultProcessor, OutputExpression, OutputExpressionRow, RuleSuite}
 import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.sql.{Column, functions}
 
-import scala.concurrent.duration.{Duration, NANOSECONDS}
+import java.util.concurrent.{Executors, ScheduledExecutorService, ScheduledThreadPoolExecutor}
+import scala.concurrent.{ExecutionContext, Future, Promise}
+import scala.concurrent.duration.{Duration, MILLISECONDS, NANOSECONDS}
 import scala.util.Try
 
 object Utils {
@@ -120,4 +123,24 @@ object Utils {
         t
     }
 
+  protected[flow] lazy val timer = Executors.newScheduledThreadPool(2)
+
+  implicit class PromiseOps[T](val promise: Promise[T])(implicit executionContext: ExecutionContext) {
+
+    /**
+     * Triggers failure in the promise after duration expires, the underlying work modeled by the promise still continues
+     */
+    def failAfter(duration: Duration)(timedOut: => Throwable): Promise[T] = {
+      val timerTask = new Runnable() {
+        def run() : Unit = {
+          promise.tryFailure(timedOut)
+        }
+      }
+
+      timer.schedule(timerTask, duration.toMillis, MILLISECONDS)
+
+      promise
+    }
+
+  }
 }
