@@ -38,7 +38,7 @@
 </span>14 <span style=''>case class FlowException(msg: String, cause: Throwable = null) extends Exception(msg, cause) with Serializable with FlowExceptionType
 </span>15 <span style=''>
 </span>16 <span style=''>@SerialVersionUID(1L)
-</span>17 <span style=''>case class StepException[RP](step: Step[RP], cause: Throwable = null) extends Exception(cause) with Serializable with
+</span>17 <span style=''>case class StepException[RP](step: Step[RP], cause: Throwable = null, timedOut: Boolean = false) extends Exception(cause) with Serializable with
 </span>18 <span style=''>  StepResultType[RP] with FlowExceptionType {
 </span>19 <span style=''>
 </span>20 <span style=''>  override def fold[R](success: StepResult[RP] =&gt; R)(failure: StepException[RP] =&gt; R): R = </span><span style='background: #AEF1AE'>failure(this)</span><span style=''>
@@ -227,9 +227,9 @@
           19
         </td>
         <td>
-          715
+          742
           -
-          728
+          755
         </td>
         <td>
           Apply
@@ -251,9 +251,9 @@
           20
         </td>
         <td>
-          765
+          792
           -
-          843
+          870
         </td>
         <td>
           Throw
@@ -275,9 +275,9 @@
           21
         </td>
         <td>
-          883
+          910
           -
-          961
+          988
         </td>
         <td>
           Throw
@@ -299,9 +299,9 @@
           22
         </td>
         <td>
-          983
+          1010
           -
-          999
+          1026
         </td>
         <td>
           Apply
@@ -323,9 +323,9 @@
           23
         </td>
         <td>
-          2055
+          2082
           -
-          2120
+          2147
         </td>
         <td>
           ApplyToImplicitArgs
@@ -347,9 +347,9 @@
           24
         </td>
         <td>
-          2685
+          2712
           -
-          2709
+          2736
         </td>
         <td>
           Apply
@@ -371,9 +371,9 @@
           25
         </td>
         <td>
-          2615
+          2642
           -
-          2615
+          2642
         </td>
         <td>
           TypeApply
@@ -395,9 +395,9 @@
           26
         </td>
         <td>
-          2615
+          2642
           -
-          2710
+          2737
         </td>
         <td>
           ApplyToImplicitArgs
@@ -419,9 +419,9 @@
           27
         </td>
         <td>
-          3126
+          3153
           -
-          3144
+          3171
         </td>
         <td>
           Select
@@ -443,9 +443,9 @@
           28
         </td>
         <td>
-          3122
+          3149
           -
-          3122
+          3149
         </td>
         <td>
           Literal
@@ -467,9 +467,9 @@
           29
         </td>
         <td>
-          3122
+          3149
           -
-          3122
+          3149
         </td>
         <td>
           Block
@@ -491,9 +491,9 @@
           30
         </td>
         <td>
-          4048
+          4075
           -
-          4065
+          4092
         </td>
         <td>
           Apply
@@ -515,9 +515,9 @@
           31
         </td>
         <td>
-          4067
+          4094
           -
-          4085
+          4112
         </td>
         <td>
           Apply
@@ -539,9 +539,9 @@
           32
         </td>
         <td>
-          4039
+          4066
           -
-          4100
+          4127
         </td>
         <td>
           Apply
@@ -563,9 +563,9 @@
           33
         </td>
         <td>
-          4177
+          4204
           -
-          4194
+          4221
         </td>
         <td>
           Apply
@@ -587,9 +587,9 @@
           34
         </td>
         <td>
-          4196
+          4223
           -
-          4214
+          4241
         </td>
         <td>
           Apply
@@ -611,9 +611,9 @@
           35
         </td>
         <td>
-          4168
+          4195
           -
-          4215
+          4242
         </td>
         <td>
           Apply
@@ -635,9 +635,9 @@
           37
         </td>
         <td>
-          4510
+          4537
           -
-          4513
+          4540
         </td>
         <td>
           Apply
@@ -659,9 +659,9 @@
           36
         </td>
         <td>
-          4586
+          4613
           -
-          4590
+          4617
         </td>
         <td>
           Select
@@ -683,9 +683,9 @@
           39
         </td>
         <td>
-          4658
+          4685
           -
-          4661
+          4688
         </td>
         <td>
           Apply
@@ -707,9 +707,9 @@
           38
         </td>
         <td>
-          4738
+          4765
           -
-          4742
+          4769
         </td>
         <td>
           Select
@@ -731,9 +731,9 @@
           40
         </td>
         <td>
-          5895
+          5922
           -
-          5899
+          5926
         </td>
         <td>
           Select
@@ -755,9 +755,9 @@
           41
         </td>
         <td>
-          5869
+          5896
           -
-          5900
+          5927
         </td>
         <td>
           Apply
@@ -779,9 +779,9 @@
           42
         </td>
         <td>
-          6035
+          6062
           -
-          6039
+          6066
         </td>
         <td>
           Select
@@ -803,9 +803,9 @@
           43
         </td>
         <td>
-          6005
+          6032
           -
-          6040
+          6067
         </td>
         <td>
           Apply
@@ -827,9 +827,9 @@
           44
         </td>
         <td>
-          6067
+          6094
           -
-          6085
+          6112
         </td>
         <td>
           Select
@@ -851,9 +851,9 @@
           45
         </td>
         <td>
-          7046
+          7073
           -
-          7059
+          7086
         </td>
         <td>
           Apply

@@ -24,7 +24,7 @@
           <div class="tab-pane active" id="codegrid">
             <pre style='font-size: 12pt; font-family: courier, monospace;'>1 <span style=''>package com.sparkutils.flow
 </span>2 <span style=''>
-</span>3 <span style=''>import com.sparkutils.flow.StepUtils.runnerInputs
+</span>3 <span style=''>import com.sparkutils.flow.StepUtils.{runnerInputs, stepTimeout}
 </span>4 <span style=''>import com.sparkutils.flow.Timer.DurationOps
 </span>5 <span style=''>import com.sparkutils.quality.{DataFrameLoader, MapConfigColumns, RuleSuiteParam, VersionedId, ViewConfigColumns}
 </span>6 <span style=''>import com.sparkutils.quality.generic.{collector, dq, engine, folder}
@@ -253,296 +253,302 @@
 </span>229 <span style=''></span><span style='background: #AEF1AE'>            }
 </span>230 <span style=''></span><span style='background: #AEF1AE'>          )
 </span>231 <span style=''></span><span style='background: #AEF1AE'>
-</span>232 <span style=''></span><span style='background: #AEF1AE'>          val newF: Future[StepResult[RP]] = f.map { names =&gt;
-</span>233 <span style=''></span><span style='background: #AEF1AE'>            performStep(names.head.output, cur, names)
-</span>234 <span style=''></span><span style='background: #AEF1AE'>          }
-</span>235 <span style=''></span><span style='background: #AEF1AE'>
-</span>236 <span style=''></span><span style='background: #AEF1AE'>          p.completeWith(newF)
-</span>237 <span style=''></span><span style='background: #AEF1AE'>          p.future
-</span>238 <span style=''></span><span style='background: #AEF1AE'>        }</span><span style=''>
-</span>239 <span style=''>
-</span>240 <span style=''>      // children should stitch on their parent only
-</span>241 <span style=''>      </span><span style='background: #AEF1AE'>elem.diSuccessors.foreach {
-</span>242 <span style=''></span><span style='background: #AEF1AE'>        dependent =&gt;
-</span>243 <span style=''></span><span style='background: #AEF1AE'>          chaseDown(dependent)
-</span>244 <span style=''></span><span style='background: #AEF1AE'>      }</span><span style=''>
-</span>245 <span style=''>
-</span>246 <span style=''>      r
-</span>247 <span style=''>    }
-</span>248 <span style=''>    </span><span style='background: #AEF1AE'>rest.foreach{r =&gt; chaseDown(theGraph.get(r))}</span><span style=''>
-</span>249 <span style=''>
-</span>250 <span style=''>    </span><span style='background: #AEF1AE'>(rootPromises, scala.collection.immutable.Map.empty ++ promises)</span><span style=''>
-</span>251 <span style=''>  }
+</span>232 <span style=''></span><span style='background: #AEF1AE'>          stepTimeout(cur, p)
+</span>233 <span style=''></span><span style='background: #AEF1AE'>
+</span>234 <span style=''></span><span style='background: #AEF1AE'>          val newF: Future[StepResult[RP]] = f.map { names =&gt;
+</span>235 <span style=''></span><span style='background: #AEF1AE'>            performStep(names.head.output, cur, names)
+</span>236 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>237 <span style=''></span><span style='background: #AEF1AE'>
+</span>238 <span style=''></span><span style='background: #AEF1AE'>          p.completeWith(newF)
+</span>239 <span style=''></span><span style='background: #AEF1AE'>
+</span>240 <span style=''></span><span style='background: #AEF1AE'>          p.future
+</span>241 <span style=''></span><span style='background: #AEF1AE'>        }</span><span style=''>
+</span>242 <span style=''>
+</span>243 <span style=''>      // children should stitch on their parent only
+</span>244 <span style=''>      </span><span style='background: #AEF1AE'>elem.diSuccessors.foreach {
+</span>245 <span style=''></span><span style='background: #AEF1AE'>        dependent =&gt;
+</span>246 <span style=''></span><span style='background: #AEF1AE'>          chaseDown(dependent)
+</span>247 <span style=''></span><span style='background: #AEF1AE'>      }</span><span style=''>
+</span>248 <span style=''>
+</span>249 <span style=''>      r
+</span>250 <span style=''>    }
+</span>251 <span style=''>    </span><span style='background: #AEF1AE'>rest.foreach{r =&gt; chaseDown(theGraph.get(r))}</span><span style=''>
 </span>252 <span style=''>
-</span>253 <span style=''>  /**
-</span>254 <span style=''>   * Base implementation of step verification
-</span>255 <span style=''>   */
-</span>256 <span style=''>  def verifySteps(): Unit = {
-</span>257 <span style=''>    def badViewName(name: String): Boolean = {
-</span>258 <span style=''>      </span><span style='background: #AEF1AE'>name.isEmpty</span><span style=''>
-</span>259 <span style=''>    }
-</span>260 <span style=''>    try </span><span style='background: #AEF1AE'>{
-</span>261 <span style=''></span><span style='background: #AEF1AE'>      if (steps.isEmpty) {
-</span>262 <span style=''></span><span style='background: #AEF1AE'>        throw FlowException(EmptyFlow)
-</span>263 <span style=''></span><span style='background: #AEF1AE'>      }
-</span>264 <span style=''></span><span style='background: #AEF1AE'>      if (steps.exists(s =&gt; (s.name eq null) || s.name.isEmpty)) {
-</span>265 <span style=''></span><span style='background: #AEF1AE'>        throw FlowException(EmptyStepName)
+</span>253 <span style=''>    </span><span style='background: #AEF1AE'>(rootPromises, scala.collection.immutable.Map.empty ++ promises)</span><span style=''>
+</span>254 <span style=''>  }
+</span>255 <span style=''>
+</span>256 <span style=''>  /**
+</span>257 <span style=''>   * Base implementation of step verification
+</span>258 <span style=''>   */
+</span>259 <span style=''>  def verifySteps(): Unit = {
+</span>260 <span style=''>    def badViewName(name: String): Boolean = {
+</span>261 <span style=''>      </span><span style='background: #AEF1AE'>name.isEmpty</span><span style=''>
+</span>262 <span style=''>    }
+</span>263 <span style=''>    try </span><span style='background: #AEF1AE'>{
+</span>264 <span style=''></span><span style='background: #AEF1AE'>      if (steps.isEmpty) {
+</span>265 <span style=''></span><span style='background: #AEF1AE'>        throw FlowException(EmptyFlow)
 </span>266 <span style=''></span><span style='background: #AEF1AE'>      }
-</span>267 <span style=''></span><span style='background: #AEF1AE'>      steps.find(s =&gt; (s.data.inputView.exists(badViewName) || s.data.inputView.isEmpty) &amp;&amp; s.dependencies.size &gt; 1).foreach {
-</span>268 <span style=''></span><span style='background: #AEF1AE'>        step =&gt;
-</span>269 <span style=''></span><span style='background: #AEF1AE'>          throw FlowException(DefaultViewNamesMultipleParents(step))
-</span>270 <span style=''></span><span style='background: #AEF1AE'>      }
-</span>271 <span style=''></span><span style='background: #AEF1AE'>      steps.find(s =&gt; s.data.inputView.exists(badViewName) || s.data.outputView.exists(badViewName)).foreach {
-</span>272 <span style=''></span><span style='background: #AEF1AE'>        step =&gt;
-</span>273 <span style=''></span><span style='background: #AEF1AE'>          throw FlowException(InvalidViewNames(step))
-</span>274 <span style=''></span><span style='background: #AEF1AE'>      }
-</span>275 <span style=''></span><span style='background: #AEF1AE'>      val dupes = steps.groupBy(_.name).filter(_._2.size &gt; 1)
-</span>276 <span style=''></span><span style='background: #AEF1AE'>      if (dupes.nonEmpty) {
-</span>277 <span style=''></span><span style='background: #AEF1AE'>        throw FlowException(s&quot;$DuplicateNames (${dupes.keys.mkString(&quot;,&quot;)})&quot;)
-</span>278 <span style=''></span><span style='background: #AEF1AE'>      }
-</span>279 <span style=''></span><span style='background: #AEF1AE'>      val cyc = theGraph.findCycle
-</span>280 <span style=''></span><span style='background: #AEF1AE'>      // for info only val paths = roots.map( n =&gt; n -&gt; theGraph.get(n).outerNodeTraverser.toSeq )
-</span>281 <span style=''></span><span style='background: #AEF1AE'>      cyc.foreach {
-</span>282 <span style=''></span><span style='background: #AEF1AE'>        cycle =&gt;
-</span>283 <span style=''></span><span style='background: #AEF1AE'>          throw FlowException(s&quot;$CycleDetected $cycle&quot;)
-</span>284 <span style=''></span><span style='background: #AEF1AE'>      }
-</span>285 <span style=''></span><span style='background: #AEF1AE'>
-</span>286 <span style=''></span><span style='background: #AEF1AE'>      steps.foreach {
-</span>287 <span style=''></span><span style='background: #AEF1AE'>        step =&gt;
-</span>288 <span style=''></span><span style='background: #AEF1AE'>          (step.operation.function, step.operation.resultApproach) match {
-</span>289 <span style=''></span><span style='background: #AEF1AE'>            case (DQ, MergeFields | OutputFieldsOnly) =&gt;
-</span>290 <span style=''></span><span style='background: #AEF1AE'>              throw FlowException(InvalidDQResultApproach(step))
-</span>291 <span style=''></span><span style='background: #AEF1AE'>            case _ =&gt; ()
-</span>292 <span style=''></span><span style='background: #AEF1AE'>          }
-</span>293 <span style=''></span><span style='background: #AEF1AE'>      }
-</span>294 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''> catch {
-</span>295 <span style=''>      case f: FlowException </span><span style='background: #AEF1AE'>=&gt;
-</span>296 <span style=''></span><span style='background: #AEF1AE'>        logError(f.msg, f)
-</span>297 <span style=''></span><span style='background: #AEF1AE'>        throw f</span><span style=''>
-</span>298 <span style=''>    }
-</span>299 <span style=''>  }
-</span>300 <span style=''>
-</span>301 <span style=''>  /**
-</span>302 <span style=''>   * A convenience function to start processing with an optionally provided DataFrame registered as the first steps inputView.
-</span>303 <span style=''>   *
-</span>304 <span style=''>   * The entire Flow must be complete within the Flow.duration
-</span>305 <span style=''>   *
-</span>306 <span style=''>   * @param sparkSession
-</span>307 <span style=''>   * @param starting a function called for each Root Step (a Step having no dependencies), when a DataFrame is provided
-</span>308 <span style=''>   *                 it is registered as a temporary view with the name of the inputView.  When None is returned and the
-</span>309 <span style=''>   *                 inputView is not present an error is thrown, this is delegated to the FlowDataHandling.loadData function
-</span>310 <span style=''>   * @param tolerant defaulting to false, an exception in an Step triggers an Exception from this function, a successful
-</span>311 <span style=''>   *                 result will only have [[StepResult]]s.  Providing true will capture both successes and failures
-</span>312 <span style=''>   * @return a map of step name to tuples of end Steps with their resulting DataFrames and run statistics,
-</span>313 <span style=''>   *         note although the Step returned may have been replaced by modifyStep
-</span>314 <span style=''>   *         the name key will be the original [[Step.name]]
-</span>315 <span style=''>   */
-</span>316 <span style=''>  def run(sparkSession: SparkSession, starting: Step[RP] =&gt; Option[DataFrame], tolerant: Boolean = false): FlowResult[RP] = {
-</span>317 <span style=''>    val timed = </span><span style='background: #AEF1AE'>Timer {
-</span>318 <span style=''></span><span style='background: #AEF1AE'>      verifySteps()
-</span>319 <span style=''></span><span style='background: #AEF1AE'>      logInfo(s&quot;Starting Flow id: ${flowId.id}, version: ${flowId.version}&quot;)
-</span>320 <span style=''></span><span style='background: #AEF1AE'>
-</span>321 <span style=''></span><span style='background: #AEF1AE'>      val (rootPromises, promises) = buildPromises()
-</span>322 <span style=''></span><span style='background: #AEF1AE'>
-</span>323 <span style=''></span><span style='background: #AEF1AE'>      // processing th roots sets of the rest
-</span>324 <span style=''></span><span style='background: #AEF1AE'>      roots.par.map {
-</span>325 <span style=''></span><span style='background: #AEF1AE'>        root =&gt;
-</span>326 <span style=''></span><span style='background: #AEF1AE'>          val p = rootPromises(root.name)
-</span>327 <span style=''></span><span style='background: #AEF1AE'>          try {
-</span>328 <span style=''></span><span style='background: #AEF1AE'>            val df = starting(root)
-</span>329 <span style=''></span><span style='background: #AEF1AE'>            val token = rootToken(root)
-</span>330 <span style=''></span><span style='background: #AEF1AE'>            val r =
-</span>331 <span style=''></span><span style='background: #AEF1AE'>              df.fold(
-</span>332 <span style=''></span><span style='background: #AEF1AE'>                performStep(loadData(sparkSession = sparkSession, token = token), root, Set.empty)
-</span>333 <span style=''></span><span style='background: #AEF1AE'>              ) { df =&gt;
-</span>334 <span style=''></span><span style='background: #AEF1AE'>                df.createOrReplaceTempView(token)
-</span>335 <span style=''></span><span style='background: #AEF1AE'>                performStep(df, root, Set.empty)
-</span>336 <span style=''></span><span style='background: #AEF1AE'>              }
-</span>337 <span style=''></span><span style='background: #AEF1AE'>
-</span>338 <span style=''></span><span style='background: #AEF1AE'>            p success r
-</span>339 <span style=''></span><span style='background: #AEF1AE'>          } catch {
-</span>340 <span style=''></span><span style='background: #AEF1AE'>            case t: Throwable =&gt; p failure StepException(root, t) // wrap this in an exception with the root
-</span>341 <span style=''></span><span style='background: #AEF1AE'>          }
-</span>342 <span style=''></span><span style='background: #AEF1AE'>      }
+</span>267 <span style=''></span><span style='background: #AEF1AE'>      if (steps.exists(s =&gt; (s.name eq null) || s.name.isEmpty)) {
+</span>268 <span style=''></span><span style='background: #AEF1AE'>        throw FlowException(EmptyStepName)
+</span>269 <span style=''></span><span style='background: #AEF1AE'>      }
+</span>270 <span style=''></span><span style='background: #AEF1AE'>      steps.find(s =&gt; (s.data.inputView.exists(badViewName) || s.data.inputView.isEmpty) &amp;&amp; s.dependencies.size &gt; 1).foreach {
+</span>271 <span style=''></span><span style='background: #AEF1AE'>        step =&gt;
+</span>272 <span style=''></span><span style='background: #AEF1AE'>          throw FlowException(DefaultViewNamesMultipleParents(step))
+</span>273 <span style=''></span><span style='background: #AEF1AE'>      }
+</span>274 <span style=''></span><span style='background: #AEF1AE'>      steps.find(s =&gt; s.data.inputView.exists(badViewName) || s.data.outputView.exists(badViewName)).foreach {
+</span>275 <span style=''></span><span style='background: #AEF1AE'>        step =&gt;
+</span>276 <span style=''></span><span style='background: #AEF1AE'>          throw FlowException(InvalidViewNames(step))
+</span>277 <span style=''></span><span style='background: #AEF1AE'>      }
+</span>278 <span style=''></span><span style='background: #AEF1AE'>      val dupes = steps.groupBy(_.name).filter(_._2.size &gt; 1)
+</span>279 <span style=''></span><span style='background: #AEF1AE'>      if (dupes.nonEmpty) {
+</span>280 <span style=''></span><span style='background: #AEF1AE'>        throw FlowException(s&quot;$DuplicateNames (${dupes.keys.mkString(&quot;,&quot;)})&quot;)
+</span>281 <span style=''></span><span style='background: #AEF1AE'>      }
+</span>282 <span style=''></span><span style='background: #AEF1AE'>      val cyc = theGraph.findCycle
+</span>283 <span style=''></span><span style='background: #AEF1AE'>      // for info only val paths = roots.map( n =&gt; n -&gt; theGraph.get(n).outerNodeTraverser.toSeq )
+</span>284 <span style=''></span><span style='background: #AEF1AE'>      cyc.foreach {
+</span>285 <span style=''></span><span style='background: #AEF1AE'>        cycle =&gt;
+</span>286 <span style=''></span><span style='background: #AEF1AE'>          throw FlowException(s&quot;$CycleDetected $cycle&quot;)
+</span>287 <span style=''></span><span style='background: #AEF1AE'>      }
+</span>288 <span style=''></span><span style='background: #AEF1AE'>
+</span>289 <span style=''></span><span style='background: #AEF1AE'>      steps.foreach {
+</span>290 <span style=''></span><span style='background: #AEF1AE'>        step =&gt;
+</span>291 <span style=''></span><span style='background: #AEF1AE'>          (step.operation.function, step.operation.resultApproach) match {
+</span>292 <span style=''></span><span style='background: #AEF1AE'>            case (DQ, MergeFields | OutputFieldsOnly) =&gt;
+</span>293 <span style=''></span><span style='background: #AEF1AE'>              throw FlowException(InvalidDQResultApproach(step))
+</span>294 <span style=''></span><span style='background: #AEF1AE'>            case _ =&gt; ()
+</span>295 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>296 <span style=''></span><span style='background: #AEF1AE'>      }
+</span>297 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''> catch {
+</span>298 <span style=''>      case f: FlowException </span><span style='background: #AEF1AE'>=&gt;
+</span>299 <span style=''></span><span style='background: #AEF1AE'>        logError(f.msg, f)
+</span>300 <span style=''></span><span style='background: #AEF1AE'>        throw f</span><span style=''>
+</span>301 <span style=''>    }
+</span>302 <span style=''>  }
+</span>303 <span style=''>
+</span>304 <span style=''>  /**
+</span>305 <span style=''>   * A convenience function to start processing with an optionally provided DataFrame registered as the first steps inputView.
+</span>306 <span style=''>   *
+</span>307 <span style=''>   * The entire Flow must be complete within the Flow.duration
+</span>308 <span style=''>   *
+</span>309 <span style=''>   * @param sparkSession
+</span>310 <span style=''>   * @param starting a function called for each Root Step (a Step having no dependencies), when a DataFrame is provided
+</span>311 <span style=''>   *                 it is registered as a temporary view with the name of the inputView.  When None is returned and the
+</span>312 <span style=''>   *                 inputView is not present an error is thrown, this is delegated to the FlowDataHandling.loadData function
+</span>313 <span style=''>   * @param tolerant defaulting to false, an exception in an Step triggers an Exception from this function, a successful
+</span>314 <span style=''>   *                 result will only have [[StepResult]]s.  Providing true will capture both successes and failures
+</span>315 <span style=''>   * @return a map of step name to tuples of end Steps with their resulting DataFrames and run statistics,
+</span>316 <span style=''>   *         note although the Step returned may have been replaced by modifyStep
+</span>317 <span style=''>   *         the name key will be the original [[Step.name]]
+</span>318 <span style=''>   */
+</span>319 <span style=''>  def run(sparkSession: SparkSession, starting: Step[RP] =&gt; Option[DataFrame], tolerant: Boolean = false): FlowResult[RP] = {
+</span>320 <span style=''>    val timed = </span><span style='background: #AEF1AE'>Timer {
+</span>321 <span style=''></span><span style='background: #AEF1AE'>      verifySteps()
+</span>322 <span style=''></span><span style='background: #AEF1AE'>      logInfo(s&quot;Starting Flow id: ${flowId.id}, version: ${flowId.version}&quot;)
+</span>323 <span style=''></span><span style='background: #AEF1AE'>
+</span>324 <span style=''></span><span style='background: #AEF1AE'>      val (rootPromises, promises) = buildPromises()
+</span>325 <span style=''></span><span style='background: #AEF1AE'>
+</span>326 <span style=''></span><span style='background: #AEF1AE'>      // processing th roots sets of the rest
+</span>327 <span style=''></span><span style='background: #AEF1AE'>      roots.par.map {
+</span>328 <span style=''></span><span style='background: #AEF1AE'>        root =&gt;
+</span>329 <span style=''></span><span style='background: #AEF1AE'>          val p = rootPromises(root.name)
+</span>330 <span style=''></span><span style='background: #AEF1AE'>          try {
+</span>331 <span style=''></span><span style='background: #AEF1AE'>            val df = starting(root)
+</span>332 <span style=''></span><span style='background: #AEF1AE'>            val token = rootToken(root)
+</span>333 <span style=''></span><span style='background: #AEF1AE'>
+</span>334 <span style=''></span><span style='background: #AEF1AE'>            stepTimeout(root, p)
+</span>335 <span style=''></span><span style='background: #AEF1AE'>
+</span>336 <span style=''></span><span style='background: #AEF1AE'>            val r =
+</span>337 <span style=''></span><span style='background: #AEF1AE'>              df.fold(
+</span>338 <span style=''></span><span style='background: #AEF1AE'>                performStep(loadData(sparkSession = sparkSession, token = token), root, Set.empty)
+</span>339 <span style=''></span><span style='background: #AEF1AE'>              ) { df =&gt;
+</span>340 <span style=''></span><span style='background: #AEF1AE'>                df.createOrReplaceTempView(token)
+</span>341 <span style=''></span><span style='background: #AEF1AE'>                performStep(df, root, Set.empty)
+</span>342 <span style=''></span><span style='background: #AEF1AE'>              }
 </span>343 <span style=''></span><span style='background: #AEF1AE'>
-</span>344 <span style=''></span><span style='background: #AEF1AE'>      if (tolerant) {
-</span>345 <span style=''></span><span style='background: #AEF1AE'>        val all = Future.sequence((rootPromises ++ promises).map(_._2.future.transform(Success(_))))
-</span>346 <span style=''></span><span style='background: #AEF1AE'>        val r = Await.result(all, duration)
-</span>347 <span style=''></span><span style='background: #AEF1AE'>
-</span>348 <span style=''></span><span style='background: #AEF1AE'>        r.map {
-</span>349 <span style=''></span><span style='background: #AEF1AE'>          case Success(stepResult: StepResult[RP]) =&gt; stepResult.step.name -&gt; stepResult
-</span>350 <span style=''></span><span style='background: #AEF1AE'>          case Failure(stepException: StepException[RP]) =&gt; stepException.step.name -&gt; stepException
-</span>351 <span style=''></span><span style='background: #AEF1AE'>        }.toMap
-</span>352 <span style=''></span><span style='background: #AEF1AE'>      } else {
-</span>353 <span style=''></span><span style='background: #AEF1AE'>        val all = Future.sequence((rootPromises ++ promises).map(_._2.future))
-</span>354 <span style=''></span><span style='background: #AEF1AE'>        val r = Await.result(all, duration)
-</span>355 <span style=''></span><span style='background: #AEF1AE'>
-</span>356 <span style=''></span><span style='background: #AEF1AE'>        r.map{stepResult =&gt; stepResult.step.name -&gt; stepResult}.toMap
-</span>357 <span style=''></span><span style='background: #AEF1AE'>      }
-</span>358 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
-</span>359 <span style=''>    </span><span style='background: #AEF1AE'>logInfo(s&quot;Finished Flow id: ${flowId.id}, version: ${flowId.version} in ${timed._2.pretty}&quot;)</span><span style=''>
-</span>360 <span style=''>
-</span>361 <span style=''>    </span><span style='background: #AEF1AE'>FlowResult(timed._1, timed._2)</span><span style=''>
-</span>362 <span style=''>  }
-</span>363 <span style=''>
-</span>364 <span style=''>  /**
-</span>365 <span style=''>   * Process using the registered views using registered views as the roots, a failure in any Step
-</span>366 <span style=''>   * throws.
-</span>367 <span style=''>   *
-</span>368 <span style=''>   * @param sparkSession
-</span>369 <span style=''>   * @param starting
-</span>370 <span style=''>   * @param tolerant defaulting to false, an exception in an Step triggers an Exception from this function, a successful
-</span>371 <span style=''>   *                 result will only have [[StepResult]]s.  Providing true will capture both successes and failures
-</span>372 <span style=''>   * @return Tuples of end Steps with their resulting DataFrames and run statistics
-</span>373 <span style=''>   */
-</span>374 <span style=''>  def run(sparkSession: SparkSession, tolerant: Boolean): FlowResult[RP] =
-</span>375 <span style=''>    </span><span style='background: #F0ADAD'>run(sparkSession, {
-</span>376 <span style=''></span><span style='background: #F0ADAD'>      _ =&gt; None
-</span>377 <span style=''></span><span style='background: #F0ADAD'>    }, tolerant)</span><span style=''>
-</span>378 <span style=''>
-</span>379 <span style=''>  /**
-</span>380 <span style=''>   * Process using the registered views using registered views as the roots, a failure in any Step
-</span>381 <span style=''>   * throws.
-</span>382 <span style=''>   *
-</span>383 <span style=''>   * @param sparkSession
-</span>384 <span style=''>   * @param starting
-</span>385 <span style=''>   * @param tolerant defaulting to false, an exception in an Step triggers an Exception from this function, a successful
-</span>386 <span style=''>   *                 result will only have [[StepResult]]s.  Providing true will capture both successes and failures
-</span>387 <span style=''>   * @return Tuples of end Steps with their resulting DataFrames and run statistics
-</span>388 <span style=''>   */
-</span>389 <span style=''>  def run(sparkSession: SparkSession): FlowResult[RP] =
-</span>390 <span style=''>    </span><span style='background: #AEF1AE'>run(sparkSession, {
-</span>391 <span style=''></span><span style='background: #AEF1AE'>      _ =&gt; None
-</span>392 <span style=''></span><span style='background: #AEF1AE'>    })</span><span style=''>
-</span>393 <span style=''>
-</span>394 <span style=''>  // this logic is tested via Quality itself
-</span>395 <span style=''>  // $COVERAGE-OFF$
-</span>396 <span style=''>  /**
-</span>397 <span style=''>   * By default, throws errors with failedToLoadDutToCycles or if the step inputView could not be loaded
-</span>398 <span style=''>   * @param vl
-</span>399 <span style=''>   * @param step
-</span>400 <span style=''>   */
-</span>401 <span style=''>  private def stepViewsLoaded(vl: ViewLoadResults, step: Step[RP]) = {
-</span>402 <span style=''>    if (vl.replaced.nonEmpty) {
-</span>403 <span style=''>      logInfo(s&quot;Views in Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} were replaced `${vl.replaced.mkString(&quot;,&quot;)}`&quot;)
-</span>404 <span style=''>    }
-</span>405 <span style=''>
-</span>406 <span style=''>    if (vl.failedToLoadDueToCycles &amp;&amp; step.initConfiguration.viewConfig.nonEmpty) {
-</span>407 <span style=''>      val err = FlowException(s&quot;View Cycle - Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} could not be started due to view cycle detection&quot;)
-</span>408 <span style=''>      logError(err.msg, err)
-</span>409 <span style=''>      throw err
+</span>344 <span style=''></span><span style='background: #AEF1AE'>            p success r
+</span>345 <span style=''></span><span style='background: #AEF1AE'>          } catch {
+</span>346 <span style=''></span><span style='background: #AEF1AE'>            case t: Throwable =&gt; p tryFailure StepException(root, t) // wrap this in an exception with the root
+</span>347 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>348 <span style=''></span><span style='background: #AEF1AE'>      }
+</span>349 <span style=''></span><span style='background: #AEF1AE'>
+</span>350 <span style=''></span><span style='background: #AEF1AE'>      if (tolerant) {
+</span>351 <span style=''></span><span style='background: #AEF1AE'>        val all = Future.sequence((rootPromises ++ promises).map(_._2.future.transform(Success(_))))
+</span>352 <span style=''></span><span style='background: #AEF1AE'>        val r = Await.result(all, duration)
+</span>353 <span style=''></span><span style='background: #AEF1AE'>
+</span>354 <span style=''></span><span style='background: #AEF1AE'>        r.map {
+</span>355 <span style=''></span><span style='background: #AEF1AE'>          case Success(stepResult: StepResult[RP]) =&gt; stepResult.step.name -&gt; stepResult
+</span>356 <span style=''></span><span style='background: #AEF1AE'>          case Failure(stepException: StepException[RP]) =&gt; stepException.step.name -&gt; stepException
+</span>357 <span style=''></span><span style='background: #AEF1AE'>        }.toMap
+</span>358 <span style=''></span><span style='background: #AEF1AE'>      } else {
+</span>359 <span style=''></span><span style='background: #AEF1AE'>        val all = Future.sequence((rootPromises ++ promises).map(_._2.future))
+</span>360 <span style=''></span><span style='background: #AEF1AE'>        val r = Await.result(all, duration)
+</span>361 <span style=''></span><span style='background: #AEF1AE'>
+</span>362 <span style=''></span><span style='background: #AEF1AE'>        r.map{stepResult =&gt; stepResult.step.name -&gt; stepResult}.toMap
+</span>363 <span style=''></span><span style='background: #AEF1AE'>      }
+</span>364 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>365 <span style=''>    </span><span style='background: #AEF1AE'>logInfo(s&quot;Finished Flow id: ${flowId.id}, version: ${flowId.version} in ${timed._2.pretty}&quot;)</span><span style=''>
+</span>366 <span style=''>
+</span>367 <span style=''>    </span><span style='background: #AEF1AE'>FlowResult(timed._1, timed._2)</span><span style=''>
+</span>368 <span style=''>  }
+</span>369 <span style=''>
+</span>370 <span style=''>  /**
+</span>371 <span style=''>   * Process using the registered views using registered views as the roots, a failure in any Step
+</span>372 <span style=''>   * throws.
+</span>373 <span style=''>   *
+</span>374 <span style=''>   * @param sparkSession
+</span>375 <span style=''>   * @param starting
+</span>376 <span style=''>   * @param tolerant defaulting to false, an exception in an Step triggers an Exception from this function, a successful
+</span>377 <span style=''>   *                 result will only have [[StepResult]]s.  Providing true will capture both successes and failures
+</span>378 <span style=''>   * @return Tuples of end Steps with their resulting DataFrames and run statistics
+</span>379 <span style=''>   */
+</span>380 <span style=''>  def run(sparkSession: SparkSession, tolerant: Boolean): FlowResult[RP] =
+</span>381 <span style=''>    </span><span style='background: #F0ADAD'>run(sparkSession, {
+</span>382 <span style=''></span><span style='background: #F0ADAD'>      _ =&gt; None
+</span>383 <span style=''></span><span style='background: #F0ADAD'>    }, tolerant)</span><span style=''>
+</span>384 <span style=''>
+</span>385 <span style=''>  /**
+</span>386 <span style=''>   * Process using the registered views using registered views as the roots, a failure in any Step
+</span>387 <span style=''>   * throws.
+</span>388 <span style=''>   *
+</span>389 <span style=''>   * @param sparkSession
+</span>390 <span style=''>   * @param starting
+</span>391 <span style=''>   * @param tolerant defaulting to false, an exception in an Step triggers an Exception from this function, a successful
+</span>392 <span style=''>   *                 result will only have [[StepResult]]s.  Providing true will capture both successes and failures
+</span>393 <span style=''>   * @return Tuples of end Steps with their resulting DataFrames and run statistics
+</span>394 <span style=''>   */
+</span>395 <span style=''>  def run(sparkSession: SparkSession): FlowResult[RP] =
+</span>396 <span style=''>    </span><span style='background: #AEF1AE'>run(sparkSession, {
+</span>397 <span style=''></span><span style='background: #AEF1AE'>      _ =&gt; None
+</span>398 <span style=''></span><span style='background: #AEF1AE'>    })</span><span style=''>
+</span>399 <span style=''>
+</span>400 <span style=''>  // this logic is tested via Quality itself
+</span>401 <span style=''>  // $COVERAGE-OFF$
+</span>402 <span style=''>  /**
+</span>403 <span style=''>   * By default, throws errors with failedToLoadDutToCycles or if the step inputView could not be loaded
+</span>404 <span style=''>   * @param vl
+</span>405 <span style=''>   * @param step
+</span>406 <span style=''>   */
+</span>407 <span style=''>  private def stepViewsLoaded(vl: ViewLoadResults, step: Step[RP]) = {
+</span>408 <span style=''>    if (vl.replaced.nonEmpty) {
+</span>409 <span style=''>      logInfo(s&quot;Views in Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} were replaced `${vl.replaced.mkString(&quot;,&quot;)}`&quot;)
 </span>410 <span style=''>    }
-</span>411 <span style=''>    if (vl.notLoadedViews.nonEmpty) {
-</span>412 <span style=''>      if (vl.notLoadedViews.exists(step.data.inputView.contains)) {
-</span>413 <span style=''>        val err = FlowException(s&quot;View Cycle - Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} could not be started as the Steps inputView `${step.data.inputView}` could not be loaded&quot;)
-</span>414 <span style=''>        logError(err.msg, err)
-</span>415 <span style=''>        throw err
-</span>416 <span style=''>      } else {
-</span>417 <span style=''>        val msg = s&quot;View Cycle - Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} could not load the following views - &quot;
-</span>418 <span style=''>        logWarning(msg + vl.notLoadedViews.map(v =&gt; s&quot;`$v`&quot;).mkString)
-</span>419 <span style=''>      }
-</span>420 <span style=''>    } else {
-</span>421 <span style=''>      infoLogStep(step, &quot;Views Loaded&quot;)
-</span>422 <span style=''>    }
-</span>423 <span style=''>  }
-</span>424 <span style=''>
-</span>425 <span style=''>  final def flowInfo(step: Step[RP], info: String): String =
-</span>426 <span style=''>    s&quot;Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} $info&quot;
-</span>427 <span style=''>
-</span>428 <span style=''>  /**
-</span>429 <span style=''>   * Logs at info level the step
-</span>430 <span style=''>   * @param step
-</span>431 <span style=''>   * @param info extra logging information
-</span>432 <span style=''>   */
-</span>433 <span style=''>  final def infoLogStep(step: Step[RP], info: String): Unit = {
-</span>434 <span style=''>    logInfo(flowInfo(step,info))
-</span>435 <span style=''>  }
-</span>436 <span style=''>  /**
-</span>437 <span style=''>   * Logs at info level the step
-</span>438 <span style=''>   * @param step
-</span>439 <span style=''>   * @param info extra logging information
-</span>440 <span style=''>   */
-</span>441 <span style=''>  final def warnLogStep(step: Step[RP], info: String): Unit = {
-</span>442 <span style=''>    logWarning(flowInfo(step,info))
-</span>443 <span style=''>  }
-</span>444 <span style=''>  /**
-</span>445 <span style=''>   * Logs at info level the step
-</span>446 <span style=''>   * @param step
-</span>447 <span style=''>   * @param info extra logging information
-</span>448 <span style=''>   */
-</span>449 <span style=''>  final protected def errorLogStep(step: Step[RP], info: String): Unit = {
-</span>450 <span style=''>    logError(flowInfo(step,info))
-</span>451 <span style=''>  }
-</span>452 <span style=''>  // $COVERAGE-ON$
-</span>453 <span style=''>
-</span>454 <span style=''>  /**
-</span>455 <span style=''>   * Called before performStep, by default just returns the step, customised Flow's can override behaviour, such as
-</span>456 <span style=''>   * generating new rules based on previous steps, or taking other actions before view loading based on either the
-</span>457 <span style=''>   * dataframe or configuration items.
-</span>458 <span style=''>   *
-</span>459 <span style=''>   * Original names will be used in the run result key but the result of this call is used in the [[run]] result pair.
-</span>460 <span style=''>   *
-</span>461 <span style=''>   * @param input
-</span>462 <span style=''>   * @param step
-</span>463 <span style=''>   * @param previousSteps
-</span>464 <span style=''>   * @return
-</span>465 <span style=''>   */
-</span>466 <span style=''>  protected def modifyStep(input: DataFrame, step: Step[RP], previousSteps: Set[StepResult[RP]]): Step[RP] =
-</span>467 <span style=''>    step
-</span>468 <span style=''>
-</span>469 <span style=''>  /**
-</span>470 <span style=''>   * @inheritdoc
+</span>411 <span style=''>
+</span>412 <span style=''>    if (vl.failedToLoadDueToCycles &amp;&amp; step.initConfiguration.viewConfig.nonEmpty) {
+</span>413 <span style=''>      val err = FlowException(s&quot;View Cycle - Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} could not be started due to view cycle detection&quot;)
+</span>414 <span style=''>      logError(err.msg, err)
+</span>415 <span style=''>      throw err
+</span>416 <span style=''>    }
+</span>417 <span style=''>    if (vl.notLoadedViews.nonEmpty) {
+</span>418 <span style=''>      if (vl.notLoadedViews.exists(step.data.inputView.contains)) {
+</span>419 <span style=''>        val err = FlowException(s&quot;View Cycle - Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} could not be started as the Steps inputView `${step.data.inputView}` could not be loaded&quot;)
+</span>420 <span style=''>        logError(err.msg, err)
+</span>421 <span style=''>        throw err
+</span>422 <span style=''>      } else {
+</span>423 <span style=''>        val msg = s&quot;View Cycle - Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} could not load the following views - &quot;
+</span>424 <span style=''>        logWarning(msg + vl.notLoadedViews.map(v =&gt; s&quot;`$v`&quot;).mkString)
+</span>425 <span style=''>      }
+</span>426 <span style=''>    } else {
+</span>427 <span style=''>      infoLogStep(step, &quot;Views Loaded&quot;)
+</span>428 <span style=''>    }
+</span>429 <span style=''>  }
+</span>430 <span style=''>
+</span>431 <span style=''>  final def flowInfo(step: Step[RP], info: String): String =
+</span>432 <span style=''>    s&quot;Step ${step.name}, Flow id: ${flowId.id}, version: ${flowId.version} $info&quot;
+</span>433 <span style=''>
+</span>434 <span style=''>  /**
+</span>435 <span style=''>   * Logs at info level the step
+</span>436 <span style=''>   * @param step
+</span>437 <span style=''>   * @param info extra logging information
+</span>438 <span style=''>   */
+</span>439 <span style=''>  final def infoLogStep(step: Step[RP], info: String): Unit = {
+</span>440 <span style=''>    logInfo(flowInfo(step,info))
+</span>441 <span style=''>  }
+</span>442 <span style=''>  /**
+</span>443 <span style=''>   * Logs at info level the step
+</span>444 <span style=''>   * @param step
+</span>445 <span style=''>   * @param info extra logging information
+</span>446 <span style=''>   */
+</span>447 <span style=''>  final def warnLogStep(step: Step[RP], info: String): Unit = {
+</span>448 <span style=''>    logWarning(flowInfo(step,info))
+</span>449 <span style=''>  }
+</span>450 <span style=''>  /**
+</span>451 <span style=''>   * Logs at info level the step
+</span>452 <span style=''>   * @param step
+</span>453 <span style=''>   * @param info extra logging information
+</span>454 <span style=''>   */
+</span>455 <span style=''>  final protected def errorLogStep(step: Step[RP], info: String): Unit = {
+</span>456 <span style=''>    logError(flowInfo(step,info))
+</span>457 <span style=''>  }
+</span>458 <span style=''>  // $COVERAGE-ON$
+</span>459 <span style=''>
+</span>460 <span style=''>  /**
+</span>461 <span style=''>   * Called before performStep, by default just returns the step, customised Flow's can override behaviour, such as
+</span>462 <span style=''>   * generating new rules based on previous steps, or taking other actions before view loading based on either the
+</span>463 <span style=''>   * dataframe or configuration items.
+</span>464 <span style=''>   *
+</span>465 <span style=''>   * Original names will be used in the run result key but the result of this call is used in the [[run]] result pair.
+</span>466 <span style=''>   *
+</span>467 <span style=''>   * @param input
+</span>468 <span style=''>   * @param step
+</span>469 <span style=''>   * @param previousSteps
+</span>470 <span style=''>   * @return
 </span>471 <span style=''>   */
-</span>472 <span style=''>  protected def startStep(input: DataFrame, step: Step[RP], previousSteps: Set[StepResult[RP]]): DataFrame = {
-</span>473 <span style=''>    </span><span style='background: #AEF1AE'>infoLogStep(step, &quot;Started&quot;)</span><span style=''>
+</span>472 <span style=''>  protected def modifyStep(input: DataFrame, step: Step[RP], previousSteps: Set[StepResult[RP]]): Step[RP] =
+</span>473 <span style=''>    step
 </span>474 <span style=''>
-</span>475 <span style=''>    val token = </span><span style='background: #AEF1AE'>step.data.inputView.getOrElse{
-</span>476 <span style=''></span><span style='background: #AEF1AE'>      // multiple are invalid, roots can have default names
-</span>477 <span style=''></span><span style='background: #AEF1AE'>      if (previousSteps.isEmpty)
-</span>478 <span style=''></span><span style='background: #AEF1AE'>        rootToken(step)
-</span>479 <span style=''></span><span style='background: #AEF1AE'>      else
-</span>480 <span style=''></span><span style='background: #AEF1AE'>        previousSteps.head.step.defaultOutputViewName
-</span>481 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
-</span>482 <span style=''>    </span><span style='background: #AEF1AE'>loadData(input.sparkSession, token = token)</span><span style=''>
-</span>483 <span style=''>  }
-</span>484 <span style=''>
-</span>485 <span style=''>  /**
-</span>486 <span style=''>   * @inheritdoc
-</span>487 <span style=''>   */
-</span>488 <span style=''>  protected def stepCompleted(result: DataFrame, step: Step[RP], previousSteps: Set[StepResult[RP]]): DataFrame = {
-</span>489 <span style=''>    val ndf =
-</span>490 <span style=''>      if (</span><span style='background: #AEF1AE'>step.data.cacheResults</span><span style=''>)
-</span>491 <span style=''>        </span><span style='background: #AEF1AE'>result.cache()</span><span style=''>
-</span>492 <span style=''>      else
-</span>493 <span style=''>        </span><span style='background: #AEF1AE'>result</span><span style=''>
-</span>494 <span style=''>
-</span>495 <span style=''>    </span><span style='background: #AEF1AE'>ndf.createOrReplaceTempView(step.defaultOutputViewName)</span><span style=''>
-</span>496 <span style=''>
-</span>497 <span style=''>    </span><span style='background: #AEF1AE'>infoLogStep(step, &quot;Completed&quot;)</span><span style=''>
-</span>498 <span style=''>
-</span>499 <span style=''>    ndf
-</span>500 <span style=''>  }
-</span>501 <span style=''>
-</span>502 <span style=''>  /**
-</span>503 <span style=''>   * @inheritdoc
-</span>504 <span style=''>   */
-</span>505 <span style=''>  protected def earlyExitCheck(result: DataFrame, step: Step[RP], previousSteps: Set[StepResult[RP]]): Unit =
-</span>506 <span style=''>    </span><span style='background: #AEF1AE'>step.options.get(flowEarlyExitSQL).foreach {
-</span>507 <span style=''></span><span style='background: #AEF1AE'>      sql =&gt;
-</span>508 <span style=''></span><span style='background: #AEF1AE'>        val msg = step.options.getOrElse(flowEarlyExitException, FlowEarlyExitException(step))
-</span>509 <span style=''></span><span style='background: #AEF1AE'>        try {
-</span>510 <span style=''></span><span style='background: #AEF1AE'>          val s = result.sparkSession
-</span>511 <span style=''></span><span style='background: #AEF1AE'>          import s.implicits._
-</span>512 <span style=''></span><span style='background: #AEF1AE'>          val df = s.sql(sql).select(flowEarlyExitColumn).as[Boolean]
-</span>513 <span style=''></span><span style='background: #AEF1AE'>          if (!(df.isEmpty || df.head())) {
-</span>514 <span style=''></span><span style='background: #AEF1AE'>            throw FlowException(msg)
-</span>515 <span style=''></span><span style='background: #AEF1AE'>          }
-</span>516 <span style=''></span><span style='background: #AEF1AE'>        } catch {
-</span>517 <span style=''></span><span style='background: #AEF1AE'>          case f: FlowException =&gt; throw f
-</span>518 <span style=''></span><span style='background: #AEF1AE'>          case t: Throwable =&gt; throw FlowException(msg,t)
-</span>519 <span style=''></span><span style='background: #AEF1AE'>        }
-</span>520 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
-</span>521 <span style=''>}
+</span>475 <span style=''>  /**
+</span>476 <span style=''>   * @inheritdoc
+</span>477 <span style=''>   */
+</span>478 <span style=''>  protected def startStep(input: DataFrame, step: Step[RP], previousSteps: Set[StepResult[RP]]): DataFrame = {
+</span>479 <span style=''>    </span><span style='background: #AEF1AE'>infoLogStep(step, &quot;Started&quot;)</span><span style=''>
+</span>480 <span style=''>
+</span>481 <span style=''>    val token = </span><span style='background: #AEF1AE'>step.data.inputView.getOrElse{
+</span>482 <span style=''></span><span style='background: #AEF1AE'>      // multiple are invalid, roots can have default names
+</span>483 <span style=''></span><span style='background: #AEF1AE'>      if (previousSteps.isEmpty)
+</span>484 <span style=''></span><span style='background: #AEF1AE'>        rootToken(step)
+</span>485 <span style=''></span><span style='background: #AEF1AE'>      else
+</span>486 <span style=''></span><span style='background: #AEF1AE'>        previousSteps.head.step.defaultOutputViewName
+</span>487 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>488 <span style=''>    </span><span style='background: #AEF1AE'>loadData(input.sparkSession, token = token)</span><span style=''>
+</span>489 <span style=''>  }
+</span>490 <span style=''>
+</span>491 <span style=''>  /**
+</span>492 <span style=''>   * @inheritdoc
+</span>493 <span style=''>   */
+</span>494 <span style=''>  protected def stepCompleted(result: DataFrame, step: Step[RP], previousSteps: Set[StepResult[RP]]): DataFrame = {
+</span>495 <span style=''>    val ndf =
+</span>496 <span style=''>      if (</span><span style='background: #AEF1AE'>step.data.cacheResults</span><span style=''>)
+</span>497 <span style=''>        </span><span style='background: #AEF1AE'>result.cache()</span><span style=''>
+</span>498 <span style=''>      else
+</span>499 <span style=''>        </span><span style='background: #AEF1AE'>result</span><span style=''>
+</span>500 <span style=''>
+</span>501 <span style=''>    </span><span style='background: #AEF1AE'>ndf.createOrReplaceTempView(step.defaultOutputViewName)</span><span style=''>
+</span>502 <span style=''>
+</span>503 <span style=''>    </span><span style='background: #AEF1AE'>infoLogStep(step, &quot;Completed&quot;)</span><span style=''>
+</span>504 <span style=''>
+</span>505 <span style=''>    ndf
+</span>506 <span style=''>  }
+</span>507 <span style=''>
+</span>508 <span style=''>  /**
+</span>509 <span style=''>   * @inheritdoc
+</span>510 <span style=''>   */
+</span>511 <span style=''>  protected def earlyExitCheck(result: DataFrame, step: Step[RP], previousSteps: Set[StepResult[RP]]): Unit =
+</span>512 <span style=''>    </span><span style='background: #AEF1AE'>step.options.get(flowEarlyExitSQL).foreach {
+</span>513 <span style=''></span><span style='background: #AEF1AE'>      sql =&gt;
+</span>514 <span style=''></span><span style='background: #AEF1AE'>        val msg = step.options.getOrElse(flowEarlyExitException, FlowEarlyExitException(step))
+</span>515 <span style=''></span><span style='background: #AEF1AE'>        try {
+</span>516 <span style=''></span><span style='background: #AEF1AE'>          val s = result.sparkSession
+</span>517 <span style=''></span><span style='background: #AEF1AE'>          import s.implicits._
+</span>518 <span style=''></span><span style='background: #AEF1AE'>          val df = s.sql(sql).select(flowEarlyExitColumn).as[Boolean]
+</span>519 <span style=''></span><span style='background: #AEF1AE'>          if (!(df.isEmpty || df.head())) {
+</span>520 <span style=''></span><span style='background: #AEF1AE'>            throw FlowException(msg)
+</span>521 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>522 <span style=''></span><span style='background: #AEF1AE'>        } catch {
+</span>523 <span style=''></span><span style='background: #AEF1AE'>          case f: FlowException =&gt; throw f
+</span>524 <span style=''></span><span style='background: #AEF1AE'>          case t: Throwable =&gt; throw FlowException(msg,t)
+</span>525 <span style=''></span><span style='background: #AEF1AE'>        }
+</span>526 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>527 <span style=''>}
 </span></pre>
           </div>
           <div class="tab-pane" id="statementlist">
@@ -560,12 +566,12 @@
           76
         </td>
         <td>
-          79
+          80
         </td>
         <td>
-          3699
+          3714
           -
-          3721
+          3736
         </td>
         <td>
           Select
@@ -584,12 +590,12 @@
           76
         </td>
         <td>
-          80
+          81
         </td>
         <td>
-          3683
+          3698
           -
-          3722
+          3737
         </td>
         <td>
           Apply
@@ -608,39 +614,15 @@
           76
         </td>
         <td>
-          81
-        </td>
-        <td>
-          3667
-          -
-          3680
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Tuple2.apply
-        </td>
-        <td>
-          
-        </td>
-        <td style="background: #AEF1AE">
-          scala.Tuple2.apply[Seq[com.sparkutils.flow.Step[RP]], Seq[com.sparkutils.flow.Step[RP]]](roots, rest)
-        </td>
-      </tr><tr>
-        <td>
-          76
-        </td>
-        <td>
           82
         </td>
         <td>
-          3667
+          3682
           -
-          3680
+          3695
         </td>
         <td>
-          Block
+          Apply
         </td>
         <td>
           scala.Tuple2.apply
@@ -659,9 +641,33 @@
           83
         </td>
         <td>
-          3668
+          3682
           -
-          3668
+          3695
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          scala.Tuple2.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Tuple2.apply[Seq[com.sparkutils.flow.Step[RP]], Seq[com.sparkutils.flow.Step[RP]]](roots, rest)
+        </td>
+      </tr><tr>
+        <td>
+          76
+        </td>
+        <td>
+          84
+        </td>
+        <td>
+          3683
+          -
+          3683
         </td>
         <td>
           Select
@@ -680,12 +686,12 @@
           76
         </td>
         <td>
-          84
+          85
         </td>
         <td>
-          3675
+          3690
           -
-          3675
+          3690
         </td>
         <td>
           Select
@@ -704,12 +710,12 @@
           79
         </td>
         <td>
-          86
+          87
         </td>
         <td>
-          3865
+          3880
           -
-          3934
+          3949
         </td>
         <td>
           Apply
@@ -728,12 +734,12 @@
           80
         </td>
         <td>
-          85
+          86
         </td>
         <td>
-          3876
+          3891
           -
-          3930
+          3945
         </td>
         <td>
           ApplyToImplicitArgs
@@ -752,12 +758,12 @@
           84
         </td>
         <td>
-          125
+          126
         </td>
         <td>
-          4118
+          4133
           -
-          6645
+          6660
         </td>
         <td>
           Apply
@@ -824,12 +830,12 @@
           88
         </td>
         <td>
-          87
+          88
         </td>
         <td>
-          4198
+          4213
           -
-          4219
+          4234
         </td>
         <td>
           Select
@@ -848,12 +854,12 @@
           90
         </td>
         <td>
-          88
+          89
         </td>
         <td>
-          4307
+          4322
           -
-          4314
+          4329
         </td>
         <td>
           Select
@@ -872,12 +878,12 @@
           90
         </td>
         <td>
-          89
+          90
         </td>
         <td>
-          4294
+          4309
           -
-          4338
+          4353
         </td>
         <td>
           ApplyToImplicitArgs
@@ -896,12 +902,12 @@
           90
         </td>
         <td>
-          90
+          91
         </td>
         <td>
-          4229
+          4244
           -
-          4291
+          4306
         </td>
         <td>
           Apply
@@ -920,12 +926,12 @@
           90
         </td>
         <td>
-          91
+          92
         </td>
         <td>
-          4229
+          4244
           -
-          4291
+          4306
         </td>
         <td>
           Block
@@ -944,12 +950,12 @@
           90
         </td>
         <td>
-          92
+          93
         </td>
         <td>
-          4229
+          4244
           -
-          4229
+          4244
         </td>
         <td>
           Select
@@ -968,12 +974,12 @@
           90
         </td>
         <td>
-          93
+          94
         </td>
         <td>
-          4247
+          4262
           -
-          4247
+          4262
         </td>
         <td>
           Select
@@ -992,12 +998,12 @@
           90
         </td>
         <td>
-          94
+          95
         </td>
         <td>
-          4255
+          4270
           -
-          4255
+          4270
         </td>
         <td>
           Select
@@ -1016,12 +1022,12 @@
           90
         </td>
         <td>
-          95
+          96
         </td>
         <td>
-          4273
+          4288
           -
-          4273
+          4288
         </td>
         <td>
           Select
@@ -1040,12 +1046,12 @@
           93
         </td>
         <td>
-          96
+          97
         </td>
         <td>
-          4363
+          4378
           -
-          4371
+          4386
         </td>
         <td>
           Select
@@ -1064,12 +1070,12 @@
           95
         </td>
         <td>
-          99
+          100
         </td>
         <td>
-          4414
+          4429
           -
-          5105
+          5120
         </td>
         <td>
           Apply
@@ -1098,12 +1104,12 @@
           95
         </td>
         <td>
-          100
+          101
         </td>
         <td>
-          4414
+          4429
           -
-          5105
+          5120
         </td>
         <td>
           Block
@@ -1132,12 +1138,12 @@
           102
         </td>
         <td>
-          97
+          98
         </td>
         <td>
-          4427
+          4442
           -
-          5027
+          5042
         </td>
         <td>
           Apply
@@ -1166,12 +1172,12 @@
           102
         </td>
         <td>
-          98
+          99
         </td>
         <td>
-          5029
+          5044
           -
-          5062
+          5077
         </td>
         <td>
           Apply
@@ -1190,12 +1196,12 @@
           107
         </td>
         <td>
-          103
+          104
         </td>
         <td>
-          5140
+          5155
           -
-          5545
+          5560
         </td>
         <td>
           Apply
@@ -1219,12 +1225,12 @@
           107
         </td>
         <td>
-          104
+          105
         </td>
         <td>
-          5140
+          5155
           -
-          5545
+          5560
         </td>
         <td>
           Block
@@ -1248,12 +1254,12 @@
           111
         </td>
         <td>
-          101
+          102
         </td>
         <td>
-          5153
+          5168
           -
-          5452
+          5467
         </td>
         <td>
           Apply
@@ -1277,12 +1283,12 @@
           111
         </td>
         <td>
-          102
+          103
         </td>
         <td>
-          5454
+          5469
           -
-          5502
+          5517
         </td>
         <td>
           Apply
@@ -1301,12 +1307,12 @@
           116
         </td>
         <td>
-          110
+          111
         </td>
         <td>
-          5580
+          5595
           -
-          6334
+          6349
         </td>
         <td>
           Apply
@@ -1338,12 +1344,12 @@
           116
         </td>
         <td>
-          111
+          112
         </td>
         <td>
-          5580
+          5595
           -
-          6334
+          6349
         </td>
         <td>
           Block
@@ -1375,12 +1381,12 @@
           124
         </td>
         <td>
-          105
+          106
         </td>
         <td>
-          5593
+          5608
           -
-          6191
+          6206
         </td>
         <td>
           Apply
@@ -1412,12 +1418,12 @@
           124
         </td>
         <td>
-          106
+          107
         </td>
         <td>
-          6193
+          6208
           -
-          6226
+          6241
         </td>
         <td>
           Apply
@@ -1436,12 +1442,12 @@
           125
         </td>
         <td>
-          109
+          110
         </td>
         <td>
-          6240
+          6255
           -
-          6322
+          6337
         </td>
         <td>
           Apply
@@ -1460,12 +1466,12 @@
           126
         </td>
         <td>
-          107
+          108
         </td>
         <td>
-          6285
+          6300
           -
-          6307
+          6322
         </td>
         <td>
           TypeApply
@@ -1484,12 +1490,12 @@
           126
         </td>
         <td>
-          108
+          109
         </td>
         <td>
-          6280
+          6295
           -
-          6308
+          6323
         </td>
         <td>
           Apply
@@ -1508,12 +1514,12 @@
           131
         </td>
         <td>
-          112
+          113
         </td>
         <td>
-          6378
+          6393
           -
-          6420
+          6435
         </td>
         <td>
           Apply
@@ -1532,12 +1538,12 @@
           131
         </td>
         <td>
-          113
+          114
         </td>
         <td>
-          6422
+          6437
           -
-          6427
+          6442
         </td>
         <td>
           Apply
@@ -1556,12 +1562,12 @@
           131
         </td>
         <td>
-          114
+          115
         </td>
         <td>
-          6429
+          6444
           -
-          6433
+          6448
         </td>
         <td>
           Select
@@ -1580,12 +1586,12 @@
           131
         </td>
         <td>
-          115
+          116
         </td>
         <td>
-          6365
+          6380
           -
-          6434
+          6449
         </td>
         <td>
           Apply
@@ -1604,12 +1610,12 @@
           131
         </td>
         <td>
-          116
+          117
         </td>
         <td>
-          6365
+          6380
           -
-          6434
+          6449
         </td>
         <td>
           Block
@@ -1628,12 +1634,12 @@
           134
         </td>
         <td>
-          117
+          118
         </td>
         <td>
-          6480
+          6495
           -
-          6489
+          6504
         </td>
         <td>
           Apply
@@ -1652,12 +1658,12 @@
           134
         </td>
         <td>
-          118
+          119
         </td>
         <td>
-          6491
+          6506
           -
-          6496
+          6511
         </td>
         <td>
           Apply
@@ -1676,12 +1682,12 @@
           134
         </td>
         <td>
-          119
+          120
         </td>
         <td>
-          6498
+          6513
           -
-          6502
+          6517
         </td>
         <td>
           Select
@@ -1700,12 +1706,12 @@
           134
         </td>
         <td>
-          120
+          121
         </td>
         <td>
-          6467
+          6482
           -
-          6503
+          6518
         </td>
         <td>
           Apply
@@ -1724,12 +1730,12 @@
           134
         </td>
         <td>
-          121
+          122
         </td>
         <td>
-          6467
+          6482
           -
-          6503
+          6518
         </td>
         <td>
           Block
@@ -1748,12 +1754,12 @@
           137
         </td>
         <td>
-          122
+          123
         </td>
         <td>
-          6553
+          6568
           -
-          6588
+          6603
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1772,12 +1778,12 @@
           137
         </td>
         <td>
-          123
+          124
         </td>
         <td>
-          6553
+          6568
           -
-          6588
+          6603
         </td>
         <td>
           Block
@@ -1796,12 +1802,12 @@
           140
         </td>
         <td>
-          124
+          125
         </td>
         <td>
-          6602
+          6617
           -
-          6640
+          6655
         </td>
         <td>
           Apply
@@ -1820,12 +1826,12 @@
           146
         </td>
         <td>
-          126
+          127
         </td>
         <td>
-          6844
+          6859
           -
-          6850
+          6865
         </td>
         <td>
           Select
@@ -1844,12 +1850,12 @@
           146
         </td>
         <td>
-          131
+          132
         </td>
         <td>
-          6796
+          6811
           -
-          7028
+          7043
         </td>
         <td>
           Apply
@@ -1885,12 +1891,12 @@
           146
         </td>
         <td>
-          132
+          133
         </td>
         <td>
-          6782
+          6797
           -
-          6793
+          6808
         </td>
         <td>
           Ident
@@ -1909,12 +1915,12 @@
           147
         </td>
         <td>
-          127
+          128
         </td>
         <td>
-          6867
+          6882
           -
-          6907
+          6922
         </td>
         <td>
           Apply
@@ -1950,12 +1956,12 @@
           148
         </td>
         <td>
-          128
+          129
         </td>
         <td>
-          6968
+          6983
           -
-          6992
+          7007
         </td>
         <td>
           Select
@@ -1974,12 +1980,12 @@
           148
         </td>
         <td>
-          129
+          130
         </td>
         <td>
-          6929
+          6944
           -
-          6994
+          7009
         </td>
         <td>
           Apply
@@ -1998,12 +2004,12 @@
           149
         </td>
         <td>
-          130
+          131
         </td>
         <td>
-          7016
+          7031
           -
-          7027
+          7042
         </td>
         <td>
           Select
@@ -2022,12 +2028,12 @@
           150
         </td>
         <td>
-          133
+          134
         </td>
         <td>
-          7033
+          7048
           -
-          7073
+          7088
         </td>
         <td>
           Apply
@@ -2046,12 +2052,12 @@
           155
         </td>
         <td>
-          134
+          135
         </td>
         <td>
-          7269
+          7284
           -
-          7275
+          7290
         </td>
         <td>
           Select
@@ -2070,12 +2076,12 @@
           155
         </td>
         <td>
-          139
+          140
         </td>
         <td>
-          7222
+          7237
           -
-          7454
+          7469
         </td>
         <td>
           Apply
@@ -2111,12 +2117,12 @@
           155
         </td>
         <td>
-          140
+          141
         </td>
         <td>
-          7208
+          7223
           -
-          7219
+          7234
         </td>
         <td>
           Ident
@@ -2135,12 +2141,12 @@
           156
         </td>
         <td>
-          135
+          136
         </td>
         <td>
-          7292
+          7307
           -
-          7331
+          7346
         </td>
         <td>
           Apply
@@ -2176,12 +2182,12 @@
           157
         </td>
         <td>
-          136
+          137
         </td>
         <td>
-          7392
+          7407
           -
-          7416
+          7431
         </td>
         <td>
           Select
@@ -2200,12 +2206,12 @@
           157
         </td>
         <td>
-          137
+          138
         </td>
         <td>
-          7353
+          7368
           -
-          7418
+          7433
         </td>
         <td>
           Apply
@@ -2224,12 +2230,12 @@
           158
         </td>
         <td>
-          138
+          139
         </td>
         <td>
-          7438
+          7453
           -
-          7448
+          7463
         </td>
         <td>
           Select
@@ -2248,12 +2254,12 @@
           161
         </td>
         <td>
-          141
+          142
         </td>
         <td>
-          7502
+          7517
           -
-          7575
+          7590
         </td>
         <td>
           Apply
@@ -2272,12 +2278,12 @@
           162
         </td>
         <td>
-          143
+          144
         </td>
         <td>
-          7459
+          7474
           -
-          7682
+          7697
         </td>
         <td>
           Apply
@@ -2296,12 +2302,12 @@
           163
         </td>
         <td>
-          142
+          143
         </td>
         <td>
-          7597
+          7612
           -
-          7676
+          7691
         </td>
         <td>
           Apply
@@ -2320,12 +2326,12 @@
           170
         </td>
         <td>
-          144
+          145
         </td>
         <td>
-          8063
-          -
           8078
+          -
+          8093
         </td>
         <td>
           Select
@@ -2344,12 +2350,12 @@
           170
         </td>
         <td>
-          145
+          146
         </td>
         <td>
-          8033
+          8048
           -
-          8079
+          8094
         </td>
         <td>
           Apply
@@ -2368,12 +2374,12 @@
           171
         </td>
         <td>
-          165
+          166
         </td>
         <td>
-          8088
+          8103
           -
-          8965
+          8980
         </td>
         <td>
           Block
@@ -2416,12 +2422,12 @@
           172
         </td>
         <td>
-          146
+          147
         </td>
         <td>
-          8113
+          8128
           -
-          8147
+          8162
         </td>
         <td>
           Apply
@@ -2440,12 +2446,12 @@
           174
         </td>
         <td>
-          147
+          148
         </td>
         <td>
-          8174
-          -
           8189
+          -
+          8204
         </td>
         <td>
           Select
@@ -2464,12 +2470,12 @@
           174
         </td>
         <td>
-          148
+          149
         </td>
         <td>
-          8164
+          8179
           -
-          8202
+          8217
         </td>
         <td>
           Apply
@@ -2488,12 +2494,12 @@
           175
         </td>
         <td>
-          149
+          150
         </td>
         <td>
-          8218
-          -
           8233
+          -
+          8248
         </td>
         <td>
           Select
@@ -2512,12 +2518,12 @@
           175
         </td>
         <td>
-          150
+          151
         </td>
         <td>
-          8209
+          8224
           -
-          8246
+          8261
         </td>
         <td>
           Apply
@@ -2536,12 +2542,12 @@
           176
         </td>
         <td>
-          151
+          152
         </td>
         <td>
-          8253
+          8268
           -
-          8284
+          8299
         </td>
         <td>
           Apply
@@ -2560,12 +2566,12 @@
           177
         </td>
         <td>
-          152
+          153
         </td>
         <td>
-          8305
+          8320
           -
-          8344
+          8359
         </td>
         <td>
           Apply
@@ -2584,12 +2590,12 @@
           178
         </td>
         <td>
-          153
+          154
         </td>
         <td>
-          8384
+          8399
           -
-          8412
+          8427
         </td>
         <td>
           Apply
@@ -2608,39 +2614,15 @@
           178
         </td>
         <td>
-          154
-        </td>
-        <td>
-          8355
-          -
-          8381
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Tuple3.apply
-        </td>
-        <td>
-          
-        </td>
-        <td style="background: #AEF1AE">
-          scala.Tuple3.apply[org.apache.spark.sql.DataFrame, scala.concurrent.duration.Duration, scala.concurrent.duration.Duration](res, processed, runner)
-        </td>
-      </tr><tr>
-        <td>
-          178
-        </td>
-        <td>
           155
         </td>
         <td>
-          8355
+          8370
           -
-          8381
+          8396
         </td>
         <td>
-          Block
+          Apply
         </td>
         <td>
           scala.Tuple3.apply
@@ -2659,9 +2641,33 @@
           156
         </td>
         <td>
-          8357
+          8370
           -
-          8357
+          8396
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          scala.Tuple3.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Tuple3.apply[org.apache.spark.sql.DataFrame, scala.concurrent.duration.Duration, scala.concurrent.duration.Duration](res, processed, runner)
+        </td>
+      </tr><tr>
+        <td>
+          178
+        </td>
+        <td>
+          157
+        </td>
+        <td>
+          8372
+          -
+          8372
         </td>
         <td>
           Select
@@ -2680,12 +2686,12 @@
           178
         </td>
         <td>
-          157
+          158
         </td>
         <td>
-          8362
+          8377
           -
-          8362
+          8377
         </td>
         <td>
           Select
@@ -2704,12 +2710,12 @@
           178
         </td>
         <td>
-          158
+          159
         </td>
         <td>
-          8374
+          8389
           -
-          8374
+          8389
         </td>
         <td>
           Select
@@ -2728,12 +2734,12 @@
           180
         </td>
         <td>
-          159
+          160
         </td>
         <td>
-          8434
+          8449
           -
-          8478
+          8493
         </td>
         <td>
           Apply
@@ -2752,12 +2758,12 @@
           182
         </td>
         <td>
-          160
+          161
         </td>
         <td>
-          8511
+          8526
           -
-          8554
+          8569
         </td>
         <td>
           Apply
@@ -2776,12 +2782,12 @@
           191
         </td>
         <td>
-          161
+          162
         </td>
         <td>
-          8761
+          8776
           -
-          8779
+          8794
         </td>
         <td>
           Apply
@@ -2800,12 +2806,12 @@
           191
         </td>
         <td>
-          162
+          163
         </td>
         <td>
-          8749
+          8764
           -
-          8791
+          8806
         </td>
         <td>
           Apply
@@ -2824,12 +2830,12 @@
           193
         </td>
         <td>
-          163
+          164
         </td>
         <td>
-          8799
+          8814
           -
-          8912
+          8927
         </td>
         <td>
           Apply
@@ -2848,12 +2854,12 @@
           194
         </td>
         <td>
-          164
+          165
         </td>
         <td>
-          8919
+          8934
           -
-          8959
+          8974
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2872,12 +2878,12 @@
           196
         </td>
         <td>
-          169
+          170
         </td>
         <td>
-          9002
+          9017
           -
-          9075
+          9090
         </td>
         <td>
           Block
@@ -2891,7 +2897,7 @@
         <td style="background: #AEF1AE">
           {
   FlowT.this.errorLogStep(step, f.msg);
-  throw StepException.apply[RP](step, f)
+  throw StepException.apply[RP](step, f, StepException.apply$default$3[Nothing])
 }
         </td>
       </tr><tr>
@@ -2899,12 +2905,12 @@
           197
         </td>
         <td>
-          166
+          167
         </td>
         <td>
-          9032
+          9047
           -
-          9037
+          9052
         </td>
         <td>
           Select
@@ -2923,12 +2929,12 @@
           197
         </td>
         <td>
-          167
+          168
         </td>
         <td>
-          9013
+          9028
           -
-          9038
+          9053
         </td>
         <td>
           Apply
@@ -2947,12 +2953,12 @@
           198
         </td>
         <td>
-          168
+          169
         </td>
         <td>
-          9047
+          9062
           -
-          9075
+          9090
         </td>
         <td>
           Throw
@@ -2964,19 +2970,19 @@
           
         </td>
         <td style="background: #AEF1AE">
-          throw StepException.apply[RP](step, f)
+          throw StepException.apply[RP](step, f, StepException.apply$default$3[Nothing])
         </td>
       </tr><tr>
         <td>
           199
         </td>
         <td>
-          171
+          172
         </td>
         <td>
-          9100
+          9115
           -
-          9356
+          9371
         </td>
         <td>
           Block
@@ -2991,7 +2997,7 @@
           {
   val info: String = &quot;An unexpected error occurred during processing the Step - &quot;.+(t.getMessage());
   FlowT.this.errorLogStep(step, info);
-  throw StepException.apply[RP](step, FlowException.apply(FlowT.this.flowInfo(step, info), t))
+  throw StepException.apply[RP](step, FlowException.apply(FlowT.this.flowInfo(step, info), t), StepException.apply$default$3[Nothing])
 }
         </td>
       </tr><tr>
@@ -2999,12 +3005,12 @@
           204
         </td>
         <td>
-          170
+          171
         </td>
         <td>
-          9291
+          9306
           -
-          9356
+          9371
         </td>
         <td>
           Throw
@@ -3016,19 +3022,19 @@
           
         </td>
         <td style="background: #AEF1AE">
-          throw StepException.apply[RP](step, FlowException.apply(FlowT.this.flowInfo(step, info), t))
+          throw StepException.apply[RP](step, FlowException.apply(FlowT.this.flowInfo(step, info), t), StepException.apply$default$3[Nothing])
         </td>
       </tr><tr>
         <td>
           213
         </td>
         <td>
-          172
+          173
         </td>
         <td>
-          9672
+          9687
           -
-          9678
+          9693
         </td>
         <td>
           Select
@@ -3047,12 +3053,12 @@
           213
         </td>
         <td>
-          173
+          174
         </td>
         <td>
-          9682
+          9697
           -
-          9707
+          9722
         </td>
         <td>
           Apply
@@ -3071,12 +3077,12 @@
           213
         </td>
         <td>
-          174
+          175
         </td>
         <td>
-          9672
+          9687
           -
-          9707
+          9722
         </td>
         <td>
           Apply
@@ -3095,12 +3101,12 @@
           213
         </td>
         <td>
-          175
+          176
         </td>
         <td>
-          9709
+          9724
           -
-          9709
+          9724
         </td>
         <td>
           TypeApply
@@ -3119,12 +3125,12 @@
           213
         </td>
         <td>
-          176
+          177
         </td>
         <td>
-          9657
+          9672
           -
-          9714
+          9729
         </td>
         <td>
           ApplyToImplicitArgs
@@ -3143,12 +3149,12 @@
           214
         </td>
         <td>
-          177
+          178
         </td>
         <td>
-          9734
+          9749
           -
-          9784
+          9799
         </td>
         <td>
           Apply
@@ -3167,12 +3173,12 @@
           217
         </td>
         <td>
-          178
+          179
         </td>
         <td>
-          9870
+          9885
           -
-          9881
+          9896
         </td>
         <td>
           Select
@@ -3191,12 +3197,12 @@
           220
         </td>
         <td>
-          179
+          180
         </td>
         <td>
-          9918
+          9933
           -
-          9926
+          9941
         </td>
         <td>
           Select
@@ -3215,12 +3221,12 @@
           220
         </td>
         <td>
-          180
+          181
         </td>
         <td>
-          9932
+          9947
           -
-          9940
+          9955
         </td>
         <td>
           Select
@@ -3239,12 +3245,12 @@
           220
         </td>
         <td>
-          196
+          200
         </td>
         <td>
-          9905
+          9920
           -
-          10410
+          10457
         </td>
         <td>
           Apply
@@ -3260,6 +3266,7 @@
   val p: scala.concurrent.Promise[com.sparkutils.flow.StepResult[RP]] = scala.concurrent.Promise.apply[com.sparkutils.flow.StepResult[RP]]();
   promises.put(FlowT.this.theGraph.Node.toOuter(cur).name, p);
   val f: scala.concurrent.Future[scala.collection.immutable.Set[com.sparkutils.flow.StepResult[RP]]] = scala.concurrent.Future.sequence[com.sparkutils.flow.StepResult[RP], scala.collection.immutable.Set, scala.collection.immutable.Set[com.sparkutils.flow.StepResult[RP]]](elem.diPredecessors.map[scala.concurrent.Future[com.sparkutils.flow.StepResult[RP]]](((parent: FlowT.this.theGraph.NodeT) =&gt; chaseDown(parent))))(collection.this.BuildFrom.buildFromIterableOps[scala.collection.immutable.Set, scala.concurrent.Future[com.sparkutils.flow.StepResult[RP]], com.sparkutils.flow.StepResult[RP]], FlowT.this.ec);
+  com.sparkutils.flow.StepUtils.stepTimeout[RP, com.sparkutils.flow.StepResult[RP]](FlowT.this.theGraph.Node.toOuter(cur), p)(FlowT.this.ec);
   val newF: scala.concurrent.Future[com.sparkutils.flow.StepResult[RP]] = f.map[com.sparkutils.flow.StepResult[RP]](((names: scala.collection.immutable.Set[com.sparkutils.flow.StepResult[RP]]) =&gt; FlowT.this.performStep(names.head.output, FlowT.this.theGraph.Node.toOuter(cur), names)))(FlowT.this.ec);
   p.completeWith(newF);
   p.future
@@ -3270,12 +3277,12 @@
           221
         </td>
         <td>
-          181
+          182
         </td>
         <td>
-          9972
+          9987
           -
-          9997
+          10012
         </td>
         <td>
           Apply
@@ -3294,12 +3301,12 @@
           222
         </td>
         <td>
-          182
+          183
         </td>
         <td>
-          10021
+          10036
           -
-          10029
+          10044
         </td>
         <td>
           Select
@@ -3318,12 +3325,12 @@
           222
         </td>
         <td>
-          183
+          184
         </td>
         <td>
-          10008
+          10023
           -
-          10033
+          10048
         </td>
         <td>
           Apply
@@ -3342,12 +3349,12 @@
           225
         </td>
         <td>
-          186
+          187
         </td>
         <td>
-          10096
+          10111
           -
-          10096
+          10111
         </td>
         <td>
           TypeApply
@@ -3366,12 +3373,12 @@
           225
         </td>
         <td>
-          187
+          188
         </td>
         <td>
-          10096
+          10111
           -
-          10096
+          10111
         </td>
         <td>
           Select
@@ -3390,12 +3397,12 @@
           225
         </td>
         <td>
-          188
+          189
         </td>
         <td>
-          10081
+          10096
           -
-          10219
+          10234
         </td>
         <td>
           ApplyToImplicitArgs
@@ -3414,12 +3421,12 @@
           226
         </td>
         <td>
-          185
+          186
         </td>
         <td>
-          10110
+          10125
           -
-          10207
+          10222
         </td>
         <td>
           Apply
@@ -3438,12 +3445,12 @@
           228
         </td>
         <td>
-          184
+          185
         </td>
         <td>
-          10176
+          10191
           -
-          10193
+          10208
         </td>
         <td>
           Apply
@@ -3462,12 +3469,36 @@
           232
         </td>
         <td>
-          192
+          190
         </td>
         <td>
-          10272
+          10258
           -
-          10272
+          10261
+        </td>
+        <td>
+          ApplyImplicitView
+        </td>
+        <td>
+          scalax.collection.GraphBase.Node.toOuter
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          FlowT.this.theGraph.Node.toOuter(cur)
+        </td>
+      </tr><tr>
+        <td>
+          232
+        </td>
+        <td>
+          191
+        </td>
+        <td>
+          10257
+          -
+          10257
         </td>
         <td>
           Select
@@ -3486,12 +3517,60 @@
           232
         </td>
         <td>
-          193
+          192
         </td>
         <td>
-          10266
+          10246
           -
-          10349
+          10265
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          com.sparkutils.flow.StepUtils.stepTimeout
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          com.sparkutils.flow.StepUtils.stepTimeout[RP, com.sparkutils.flow.StepResult[RP]](FlowT.this.theGraph.Node.toOuter(cur), p)(FlowT.this.ec)
+        </td>
+      </tr><tr>
+        <td>
+          234
+        </td>
+        <td>
+          196
+        </td>
+        <td>
+          10318
+          -
+          10318
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FlowT.ec
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          FlowT.this.ec
+        </td>
+      </tr><tr>
+        <td>
+          234
+        </td>
+        <td>
+          197
+        </td>
+        <td>
+          10312
+          -
+          10395
         </td>
         <td>
           ApplyToImplicitArgs
@@ -3507,15 +3586,15 @@
         </td>
       </tr><tr>
         <td>
-          233
+          235
         </td>
         <td>
-          189
+          193
         </td>
         <td>
-          10307
+          10353
           -
-          10324
+          10370
         </td>
         <td>
           Select
@@ -3531,15 +3610,15 @@
         </td>
       </tr><tr>
         <td>
-          233
+          235
         </td>
         <td>
-          190
+          194
         </td>
         <td>
-          10326
+          10372
           -
-          10329
+          10375
         </td>
         <td>
           ApplyImplicitView
@@ -3555,15 +3634,15 @@
         </td>
       </tr><tr>
         <td>
-          233
+          235
         </td>
         <td>
-          191
+          195
         </td>
         <td>
-          10295
+          10341
           -
-          10337
+          10383
         </td>
         <td>
           Apply
@@ -3579,15 +3658,15 @@
         </td>
       </tr><tr>
         <td>
-          236
+          238
         </td>
         <td>
-          194
+          198
         </td>
         <td>
-          10361
+          10407
           -
-          10381
+          10427
         </td>
         <td>
           Apply
@@ -3603,15 +3682,15 @@
         </td>
       </tr><tr>
         <td>
-          237
+          240
         </td>
         <td>
-          195
+          199
         </td>
         <td>
-          10392
+          10439
           -
-          10400
+          10447
         </td>
         <td>
           Select
@@ -3627,15 +3706,15 @@
         </td>
       </tr><tr>
         <td>
-          241
+          244
         </td>
         <td>
-          198
+          202
         </td>
         <td>
-          10471
+          10518
           -
-          10558
+          10605
         </td>
         <td>
           Apply
@@ -3651,15 +3730,15 @@
         </td>
       </tr><tr>
         <td>
-          243
+          246
         </td>
         <td>
-          197
+          201
         </td>
         <td>
-          10530
+          10577
           -
-          10550
+          10597
         </td>
         <td>
           Apply
@@ -3675,15 +3754,15 @@
         </td>
       </tr><tr>
         <td>
-          248
+          251
         </td>
         <td>
-          199
+          203
         </td>
         <td>
-          10606
+          10653
           -
-          10621
+          10668
         </td>
         <td>
           Apply
@@ -3699,15 +3778,15 @@
         </td>
       </tr><tr>
         <td>
-          248
+          251
         </td>
         <td>
-          200
+          204
         </td>
         <td>
-          10596
+          10643
           -
-          10622
+          10669
         </td>
         <td>
           Apply
@@ -3723,15 +3802,15 @@
         </td>
       </tr><tr>
         <td>
-          248
+          251
         </td>
         <td>
-          201
+          205
         </td>
         <td>
-          10578
+          10625
           -
-          10623
+          10670
         </td>
         <td>
           Apply
@@ -3747,15 +3826,15 @@
         </td>
       </tr><tr>
         <td>
-          250
+          253
         </td>
         <td>
-          202
+          206
         </td>
         <td>
-          10644
+          10691
           -
-          10692
+          10739
         </td>
         <td>
           Apply
@@ -3771,15 +3850,15 @@
         </td>
       </tr><tr>
         <td>
-          250
+          253
         </td>
         <td>
-          203
+          207
         </td>
         <td>
-          10629
+          10676
           -
-          10693
+          10740
         </td>
         <td>
           Apply
@@ -3795,15 +3874,15 @@
         </td>
       </tr><tr>
         <td>
-          258
+          261
         </td>
         <td>
-          204
+          208
         </td>
         <td>
-          10840
+          10887
           -
-          10852
+          10899
         </td>
         <td>
           Apply
@@ -3819,15 +3898,15 @@
         </td>
       </tr><tr>
         <td>
-          260
+          263
         </td>
         <td>
-          247
+          251
         </td>
         <td>
-          10867
+          10914
           -
-          12167
+          12214
         </td>
         <td>
           Block
@@ -3865,15 +3944,15 @@
         </td>
       </tr><tr>
         <td>
-          261
+          264
         </td>
         <td>
-          205
+          209
         </td>
         <td>
-          10879
+          10926
           -
-          10892
+          10939
         </td>
         <td>
           Select
@@ -3889,15 +3968,15 @@
         </td>
       </tr><tr>
         <td>
-          261
+          264
         </td>
         <td>
-          208
+          212
         </td>
         <td>
-          10875
+          10922
           -
-          10875
+          10922
         </td>
         <td>
           Literal
@@ -3913,15 +3992,15 @@
         </td>
       </tr><tr>
         <td>
-          261
+          264
         </td>
         <td>
-          209
+          213
         </td>
         <td>
-          10875
+          10922
           -
-          10875
+          10922
         </td>
         <td>
           Block
@@ -3937,15 +4016,15 @@
         </td>
       </tr><tr>
         <td>
-          262
+          265
         </td>
         <td>
-          206
+          210
         </td>
         <td>
-          10904
+          10951
           -
-          10934
+          10981
         </td>
         <td>
           Throw
@@ -3961,15 +4040,15 @@
         </td>
       </tr><tr>
         <td>
-          262
+          265
         </td>
         <td>
-          207
+          211
         </td>
         <td>
-          10904
+          10951
           -
-          10934
+          10981
         </td>
         <td>
           Block
@@ -3985,15 +4064,15 @@
         </td>
       </tr><tr>
         <td>
-          264
+          267
         </td>
         <td>
-          210
+          214
         </td>
         <td>
-          10982
+          11029
           -
-          10986
+          11033
         </td>
         <td>
           Literal
@@ -4009,15 +4088,15 @@
         </td>
       </tr><tr>
         <td>
-          264
+          267
         </td>
         <td>
-          211
+          215
         </td>
         <td>
-          10991
+          11038
           -
-          11005
+          11052
         </td>
         <td>
           Apply
@@ -4033,15 +4112,15 @@
         </td>
       </tr><tr>
         <td>
-          264
+          267
         </td>
         <td>
-          212
+          216
         </td>
         <td>
-          10971
+          11018
           -
-          11005
+          11052
         </td>
         <td>
           Apply
@@ -4057,15 +4136,15 @@
         </td>
       </tr><tr>
         <td>
-          264
+          267
         </td>
         <td>
-          213
+          217
         </td>
         <td>
-          10953
+          11000
           -
-          11006
+          11053
         </td>
         <td>
           Apply
@@ -4081,15 +4160,15 @@
         </td>
       </tr><tr>
         <td>
-          264
+          267
         </td>
         <td>
-          216
+          220
         </td>
         <td>
-          10949
+          10996
           -
-          10949
+          10996
         </td>
         <td>
           Literal
@@ -4105,15 +4184,15 @@
         </td>
       </tr><tr>
         <td>
-          264
+          267
         </td>
         <td>
-          217
+          221
         </td>
         <td>
-          10949
+          10996
           -
-          10949
+          10996
         </td>
         <td>
           Block
@@ -4129,15 +4208,15 @@
         </td>
       </tr><tr>
         <td>
-          265
+          268
         </td>
         <td>
-          214
+          218
         </td>
         <td>
-          11018
+          11065
           -
-          11052
+          11099
         </td>
         <td>
           Throw
@@ -4153,15 +4232,15 @@
         </td>
       </tr><tr>
         <td>
-          265
+          268
         </td>
         <td>
-          215
+          219
         </td>
         <td>
-          11018
+          11065
           -
-          11052
+          11099
         </td>
         <td>
           Block
@@ -4177,15 +4256,15 @@
         </td>
       </tr><tr>
         <td>
-          267
+          270
         </td>
         <td>
-          218
+          222
         </td>
         <td>
-          11108
+          11155
           -
-          11119
+          11166
         </td>
         <td>
           Apply
@@ -4201,15 +4280,15 @@
         </td>
       </tr><tr>
         <td>
-          267
+          270
         </td>
         <td>
-          219
+          223
         </td>
         <td>
-          11124
+          11171
           -
-          11148
+          11195
         </td>
         <td>
           Select
@@ -4225,15 +4304,15 @@
         </td>
       </tr><tr>
         <td>
-          267
+          270
         </td>
         <td>
-          220
+          224
         </td>
         <td>
-          11153
+          11200
           -
-          11176
+          11223
         </td>
         <td>
           Apply
@@ -4249,15 +4328,15 @@
         </td>
       </tr><tr>
         <td>
-          267
+          270
         </td>
         <td>
-          221
+          225
         </td>
         <td>
-          11083
+          11130
           -
-          11176
+          11223
         </td>
         <td>
           Apply
@@ -4273,15 +4352,15 @@
         </td>
       </tr><tr>
         <td>
-          267
+          270
         </td>
         <td>
-          223
+          227
         </td>
         <td>
-          11067
+          11114
           -
-          11280
+          11327
         </td>
         <td>
           Apply
@@ -4297,15 +4376,15 @@
         </td>
       </tr><tr>
         <td>
-          269
+          272
         </td>
         <td>
-          222
+          226
         </td>
         <td>
-          11214
+          11261
           -
-          11272
+          11319
         </td>
         <td>
           Throw
@@ -4321,15 +4400,15 @@
         </td>
       </tr><tr>
         <td>
-          271
+          274
         </td>
         <td>
-          224
+          228
         </td>
         <td>
-          11327
+          11374
           -
-          11338
+          11385
         </td>
         <td>
           Apply
@@ -4345,15 +4424,15 @@
         </td>
       </tr><tr>
         <td>
-          271
+          274
         </td>
         <td>
-          225
+          229
         </td>
         <td>
-          11368
+          11415
           -
-          11379
+          11426
         </td>
         <td>
           Apply
@@ -4369,15 +4448,15 @@
         </td>
       </tr><tr>
         <td>
-          271
+          274
         </td>
         <td>
-          226
+          230
         </td>
         <td>
-          11343
+          11390
           -
-          11380
+          11427
         </td>
         <td>
           Apply
@@ -4393,15 +4472,15 @@
         </td>
       </tr><tr>
         <td>
-          271
+          274
         </td>
         <td>
-          227
+          231
         </td>
         <td>
-          11303
+          11350
           -
-          11380
+          11427
         </td>
         <td>
           Apply
@@ -4417,15 +4496,15 @@
         </td>
       </tr><tr>
         <td>
-          271
+          274
         </td>
         <td>
-          229
+          233
         </td>
         <td>
-          11287
+          11334
           -
-          11469
+          11516
         </td>
         <td>
           Apply
@@ -4441,15 +4520,15 @@
         </td>
       </tr><tr>
         <td>
-          273
+          276
         </td>
         <td>
-          228
+          232
         </td>
         <td>
-          11418
+          11465
           -
-          11461
+          11508
         </td>
         <td>
           Throw
@@ -4465,15 +4544,15 @@
         </td>
       </tr><tr>
         <td>
-          275
+          278
         </td>
         <td>
-          230
+          234
         </td>
         <td>
-          11502
+          11549
           -
-          11508
+          11555
         </td>
         <td>
           Select
@@ -4489,15 +4568,15 @@
         </td>
       </tr><tr>
         <td>
-          275
+          278
         </td>
         <td>
-          231
+          235
         </td>
         <td>
-          11517
+          11564
           -
-          11530
+          11577
         </td>
         <td>
           Apply
@@ -4513,15 +4592,15 @@
         </td>
       </tr><tr>
         <td>
-          275
+          278
         </td>
         <td>
-          232
+          236
         </td>
         <td>
-          11488
+          11535
           -
-          11531
+          11578
         </td>
         <td>
           Apply
@@ -4537,15 +4616,15 @@
         </td>
       </tr><tr>
         <td>
-          276
+          279
         </td>
         <td>
-          233
+          237
         </td>
         <td>
-          11542
+          11589
           -
-          11556
+          11603
         </td>
         <td>
           Select
@@ -4561,15 +4640,15 @@
         </td>
       </tr><tr>
         <td>
-          276
+          279
         </td>
         <td>
-          236
+          240
         </td>
         <td>
-          11538
+          11585
           -
-          11538
+          11585
         </td>
         <td>
           Literal
@@ -4585,15 +4664,15 @@
         </td>
       </tr><tr>
         <td>
-          276
+          279
         </td>
         <td>
-          237
+          241
         </td>
         <td>
-          11538
+          11585
           -
-          11538
+          11585
         </td>
         <td>
           Block
@@ -4609,15 +4688,15 @@
         </td>
       </tr><tr>
         <td>
-          277
+          280
         </td>
         <td>
-          234
+          238
         </td>
         <td>
-          11568
+          11615
           -
-          11637
+          11684
         </td>
         <td>
           Throw
@@ -4633,15 +4712,15 @@
         </td>
       </tr><tr>
         <td>
-          277
+          280
         </td>
         <td>
-          235
+          239
         </td>
         <td>
-          11568
+          11615
           -
-          11637
+          11684
         </td>
         <td>
           Block
@@ -4657,15 +4736,15 @@
         </td>
       </tr><tr>
         <td>
-          279
+          282
         </td>
         <td>
-          238
+          242
         </td>
         <td>
-          11671
+          11718
           -
-          11671
+          11718
         </td>
         <td>
           TypeApply
@@ -4681,15 +4760,15 @@
         </td>
       </tr><tr>
         <td>
-          279
+          282
         </td>
         <td>
-          239
+          243
         </td>
         <td>
-          11662
+          11709
           -
-          11680
+          11727
         </td>
         <td>
           ApplyToImplicitArgs
@@ -4705,15 +4784,15 @@
         </td>
       </tr><tr>
         <td>
-          281
+          284
         </td>
         <td>
-          241
+          245
         </td>
         <td>
-          11786
+          11833
           -
-          11880
+          11927
         </td>
         <td>
           Apply
@@ -4729,15 +4808,15 @@
         </td>
       </tr><tr>
         <td>
-          283
+          286
         </td>
         <td>
-          240
+          244
         </td>
         <td>
-          11827
+          11874
           -
-          11872
+          11919
         </td>
         <td>
           Throw
@@ -4753,15 +4832,15 @@
         </td>
       </tr><tr>
         <td>
-          286
+          289
         </td>
         <td>
-          246
+          250
         </td>
         <td>
-          11888
+          11935
           -
-          12161
+          12208
         </td>
         <td>
           Apply
@@ -4780,15 +4859,15 @@
         </td>
       </tr><tr>
         <td>
-          290
+          293
         </td>
         <td>
-          242
+          246
         </td>
         <td>
-          12066
+          12113
           -
-          12116
+          12163
         </td>
         <td>
           Throw
@@ -4804,15 +4883,15 @@
         </td>
       </tr><tr>
         <td>
-          290
+          293
         </td>
         <td>
-          243
+          247
         </td>
         <td>
-          12066
+          12113
           -
-          12116
+          12163
         </td>
         <td>
           Block
@@ -4828,15 +4907,15 @@
         </td>
       </tr><tr>
         <td>
-          291
+          294
         </td>
         <td>
-          244
+          248
         </td>
         <td>
-          12139
+          12186
           -
-          12141
+          12188
         </td>
         <td>
           Literal
@@ -4852,15 +4931,15 @@
         </td>
       </tr><tr>
         <td>
-          291
+          294
         </td>
         <td>
-          245
+          249
         </td>
         <td>
-          12139
+          12186
           -
-          12141
+          12188
         </td>
         <td>
           Block
@@ -4876,15 +4955,15 @@
         </td>
       </tr><tr>
         <td>
-          295
+          298
         </td>
         <td>
-          251
+          255
         </td>
         <td>
-          12204
+          12251
           -
-          12249
+          12296
         </td>
         <td>
           Block
@@ -4903,15 +4982,15 @@
         </td>
       </tr><tr>
         <td>
-          296
+          299
         </td>
         <td>
-          248
+          252
         </td>
         <td>
-          12224
+          12271
           -
-          12229
+          12276
         </td>
         <td>
           Select
@@ -4927,15 +5006,15 @@
         </td>
       </tr><tr>
         <td>
-          296
+          299
         </td>
         <td>
-          249
+          253
         </td>
         <td>
-          12215
+          12262
           -
-          12233
+          12280
         </td>
         <td>
           Apply
@@ -4951,15 +5030,15 @@
         </td>
       </tr><tr>
         <td>
-          297
+          300
         </td>
         <td>
-          250
+          254
         </td>
         <td>
-          12242
+          12289
           -
-          12249
+          12296
         </td>
         <td>
           Throw
@@ -4975,15 +5054,15 @@
         </td>
       </tr><tr>
         <td>
-          317
+          320
         </td>
         <td>
-          304
+          311
         </td>
         <td>
-          13495
+          13542
           -
-          14941
+          15026
         </td>
         <td>
           Apply
@@ -5003,18 +5082,19 @@
   };
   val rootPromises: Map[String,scala.concurrent.Promise[com.sparkutils.flow.StepResult[RP]]] = x$8._1;
   val promises: Map[String,scala.concurrent.Promise[com.sparkutils.flow.StepResult[RP]]] = x$8._2;
-  scala.collection.parallel.CollectionConverters.ImmutableIterableIsParallelizable[com.sparkutils.flow.Step[RP]](FlowT.this.roots).par.map[scala.concurrent.Promise[com.sparkutils.flow.StepResult[RP]]](((root: com.sparkutils.flow.Step[RP]) =&gt; {
+  scala.collection.parallel.CollectionConverters.ImmutableIterableIsParallelizable[com.sparkutils.flow.Step[RP]](FlowT.this.roots).par.map[Any](((root: com.sparkutils.flow.Step[RP]) =&gt; {
     val p: scala.concurrent.Promise[com.sparkutils.flow.StepResult[RP]] = rootPromises.apply(root.name);
     try {
       val df: Option[org.apache.spark.sql.DataFrame] = starting.apply(root);
       val token: String = FlowT.this.rootToken(root);
+      com.sparkutils.flow.StepUtils.stepTimeout[RP, com.sparkutils.flow.StepResult[RP]](root, p)(FlowT.this.ec);
       val r: com.sparkutils.flow.StepResult[RP] = df.fold[com.sparkutils.flow.StepResult[RP]](FlowT.this.performStep(FlowT.this.loadData(sparkSession, token), root, scala.Predef.Set.empty[com.sparkutils.flow.StepResult[RP]]))(((df: org.apache.spark.sql.DataFrame) =&gt; {
         df.createOrReplaceTempView(token);
         FlowT.this.performStep(df, root, scala.Predef.Set.empty[com.sparkutils.flow.StepResult[RP]])
       }));
       p.success(r)
     } catch {
-      case (t @ (_: Throwable)) =&gt; p.failure(StepException.apply[RP](root, t))
+      case (t @ (_: Throwable)) =&gt; p.tryFailure(StepException.apply[RP](root, t, StepException.apply$default$3[Nothing]))
     }
   }));
   if (tolerant)
@@ -5036,15 +5116,15 @@
         </td>
       </tr><tr>
         <td>
-          318
+          321
         </td>
         <td>
-          252
+          256
         </td>
         <td>
-          13509
+          13556
           -
-          13522
+          13569
         </td>
         <td>
           Apply
@@ -5060,15 +5140,15 @@
         </td>
       </tr><tr>
         <td>
-          319
+          322
         </td>
         <td>
-          253
+          257
         </td>
         <td>
-          13529
+          13576
           -
-          13599
+          13646
         </td>
         <td>
           Apply
@@ -5084,15 +5164,15 @@
         </td>
       </tr><tr>
         <td>
-          321
+          324
         </td>
         <td>
-          254
+          258
         </td>
         <td>
-          13638
+          13685
           -
-          13653
+          13700
         </td>
         <td>
           Apply
@@ -5108,15 +5188,15 @@
         </td>
       </tr><tr>
         <td>
-          321
+          324
         </td>
         <td>
-          255
+          259
         </td>
         <td>
-          13611
+          13658
           -
-          13635
+          13682
         </td>
         <td>
           Apply
@@ -5132,15 +5212,15 @@
         </td>
       </tr><tr>
         <td>
-          321
+          324
         </td>
         <td>
-          256
+          260
         </td>
         <td>
-          13611
+          13658
           -
-          13635
+          13682
         </td>
         <td>
           Block
@@ -5156,15 +5236,15 @@
         </td>
       </tr><tr>
         <td>
-          321
+          324
         </td>
         <td>
-          257
+          261
         </td>
         <td>
-          13612
+          13659
           -
-          13612
+          13659
         </td>
         <td>
           Select
@@ -5180,15 +5260,15 @@
         </td>
       </tr><tr>
         <td>
-          321
+          324
         </td>
         <td>
-          258
+          262
         </td>
         <td>
-          13626
+          13673
           -
-          13626
+          13673
         </td>
         <td>
           Select
@@ -5204,15 +5284,15 @@
         </td>
       </tr><tr>
         <td>
-          324
+          327
         </td>
         <td>
-          259
+          263
         </td>
         <td>
-          13707
+          13754
           -
-          13712
+          13759
         </td>
         <td>
           Select
@@ -5228,15 +5308,15 @@
         </td>
       </tr><tr>
         <td>
-          324
+          327
         </td>
         <td>
-          276
+          283
         </td>
         <td>
-          13707
+          13754
           -
-          14327
+          14412
         </td>
         <td>
           Apply
@@ -5248,32 +5328,33 @@
           
         </td>
         <td style="background: #AEF1AE">
-          scala.collection.parallel.CollectionConverters.ImmutableIterableIsParallelizable[com.sparkutils.flow.Step[RP]](FlowT.this.roots).par.map[scala.concurrent.Promise[com.sparkutils.flow.StepResult[RP]]](((root: com.sparkutils.flow.Step[RP]) =&gt; {
+          scala.collection.parallel.CollectionConverters.ImmutableIterableIsParallelizable[com.sparkutils.flow.Step[RP]](FlowT.this.roots).par.map[Any](((root: com.sparkutils.flow.Step[RP]) =&gt; {
   val p: scala.concurrent.Promise[com.sparkutils.flow.StepResult[RP]] = rootPromises.apply(root.name);
   try {
     val df: Option[org.apache.spark.sql.DataFrame] = starting.apply(root);
     val token: String = FlowT.this.rootToken(root);
+    com.sparkutils.flow.StepUtils.stepTimeout[RP, com.sparkutils.flow.StepResult[RP]](root, p)(FlowT.this.ec);
     val r: com.sparkutils.flow.StepResult[RP] = df.fold[com.sparkutils.flow.StepResult[RP]](FlowT.this.performStep(FlowT.this.loadData(sparkSession, token), root, scala.Predef.Set.empty[com.sparkutils.flow.StepResult[RP]]))(((df: org.apache.spark.sql.DataFrame) =&gt; {
       df.createOrReplaceTempView(token);
       FlowT.this.performStep(df, root, scala.Predef.Set.empty[com.sparkutils.flow.StepResult[RP]])
     }));
     p.success(r)
   } catch {
-    case (t @ (_: Throwable)) =&gt; p.failure(StepException.apply[RP](root, t))
+    case (t @ (_: Throwable)) =&gt; p.tryFailure(StepException.apply[RP](root, t, StepException.apply$default$3[Nothing]))
   }
 }))
         </td>
       </tr><tr>
         <td>
-          326
+          329
         </td>
         <td>
-          260
+          264
         </td>
         <td>
-          13770
+          13817
           -
-          13779
+          13826
         </td>
         <td>
           Select
@@ -5289,15 +5370,15 @@
         </td>
       </tr><tr>
         <td>
-          326
+          329
         </td>
         <td>
-          261
+          265
         </td>
         <td>
-          13757
+          13804
           -
-          13780
+          13827
         </td>
         <td>
           Apply
@@ -5313,15 +5394,15 @@
         </td>
       </tr><tr>
         <td>
-          327
+          330
         </td>
         <td>
-          272
+          278
         </td>
         <td>
-          13795
+          13842
           -
-          14190
+          14272
         </td>
         <td>
           Block
@@ -5336,6 +5417,7 @@
           {
   val df: Option[org.apache.spark.sql.DataFrame] = starting.apply(root);
   val token: String = FlowT.this.rootToken(root);
+  com.sparkutils.flow.StepUtils.stepTimeout[RP, com.sparkutils.flow.StepResult[RP]](root, p)(FlowT.this.ec);
   val r: com.sparkutils.flow.StepResult[RP] = df.fold[com.sparkutils.flow.StepResult[RP]](FlowT.this.performStep(FlowT.this.loadData(sparkSession, token), root, scala.Predef.Set.empty[com.sparkutils.flow.StepResult[RP]]))(((df: org.apache.spark.sql.DataFrame) =&gt; {
     df.createOrReplaceTempView(token);
     FlowT.this.performStep(df, root, scala.Predef.Set.empty[com.sparkutils.flow.StepResult[RP]])
@@ -5345,15 +5427,15 @@
         </td>
       </tr><tr>
         <td>
-          328
+          331
         </td>
         <td>
-          262
+          266
         </td>
         <td>
-          13818
+          13865
           -
-          13832
+          13879
         </td>
         <td>
           Apply
@@ -5369,15 +5451,15 @@
         </td>
       </tr><tr>
         <td>
-          329
+          332
         </td>
         <td>
-          263
+          267
         </td>
         <td>
-          13857
+          13904
           -
-          13872
+          13919
         </td>
         <td>
           Apply
@@ -5393,15 +5475,63 @@
         </td>
       </tr><tr>
         <td>
-          332
+          334
         </td>
         <td>
-          264
+          268
         </td>
         <td>
           13944
           -
-          13996
+          13944
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FlowT.ec
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          FlowT.this.ec
+        </td>
+      </tr><tr>
+        <td>
+          334
+        </td>
+        <td>
+          269
+        </td>
+        <td>
+          13933
+          -
+          13953
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          com.sparkutils.flow.StepUtils.stepTimeout
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          com.sparkutils.flow.StepUtils.stepTimeout[RP, com.sparkutils.flow.StepResult[RP]](root, p)(FlowT.this.ec)
+        </td>
+      </tr><tr>
+        <td>
+          338
+        </td>
+        <td>
+          270
+        </td>
+        <td>
+          14026
+          -
+          14078
         </td>
         <td>
           Apply
@@ -5417,15 +5547,15 @@
         </td>
       </tr><tr>
         <td>
-          332
+          338
         </td>
         <td>
-          265
+          271
         </td>
         <td>
-          14004
+          14086
           -
-          14013
+          14095
         </td>
         <td>
           TypeApply
@@ -5441,15 +5571,15 @@
         </td>
       </tr><tr>
         <td>
-          332
+          338
         </td>
         <td>
-          266
+          272
         </td>
         <td>
-          13932
-          -
           14014
+          -
+          14096
         </td>
         <td>
           Apply
@@ -5465,15 +5595,15 @@
         </td>
       </tr><tr>
         <td>
-          333
+          339
         </td>
         <td>
-          270
+          276
         </td>
         <td>
-          13907
+          13989
           -
-          14153
+          14235
         </td>
         <td>
           Apply
@@ -5492,15 +5622,15 @@
         </td>
       </tr><tr>
         <td>
-          334
+          340
         </td>
         <td>
-          267
+          273
         </td>
         <td>
-          14055
+          14137
           -
-          14088
+          14170
         </td>
         <td>
           Apply
@@ -5516,15 +5646,15 @@
         </td>
       </tr><tr>
         <td>
-          335
+          341
         </td>
         <td>
-          268
+          274
         </td>
         <td>
-          14127
+          14209
           -
-          14136
+          14218
         </td>
         <td>
           TypeApply
@@ -5540,15 +5670,15 @@
         </td>
       </tr><tr>
         <td>
-          335
+          341
         </td>
         <td>
-          269
+          275
         </td>
         <td>
-          14105
+          14187
           -
-          14137
+          14219
         </td>
         <td>
           Apply
@@ -5564,15 +5694,15 @@
         </td>
       </tr><tr>
         <td>
-          338
+          344
         </td>
         <td>
-          271
+          277
         </td>
         <td>
-          14167
+          14249
           -
-          14178
+          14260
         </td>
         <td>
           Apply
@@ -5588,15 +5718,39 @@
         </td>
       </tr><tr>
         <td>
-          340
+          346
         </td>
         <td>
-          273
+          279
         </td>
         <td>
-          14242
+          14327
           -
-          14264
+          14327
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.sparkutils.flow.StepException.apply$default$3
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          StepException.apply$default$3[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          346
+        </td>
+        <td>
+          280
+        </td>
+        <td>
+          14327
+          -
+          14349
         </td>
         <td>
           Apply
@@ -5608,67 +5762,67 @@
           
         </td>
         <td style="background: #AEF1AE">
-          StepException.apply[RP](root, t)
+          StepException.apply[RP](root, t, StepException.apply$default$3[Nothing])
         </td>
       </tr><tr>
         <td>
-          340
+          346
         </td>
         <td>
-          274
+          281
         </td>
         <td>
-          14232
+          14314
           -
-          14264
+          14349
         </td>
         <td>
           Apply
         </td>
         <td>
-          scala.concurrent.Promise.failure
+          scala.concurrent.Promise.tryFailure
         </td>
         <td>
           
         </td>
         <td style="background: #AEF1AE">
-          p.failure(StepException.apply[RP](root, t))
+          p.tryFailure(StepException.apply[RP](root, t, StepException.apply$default$3[Nothing]))
         </td>
       </tr><tr>
         <td>
-          340
+          346
         </td>
         <td>
-          275
+          282
         </td>
         <td>
-          14232
+          14314
           -
-          14264
+          14349
         </td>
         <td>
           Block
         </td>
         <td>
-          scala.concurrent.Promise.failure
+          scala.concurrent.Promise.tryFailure
         </td>
         <td>
           
         </td>
         <td style="background: #AEF1AE">
-          p.failure(StepException.apply[RP](root, t))
+          p.tryFailure(StepException.apply[RP](root, t, StepException.apply$default$3[Nothing]))
         </td>
       </tr><tr>
         <td>
-          344
+          350
         </td>
         <td>
-          292
+          299
         </td>
         <td>
-          14349
+          14434
           -
-          14726
+          14811
         </td>
         <td>
           Block
@@ -5691,15 +5845,15 @@
         </td>
       </tr><tr>
         <td>
-          345
+          351
         </td>
         <td>
-          277
+          284
         </td>
         <td>
-          14438
+          14523
           -
-          14448
+          14533
         </td>
         <td>
           Apply
@@ -5715,15 +5869,15 @@
         </td>
       </tr><tr>
         <td>
-          345
+          351
         </td>
         <td>
-          278
+          285
         </td>
         <td>
-          14437
+          14522
           -
-          14437
+          14522
         </td>
         <td>
           Select
@@ -5739,15 +5893,15 @@
         </td>
       </tr><tr>
         <td>
-          345
+          351
         </td>
         <td>
-          279
+          286
         </td>
         <td>
-          14416
+          14501
           -
-          14449
+          14534
         </td>
         <td>
           ApplyToImplicitArgs
@@ -5763,15 +5917,15 @@
         </td>
       </tr><tr>
         <td>
-          345
+          351
         </td>
         <td>
-          280
+          287
         </td>
         <td>
-          14385
+          14470
           -
-          14450
+          14535
         </td>
         <td>
           Apply
@@ -5787,15 +5941,15 @@
         </td>
       </tr><tr>
         <td>
-          345
+          351
         </td>
         <td>
-          281
+          288
         </td>
         <td>
-          14384
+          14469
           -
-          14384
+          14469
         </td>
         <td>
           TypeApply
@@ -5811,15 +5965,15 @@
         </td>
       </tr><tr>
         <td>
-          345
+          351
         </td>
         <td>
-          282
+          289
         </td>
         <td>
-          14384
+          14469
           -
-          14384
+          14469
         </td>
         <td>
           Select
@@ -5835,15 +5989,15 @@
         </td>
       </tr><tr>
         <td>
-          345
+          351
         </td>
         <td>
-          283
+          290
         </td>
         <td>
-          14369
+          14454
           -
-          14451
+          14536
         </td>
         <td>
           ApplyToImplicitArgs
@@ -5859,15 +6013,15 @@
         </td>
       </tr><tr>
         <td>
-          346
+          352
         </td>
         <td>
-          284
+          291
         </td>
         <td>
-          14486
+          14571
           -
-          14494
+          14579
         </td>
         <td>
           Select
@@ -5883,15 +6037,15 @@
         </td>
       </tr><tr>
         <td>
-          346
+          352
         </td>
         <td>
-          285
+          292
         </td>
         <td>
-          14468
+          14553
           -
-          14495
+          14580
         </td>
         <td>
           Apply
@@ -5907,15 +6061,15 @@
         </td>
       </tr><tr>
         <td>
-          349
+          355
         </td>
         <td>
-          286
+          293
         </td>
         <td>
-          14567
+          14652
           -
-          14601
+          14686
         </td>
         <td>
           Apply
@@ -5931,15 +6085,15 @@
         </td>
       </tr><tr>
         <td>
-          349
+          355
         </td>
         <td>
-          287
+          294
         </td>
         <td>
-          14567
+          14652
           -
-          14601
+          14686
         </td>
         <td>
           Block
@@ -5955,15 +6109,15 @@
         </td>
       </tr><tr>
         <td>
-          350
+          356
         </td>
         <td>
-          288
+          295
         </td>
         <td>
-          14662
+          14747
           -
-          14702
+          14787
         </td>
         <td>
           Apply
@@ -5979,15 +6133,15 @@
         </td>
       </tr><tr>
         <td>
-          350
+          356
         </td>
         <td>
-          289
+          296
         </td>
         <td>
-          14662
+          14747
           -
-          14702
+          14787
         </td>
         <td>
           Block
@@ -6003,15 +6157,15 @@
         </td>
       </tr><tr>
         <td>
-          351
+          357
         </td>
         <td>
-          290
+          297
         </td>
         <td>
-          14713
+          14798
           -
-          14713
+          14798
         </td>
         <td>
           TypeApply
@@ -6027,15 +6181,15 @@
         </td>
       </tr><tr>
         <td>
-          351
+          357
         </td>
         <td>
-          291
+          298
         </td>
         <td>
-          14505
+          14590
           -
-          14718
+          14803
         </td>
         <td>
           ApplyToImplicitArgs
@@ -6054,15 +6208,15 @@
         </td>
       </tr><tr>
         <td>
-          352
+          358
         </td>
         <td>
-          303
+          310
         </td>
         <td>
-          14732
+          14817
           -
-          14935
+          15020
         </td>
         <td>
           Block
@@ -6082,15 +6236,15 @@
         </td>
       </tr><tr>
         <td>
-          353
+          359
         </td>
         <td>
-          293
+          300
         </td>
         <td>
-          14799
+          14884
           -
-          14810
+          14895
         </td>
         <td>
           Select
@@ -6106,15 +6260,15 @@
         </td>
       </tr><tr>
         <td>
-          353
+          359
         </td>
         <td>
-          294
+          301
         </td>
         <td>
-          14768
+          14853
           -
-          14811
+          14896
         </td>
         <td>
           Apply
@@ -6130,15 +6284,15 @@
         </td>
       </tr><tr>
         <td>
-          353
+          359
         </td>
         <td>
-          295
+          302
         </td>
         <td>
-          14767
+          14852
           -
-          14767
+          14852
         </td>
         <td>
           TypeApply
@@ -6154,15 +6308,15 @@
         </td>
       </tr><tr>
         <td>
-          353
+          359
         </td>
         <td>
-          296
+          303
         </td>
         <td>
-          14767
+          14852
           -
-          14767
+          14852
         </td>
         <td>
           Select
@@ -6178,15 +6332,15 @@
         </td>
       </tr><tr>
         <td>
-          353
+          359
         </td>
         <td>
-          297
+          304
         </td>
         <td>
-          14752
+          14837
           -
-          14812
+          14897
         </td>
         <td>
           ApplyToImplicitArgs
@@ -6202,15 +6356,15 @@
         </td>
       </tr><tr>
         <td>
-          354
+          360
         </td>
         <td>
-          298
+          305
         </td>
         <td>
-          14847
+          14932
           -
-          14855
+          14940
         </td>
         <td>
           Select
@@ -6226,15 +6380,15 @@
         </td>
       </tr><tr>
         <td>
-          354
+          360
         </td>
         <td>
-          299
+          306
         </td>
         <td>
-          14829
+          14914
           -
-          14856
+          14941
         </td>
         <td>
           Apply
@@ -6250,15 +6404,15 @@
         </td>
       </tr><tr>
         <td>
-          356
+          362
         </td>
         <td>
-          300
+          307
         </td>
         <td>
-          14886
+          14971
           -
-          14920
+          15005
         </td>
         <td>
           Apply
@@ -6274,15 +6428,15 @@
         </td>
       </tr><tr>
         <td>
-          356
+          362
         </td>
         <td>
-          301
+          308
         </td>
         <td>
-          14922
+          15007
           -
-          14922
+          15007
         </td>
         <td>
           TypeApply
@@ -6298,15 +6452,15 @@
         </td>
       </tr><tr>
         <td>
-          356
+          362
         </td>
         <td>
-          302
+          309
         </td>
         <td>
-          14866
+          14951
           -
-          14927
+          15012
         </td>
         <td>
           ApplyToImplicitArgs
@@ -6322,15 +6476,15 @@
         </td>
       </tr><tr>
         <td>
-          359
+          365
         </td>
         <td>
-          305
+          312
         </td>
         <td>
-          14946
+          15031
           -
-          15038
+          15123
         </td>
         <td>
           Apply
@@ -6346,15 +6500,15 @@
         </td>
       </tr><tr>
         <td>
-          361
+          367
         </td>
         <td>
-          306
+          313
         </td>
         <td>
-          15055
+          15140
           -
-          15063
+          15148
         </td>
         <td>
           Select
@@ -6370,15 +6524,15 @@
         </td>
       </tr><tr>
         <td>
-          361
+          367
         </td>
         <td>
-          307
+          314
         </td>
         <td>
-          15065
+          15150
           -
-          15073
+          15158
         </td>
         <td>
           Select
@@ -6394,15 +6548,15 @@
         </td>
       </tr><tr>
         <td>
-          361
+          367
         </td>
         <td>
-          308
+          315
         </td>
         <td>
-          15044
+          15129
           -
-          15074
+          15159
         </td>
         <td>
           ApplyToImplicitArgs
@@ -6418,15 +6572,15 @@
         </td>
       </tr><tr>
         <td>
-          375
+          381
         </td>
         <td>
-          310
+          317
         </td>
         <td>
-          15656
+          15741
           -
-          15708
+          15793
         </td>
         <td>
           Apply
@@ -6442,15 +6596,15 @@
         </td>
       </tr><tr>
         <td>
-          376
+          382
         </td>
         <td>
-          309
+          316
         </td>
         <td>
-          15687
+          15772
           -
-          15691
+          15776
         </td>
         <td>
           Select
@@ -6466,15 +6620,15 @@
         </td>
       </tr><tr>
         <td>
-          390
+          396
         </td>
         <td>
-          312
+          319
         </td>
         <td>
-          16267
+          16352
           -
-          16309
+          16394
         </td>
         <td>
           Apply
@@ -6490,15 +6644,15 @@
         </td>
       </tr><tr>
         <td>
-          391
+          397
         </td>
         <td>
-          311
+          318
         </td>
         <td>
-          16298
+          16383
           -
-          16302
+          16387
         </td>
         <td>
           Select
@@ -6514,15 +6668,15 @@
         </td>
       </tr><tr>
         <td>
-          473
+          479
         </td>
         <td>
-          313
+          320
         </td>
         <td>
-          19282
+          19367
           -
-          19310
+          19395
         </td>
         <td>
           Apply
@@ -6538,15 +6692,15 @@
         </td>
       </tr><tr>
         <td>
-          475
+          481
         </td>
         <td>
-          319
+          326
         </td>
         <td>
-          19328
+          19413
           -
-          19546
+          19631
         </td>
         <td>
           Apply
@@ -6565,15 +6719,15 @@ else
         </td>
       </tr><tr>
         <td>
-          477
+          483
         </td>
         <td>
-          314
+          321
         </td>
         <td>
-          19429
+          19514
           -
-          19450
+          19535
         </td>
         <td>
           Select
@@ -6589,15 +6743,15 @@ else
         </td>
       </tr><tr>
         <td>
-          478
+          484
         </td>
         <td>
-          315
+          322
         </td>
         <td>
-          19460
+          19545
           -
-          19475
+          19560
         </td>
         <td>
           Apply
@@ -6613,15 +6767,15 @@ else
         </td>
       </tr><tr>
         <td>
-          478
+          484
         </td>
         <td>
-          316
+          323
         </td>
         <td>
-          19460
+          19545
           -
-          19475
+          19560
         </td>
         <td>
           Block
@@ -6637,15 +6791,15 @@ else
         </td>
       </tr><tr>
         <td>
-          480
+          486
         </td>
         <td>
-          317
+          324
         </td>
         <td>
-          19495
+          19580
           -
-          19540
+          19625
         </td>
         <td>
           Select
@@ -6661,15 +6815,15 @@ else
         </td>
       </tr><tr>
         <td>
-          480
+          486
         </td>
         <td>
-          318
+          325
         </td>
         <td>
-          19495
+          19580
           -
-          19540
+          19625
         </td>
         <td>
           Block
@@ -6685,15 +6839,15 @@ else
         </td>
       </tr><tr>
         <td>
-          482
+          488
         </td>
         <td>
-          320
+          327
         </td>
         <td>
-          19560
+          19645
           -
-          19578
+          19663
         </td>
         <td>
           Select
@@ -6709,15 +6863,15 @@ else
         </td>
       </tr><tr>
         <td>
-          482
+          488
         </td>
         <td>
-          321
+          328
         </td>
         <td>
-          19551
+          19636
           -
-          19594
+          19679
         </td>
         <td>
           Apply
@@ -6733,15 +6887,15 @@ else
         </td>
       </tr><tr>
         <td>
-          490
+          496
         </td>
         <td>
-          322
+          329
         </td>
         <td>
-          19769
+          19854
           -
-          19791
+          19876
         </td>
         <td>
           Select
@@ -6757,15 +6911,15 @@ else
         </td>
       </tr><tr>
         <td>
-          491
+          497
         </td>
         <td>
-          323
+          330
         </td>
         <td>
-          19801
+          19886
           -
-          19815
+          19900
         </td>
         <td>
           Apply
@@ -6781,15 +6935,15 @@ else
         </td>
       </tr><tr>
         <td>
-          491
+          497
         </td>
         <td>
-          324
+          331
         </td>
         <td>
-          19801
+          19886
           -
-          19815
+          19900
         </td>
         <td>
           Block
@@ -6805,15 +6959,15 @@ else
         </td>
       </tr><tr>
         <td>
-          493
+          499
         </td>
         <td>
-          325
+          332
         </td>
         <td>
-          19835
+          19920
           -
-          19841
+          19926
         </td>
         <td>
           Ident
@@ -6829,15 +6983,15 @@ else
         </td>
       </tr><tr>
         <td>
-          495
+          501
         </td>
         <td>
-          326
+          333
         </td>
         <td>
-          19875
+          19960
           -
-          19901
+          19986
         </td>
         <td>
           Select
@@ -6853,15 +7007,15 @@ else
         </td>
       </tr><tr>
         <td>
-          495
+          501
         </td>
         <td>
-          327
+          334
         </td>
         <td>
-          19847
+          19932
           -
-          19902
+          19987
         </td>
         <td>
           Apply
@@ -6877,15 +7031,15 @@ else
         </td>
       </tr><tr>
         <td>
-          497
+          503
         </td>
         <td>
-          328
+          335
         </td>
         <td>
-          19908
+          19993
           -
-          19938
+          20023
         </td>
         <td>
           Apply
@@ -6901,15 +7055,15 @@ else
         </td>
       </tr><tr>
         <td>
-          506
+          512
         </td>
         <td>
-          329
+          336
         </td>
         <td>
-          20113
+          20198
           -
-          20129
+          20214
         </td>
         <td>
           Select
@@ -6925,15 +7079,15 @@ else
         </td>
       </tr><tr>
         <td>
-          506
+          512
         </td>
         <td>
-          348
+          355
         </td>
         <td>
-          20096
+          20181
           -
-          20629
+          20714
         </td>
         <td>
           Apply
@@ -6963,15 +7117,15 @@ else
         </td>
       </tr><tr>
         <td>
-          508
+          514
         </td>
         <td>
-          330
+          337
         </td>
         <td>
-          20195
+          20280
           -
-          20217
+          20302
         </td>
         <td>
           Select
@@ -6987,15 +7141,15 @@ else
         </td>
       </tr><tr>
         <td>
-          508
+          514
         </td>
         <td>
-          331
+          338
         </td>
         <td>
-          20219
+          20304
           -
-          20247
+          20332
         </td>
         <td>
           Apply
@@ -7011,15 +7165,15 @@ else
         </td>
       </tr><tr>
         <td>
-          508
+          514
         </td>
         <td>
-          332
+          339
         </td>
         <td>
-          20172
+          20257
           -
-          20248
+          20333
         </td>
         <td>
           Apply
@@ -7035,15 +7189,15 @@ else
         </td>
       </tr><tr>
         <td>
-          509
+          515
         </td>
         <td>
-          343
+          350
         </td>
         <td>
-          20261
+          20346
           -
-          20504
+          20589
         </td>
         <td>
           Block
@@ -7067,15 +7221,15 @@ else
         </td>
       </tr><tr>
         <td>
-          510
+          516
         </td>
         <td>
-          333
+          340
         </td>
         <td>
-          20281
+          20366
           -
-          20300
+          20385
         </td>
         <td>
           Select
@@ -7091,15 +7245,15 @@ else
         </td>
       </tr><tr>
         <td>
-          512
+          518
         </td>
         <td>
-          334
+          341
         </td>
         <td>
-          20369
+          20454
           -
-          20388
+          20473
         </td>
         <td>
           Select
@@ -7115,15 +7269,15 @@ else
         </td>
       </tr><tr>
         <td>
-          512
+          518
         </td>
         <td>
-          335
+          342
         </td>
         <td>
-          20392
+          20477
           -
-          20392
+          20477
         </td>
         <td>
           Select
@@ -7139,15 +7293,15 @@ else
         </td>
       </tr><tr>
         <td>
-          512
+          518
         </td>
         <td>
-          336
+          343
         </td>
         <td>
-          20351
+          20436
           -
-          20401
+          20486
         </td>
         <td>
           ApplyToImplicitArgs
@@ -7163,15 +7317,15 @@ else
         </td>
       </tr><tr>
         <td>
-          513
+          519
         </td>
         <td>
-          337
+          344
         </td>
         <td>
-          20432
+          20517
           -
-          20441
+          20526
         </td>
         <td>
           Apply
@@ -7187,15 +7341,15 @@ else
         </td>
       </tr><tr>
         <td>
-          513
+          519
         </td>
         <td>
-          338
+          345
         </td>
         <td>
-          20416
+          20501
           -
-          20442
+          20527
         </td>
         <td>
           Select
@@ -7211,15 +7365,15 @@ else
         </td>
       </tr><tr>
         <td>
-          513
+          519
         </td>
         <td>
-          341
+          348
         </td>
         <td>
-          20412
+          20497
           -
-          20412
+          20497
         </td>
         <td>
           Literal
@@ -7235,15 +7389,15 @@ else
         </td>
       </tr><tr>
         <td>
-          513
+          519
         </td>
         <td>
-          342
+          349
         </td>
         <td>
-          20412
+          20497
           -
-          20412
+          20497
         </td>
         <td>
           Block
@@ -7259,111 +7413,111 @@ else
         </td>
       </tr><tr>
         <td>
-          514
-        </td>
-        <td>
-          339
-        </td>
-        <td>
-          20458
-          -
-          20482
-        </td>
-        <td>
-          Throw
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td>
-          
-        </td>
-        <td style="background: #AEF1AE">
-          throw FlowException.apply(msg, FlowException.apply$default$2)
-        </td>
-      </tr><tr>
-        <td>
-          514
-        </td>
-        <td>
-          340
-        </td>
-        <td>
-          20458
-          -
-          20482
-        </td>
-        <td>
-          Block
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td>
-          
-        </td>
-        <td style="background: #AEF1AE">
-          throw FlowException.apply(msg, FlowException.apply$default$2)
-        </td>
-      </tr><tr>
-        <td>
-          517
-        </td>
-        <td>
-          344
-        </td>
-        <td>
-          20548
-          -
-          20555
-        </td>
-        <td>
-          Throw
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td>
-          
-        </td>
-        <td style="background: #AEF1AE">
-          throw f
-        </td>
-      </tr><tr>
-        <td>
-          517
-        </td>
-        <td>
-          345
-        </td>
-        <td>
-          20548
-          -
-          20555
-        </td>
-        <td>
-          Block
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td>
-          
-        </td>
-        <td style="background: #AEF1AE">
-          throw f
-        </td>
-      </tr><tr>
-        <td>
-          518
+          520
         </td>
         <td>
           346
         </td>
         <td>
-          20587
+          20543
           -
-          20613
+          20567
+        </td>
+        <td>
+          Throw
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          throw FlowException.apply(msg, FlowException.apply$default$2)
+        </td>
+      </tr><tr>
+        <td>
+          520
+        </td>
+        <td>
+          347
+        </td>
+        <td>
+          20543
+          -
+          20567
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          throw FlowException.apply(msg, FlowException.apply$default$2)
+        </td>
+      </tr><tr>
+        <td>
+          523
+        </td>
+        <td>
+          351
+        </td>
+        <td>
+          20633
+          -
+          20640
+        </td>
+        <td>
+          Throw
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          throw f
+        </td>
+      </tr><tr>
+        <td>
+          523
+        </td>
+        <td>
+          352
+        </td>
+        <td>
+          20633
+          -
+          20640
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          throw f
+        </td>
+      </tr><tr>
+        <td>
+          524
+        </td>
+        <td>
+          353
+        </td>
+        <td>
+          20672
+          -
+          20698
         </td>
         <td>
           Throw
@@ -7379,15 +7533,15 @@ else
         </td>
       </tr><tr>
         <td>
-          518
+          524
         </td>
         <td>
-          347
+          354
         </td>
         <td>
-          20587
+          20672
           -
-          20613
+          20698
         </td>
         <td>
           Block

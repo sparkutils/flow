@@ -223,7 +223,17 @@
 </span>199 <span style=''>   * The defaultGroup value is used when calling [[convertToIds]] should there be no flowRuleGroup present
 </span>200 <span style=''>   */
 </span>201 <span style=''>  val defaultConvertGroupName = </span><span style='background: #AEF1AE'>&quot;defaultGroup&quot;</span><span style=''>
-</span>202 <span style=''>}
+</span>202 <span style=''>
+</span>203 <span style=''>  /**
+</span>204 <span style=''>   * When added to a [[Step.options]] configuration it specifies how long a Step will be allowed to process before
+</span>205 <span style=''>   * a timeout is triggered, this will be signaled in [[StepException.timedOut]].  The timeout does not stop the underlying
+</span>206 <span style=''>   * Step, but forces the dependent graph below it to fail.
+</span>207 <span style=''>   *
+</span>208 <span style=''>   * The failure is either a complete exit, tolerant = false, or the [[StepException.timedOut]] will be true for the
+</span>209 <span style=''>   * source Step.
+</span>210 <span style=''>   */
+</span>211 <span style=''>  val stepTimeoutName = </span><span style='background: #AEF1AE'>&quot;stepTimeout&quot;</span><span style=''>
+</span>212 <span style=''>}
 </span></pre>
           </div>
           <div class="tab-pane" id="statementlist">
@@ -883,6 +893,30 @@
         </td>
         <td style="background: #AEF1AE">
           &quot;defaultGroup&quot;
+        </td>
+      </tr><tr>
+        <td>
+          211
+        </td>
+        <td>
+          79
+        </td>
+        <td>
+          7704
+          -
+          7717
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;stepTimeout&quot;
         </td>
       </tr>
     </table>
