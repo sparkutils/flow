@@ -6,6 +6,7 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1" name="viewport"/>
 <link href="https://sparkutils.github.io/flow/0.0.1-poc6/" rel="canonical"/>
+<link href="background/about/" rel="next"/>
 <link href="img/quality.png" rel="icon"/>
 <meta content="mkdocs-1.4.2, mkdocs-material-9.1.2" name="generator"/>
 <title>Flow</title>
@@ -118,6 +119,21 @@
       Home
     </a>
 </li>
+<li class="md-tabs__item">
+<a class="md-tabs__link" href="background/about/">
+      About
+    </a>
+</li>
+<li class="md-tabs__item">
+<a class="md-tabs__link" href="site/">
+      Maven Site
+    </a>
+</li>
+<li class="md-tabs__item">
+<a class="md-tabs__link" href="scaladocs/">
+      Scala Docs
+    </a>
+</li>
 </ul>
 </div>
 </nav>
@@ -164,8 +180,61 @@
     Process a Graph of data processing Steps with Quality
   </a>
 </li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#flow-and-flowt">
+    Flow and FlowT?
+  </a>
+<nav aria-label="Flow and FlowT?" class="md-nav">
+<ul class="md-nav__list">
+<li class="md-nav__item">
+<a class="md-nav__link" href="#what-is-returned">
+    What is returned?
+  </a>
+</li>
 </ul>
 </nav>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#serialisation">
+    Serialisation
+  </a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#timeouts-and-error-handling">
+    Timeouts and Error handling
+  </a>
+<nav aria-label="Timeouts and Error handling" class="md-nav">
+<ul class="md-nav__list">
+<li class="md-nav__item">
+<a class="md-nav__link" href="#timeouts">
+    Timeouts
+  </a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#exception-error-handling">
+    Exception / Error handling
+  </a>
+</li>
+</ul>
+</nav>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="background/about/">
+        About
+      </a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="site/">
+        Maven Site
+      </a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="scaladocs/">
+        Scala Docs
+      </a>
 </li>
 </ul>
 </nav>
@@ -186,6 +255,44 @@
     Process a Graph of data processing Steps with Quality
   </a>
 </li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#flow-and-flowt">
+    Flow and FlowT?
+  </a>
+<nav aria-label="Flow and FlowT?" class="md-nav">
+<ul class="md-nav__list">
+<li class="md-nav__item">
+<a class="md-nav__link" href="#what-is-returned">
+    What is returned?
+  </a>
+</li>
+</ul>
+</nav>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#serialisation">
+    Serialisation
+  </a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#timeouts-and-error-handling">
+    Timeouts and Error handling
+  </a>
+<nav aria-label="Timeouts and Error handling" class="md-nav">
+<ul class="md-nav__list">
+<li class="md-nav__item">
+<a class="md-nav__link" href="#timeouts">
+    Timeouts
+  </a>
+</li>
+<li class="md-nav__item">
+<a class="md-nav__link" href="#exception-error-handling">
+    Exception / Error handling
+  </a>
+</li>
+</ul>
+</nav>
+</li>
 </ul>
 </nav>
 </div>
@@ -205,7 +312,7 @@
 </details>
 <h2 id="process-a-graph-of-data-processing-steps-with-quality">Process a Graph of data processing Steps with Quality<a class="headerlink" href="#process-a-graph-of-data-processing-steps-with-quality" title="Permanent link">¶</a></h2>
 <p>Write auditable DQ and transformation rules using simple SQL or create re-usable functions via SQL Lambdas and manage them through a graph of Steps.</p>
-<p>Your Flows can be provided DataFrames from either a Quality DataFrameLoader, catalog or even custom loading logic.</p>
+<p>Your Flows can be provided DataFrames from either a Quality DataFrameLoader, catalog or even custom loading logic via extension of FlowT.</p>
 <ul>
 <li><img alt="🆕" class="twemoji pulseABit" src="https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/1f195.svg" title=":new:"> Initial Release</img></li>
 </ul>
@@ -228,15 +335,75 @@ either Quality:</p>
 <li>OutFieldOnly - only the result column remains or</li>
 <li>a custom implementation</li>
 </ul>
+<h2 id="flow-and-flowt">Flow and FlowT?<a class="headerlink" href="#flow-and-flowt" title="Permanent link">¶</a></h2>
+<p>The default Flow is a type alias for:</p>
+<div class="highlight"><pre><span></span><code><span class="k">type</span><span class="w"> </span><span class="nc">Flow</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nc">FlowT</span><span class="p">[</span><span class="nc">CombinedRuleSuiteRows</span><span class="p">,</span><span class="w"> </span><span class="nc">RuleSuite</span><span class="p">]</span>
+</code></pre></div>
+<p>The first parameter is for the type of Flow / "group level" rules, these may be accessed as nested runners within transformations,
+the second parameter is the type of RuleSuiteTypeParam parameter to use, which are passed to the Runner functions.</p>
+<p>Flow supports both GroupRuleId and RuleSuite RuleSuiteTypeParam in Steps <em>and</em> also Id's at group level, with the exact types
+used following through to serialisation.</p>
+<h3 id="what-is-returned">What is returned?<a class="headerlink" href="#what-is-returned" title="Permanent link">¶</a></h3>
+<p>Flow's Steps are processed as graphs of Futures, each effectively returning a DataFrame, which can be optionally cached,
+forming the inputs to the next dependent Step.  These Futures are then sequenced to return a FlowResult:</p>
+<div class="highlight"><pre><span></span><code><span class="k">case</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">FlowResult</span><span class="p">[</span><span class="nc">T</span><span class="p">:</span><span class="w"> </span><span class="nc">RuleSuiteTypeParam</span><span class="p">](</span><span class="n">stepResults</span><span class="p">:</span><span class="w"> </span><span class="nc">Map</span><span class="p">[</span><span class="nc">String</span><span class="p">,</span><span class="w"> </span><span class="nc">StepResultType</span><span class="p">[</span><span class="nc">T</span><span class="p">]],</span>
+<span class="w">                                             </span><span class="n">duration</span><span class="p">:</span><span class="w"> </span><span class="nc">Duration</span><span class="p">)</span><span class="w"> </span><span class="k">extends</span><span class="w"> </span><span class="nc">Serializable</span>
+</code></pre></div>
+<p>wherein each StepResultType is either a StepResult or a StepException, by default any return is only StepResults, use
+the tolerant parameter to decide how to handle failure.</p>
+<div class="highlight"><pre><span></span><code><span class="k">case</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">StepResult</span><span class="p">[</span><span class="nc">RP</span><span class="p">:</span><span class="w"> </span><span class="nc">RuleSuiteTypeParam</span><span class="p">](</span><span class="n">step</span><span class="p">:</span><span class="w"> </span><span class="nc">Step</span><span class="p">[</span><span class="nc">RP</span><span class="p">],</span><span class="w"> </span><span class="n">output</span><span class="p">:</span><span class="w"> </span><span class="nc">DataFrame</span><span class="p">,</span><span class="w"> </span><span class="n">timings</span><span class="p">:</span><span class="w"> </span><span class="nc">StepTimings</span><span class="p">)</span>
+</code></pre></div>
+<p>StepResult itself provides the resulting DataFrame, as the Flow can have multiple final leaf nodes the caller must know
+what to do with them, for example custom ResultApproaches may save the DataFrame to disk, or the Flow.run caller has
+custom knowledge of the flows.</p>
+<h2 id="serialisation">Serialisation<a class="headerlink" href="#serialisation" title="Permanent link">¶</a></h2>
+<p>Flow supports both individual datasets for a more normalised flow management approach and a FullFlow approach allowing
+individual flows to be serialised via json, for example.  Although the default behaviour of both Flow's and serialisation
+is group level CombinedRuleSuites and RuleSuites, the types can be converted to group level rules and GroupRuleId's via
+the convertToIds function.</p>
+<p>As the Id's and Rules can be sourced from different locations in a Flow there are a number of strategies that can be
+provided to serialisation functions:</p>
+<ul>
+<li>RuleSuiteFromDataset</li>
+<li>RuleSuiteFromFlows</li>
+<li>IdFromFlows</li>
+<li>IdFromDatasets</li>
+</ul>
+<p>these customise the processing of configuration data.</p>
+<p>Serialising the default Flow to a FullFlow will yield a RuleSuite at each Step, doing so with GroupId's as the Step type
+just has the ruleSuiteId and ruleSuiteVersion saved.</p>
+<p>Flow makes use of the sparkutils fork of Frameless to use AgnosticEncoding for Spark 4+ for correct type handling, this
+also allows deciding on which type of FlowT should be used to be abstracted and combined by Frameless' encoder derivation approach. </p>
+<h2 id="timeouts-and-error-handling">Timeouts and Error handling<a class="headerlink" href="#timeouts-and-error-handling" title="Permanent link">¶</a></h2>
+<h3 id="timeouts">Timeouts<a class="headerlink" href="#timeouts" title="Permanent link">¶</a></h3>
+<p>By default, a Flow will run until normal completion, but in many cases Flows will be part of business processes with tight SLAs where
+detecting errand processes early is important.  As such there are two layers of timeouts..</p>
+<ol>
+<li>Flow level - configured via FlowT parameters and FlowRow "duration" fields.</li>
+<li>Step level - configured via a Step's stepTimeout options</li>
+</ol>
+<p>Step level timeouts can operate independently, allowing a given problematic step to be configured with a timeout that then
+applies to the whole Step sub-graph.</p>
+<p>When a timeout is reached a StepException is returned for a Step instead of a StepResult.</p>
+<h3 id="exception-error-handling">Exception / Error handling<a class="headerlink" href="#exception-error-handling" title="Permanent link">¶</a></h3>
+<p>When calling Flow.run the default value of the "tolerant" parameter is 'false' e.g.:</p>
+<div class="highlight"><pre><span></span><code><span class="kd">val</span><span class="w"> </span><span class="n">ires</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">flow</span><span class="p">.</span><span class="n">run</span><span class="p">(</span><span class="n">sparkSession</span><span class="p">)</span>
+</code></pre></div>
+<p>In this default behaviour <strong>any</strong> exception, whether in Spark or via stepTimeout options, will trigger the run call to throw.</p>
+<p>In contrast:</p>
+<div class="highlight"><pre><span></span><code><span class="kd">val</span><span class="w"> </span><span class="n">ires</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">flow</span><span class="p">.</span><span class="n">run</span><span class="p">(</span><span class="n">sparkSession</span><span class="p">,</span><span class="w"> </span><span class="n">tolerant</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="p">)</span>
+</code></pre></div>
+<p>will return a mix of responses for each Step.  You can use either pattern matching or the StepResultType.fold function to
+process failures and successes.</p>
 <hr/>
 <div class="md-source-file">
 <small>
     
       Last update:
-      <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime">May 3, 2026 12:33:20</span>
+      <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime">May 3, 2026 14:20:15</span>
 <br/>
         Created:
-        <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime">May 3, 2026 12:33:20</span>
+        <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-datetime">May 3, 2026 14:20:15</span>
 </small>
 </div>
 </article>

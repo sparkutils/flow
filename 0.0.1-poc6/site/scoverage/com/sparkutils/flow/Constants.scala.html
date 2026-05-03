@@ -191,9 +191,9 @@
 </span>167 <span style=''>  val rootInputSuffix = </span><span style='background: #AEF1AE'>&quot;_root_input&quot;</span><span style=''>
 </span>168 <span style=''>
 </span>169 <span style=''>  /**
-</span>170 <span style=''>   * By default, the duration a low lasts for is 1hr
+</span>170 <span style=''>   * By default, flows do not have time limits imposed
 </span>171 <span style=''>   */
-</span>172 <span style=''>  val defaultFlowDuration: Duration = </span><span style='background: #AEF1AE'>Duration(1L, HOURS)</span><span style=''>
+</span>172 <span style=''>  val defaultFlowDuration: Duration = </span><span style='background: #AEF1AE'>Duration.Inf</span><span style=''>
 </span>173 <span style=''>
 </span>174 <span style=''>  /**
 </span>175 <span style=''>   * This optional [[Step.options]] configuration, defaulting to true, takes effect when the [[Step]]'s
@@ -782,21 +782,21 @@
           74
         </td>
         <td>
-          5810
+          5812
           -
-          5829
+          5824
         </td>
         <td>
-          Apply
+          Select
         </td>
         <td>
-          scala.concurrent.duration.Duration.apply
+          scala.concurrent.duration.Duration.Inf
         </td>
         <td>
           
         </td>
         <td style="background: #AEF1AE">
-          scala.concurrent.duration.Duration.apply(1L, HOURS)
+          scala.concurrent.duration.Duration.Inf
         </td>
       </tr><tr>
         <td>
@@ -806,9 +806,9 @@
           75
         </td>
         <td>
-          6413
+          6408
           -
-          6440
+          6435
         </td>
         <td>
           Literal
@@ -830,9 +830,9 @@
           76
         </td>
         <td>
-          6748
+          6743
           -
-          6766
+          6761
         </td>
         <td>
           Literal
@@ -854,9 +854,9 @@
           77
         </td>
         <td>
-          7037
+          7032
           -
-          7060
+          7055
         </td>
         <td>
           Literal
@@ -878,9 +878,9 @@
           78
         </td>
         <td>
-          7213
+          7208
           -
-          7227
+          7222
         </td>
         <td>
           Literal
@@ -902,9 +902,9 @@
           79
         </td>
         <td>
-          7704
+          7699
           -
-          7717
+          7712
         </td>
         <td>
           Literal
