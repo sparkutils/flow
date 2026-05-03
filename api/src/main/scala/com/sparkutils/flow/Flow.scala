@@ -1,6 +1,6 @@
 package com.sparkutils.flow
 
-import com.sparkutils.flow.StepUtils.runnerInputs
+import com.sparkutils.flow.StepUtils.{runnerInputs, stepTimeout}
 import com.sparkutils.flow.Timer.DurationOps
 import com.sparkutils.quality.{DataFrameLoader, MapConfigColumns, RuleSuiteParam, VersionedId, ViewConfigColumns}
 import com.sparkutils.quality.generic.{collector, dq, engine, folder}
@@ -229,11 +229,14 @@ class FlowT[FG, RP: RuleSuiteParam: RuleSuiteTypeParam](val flowId: VersionedId,
             }
           )
 
+          stepTimeout(cur, p)
+
           val newF: Future[StepResult[RP]] = f.map { names =>
             performStep(names.head.output, cur, names)
           }
 
           p.completeWith(newF)
+
           p.future
         }
 
@@ -327,6 +330,9 @@ class FlowT[FG, RP: RuleSuiteParam: RuleSuiteTypeParam](val flowId: VersionedId,
           try {
             val df = starting(root)
             val token = rootToken(root)
+
+            stepTimeout(root, p)
+
             val r =
               df.fold(
                 performStep(loadData(sparkSession = sparkSession, token = token), root, Set.empty)
@@ -337,7 +343,7 @@ class FlowT[FG, RP: RuleSuiteParam: RuleSuiteTypeParam](val flowId: VersionedId,
 
             p success r
           } catch {
-            case t: Throwable => p failure StepException(root, t) // wrap this in an exception with the root
+            case t: Throwable => p tryFailure StepException(root, t) // wrap this in an exception with the root
           }
       }
 

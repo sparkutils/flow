@@ -199,4 +199,14 @@ trait Constants {
    * The defaultGroup value is used when calling [[convertToIds]] should there be no flowRuleGroup present
    */
   val defaultConvertGroupName = "defaultGroup"
+
+  /**
+   * When added to a [[Step.options]] configuration it specifies how long a Step will be allowed to process before
+   * a timeout is triggered, this will be signaled in [[StepException.timedOut]].  The timeout does not stop the underlying
+   * Step, but forces the dependent graph below it to fail.
+   *
+   * The failure is either a complete exit, tolerant = false, or the [[StepException.timedOut]] will be true for the
+   * source Step.
+   */
+  val stepTimeoutName = "stepTimeout"
 }

@@ -15,10 +15,10 @@ import frameless.TypedEncoder
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.Try
 
-class CustomExtensions extends SharedPureConnectTests with Matchers {
+trait CustomExtensionsUtils { thisType: SharedPureConnectTests with Matchers =>
 
   def buildFlow[FG](resultApproach: ResultApproach = StarOnly, runner: Runner = Engine,
-                options: Map[String,String] = Map.empty, flowRuleGroup: Option[FlowRuleGroup[FG]] = None): FlowT[FG, RuleSuite] =
+                    options: Map[String,String] = Map.empty, flowRuleGroup: Option[FlowRuleGroup[FG]] = None): FlowT[FG, RuleSuite] =
     new FlowT[FG, RuleSuite](Id(1, 1), Seq(
       Step("a", Set.empty, Operation[RuleSuite](rulesRaw(Seq(
         (ExpressionRule("true"), RunOnPassProcessor(1000, Id(1040, 1),
@@ -39,6 +39,10 @@ class CustomExtensions extends SharedPureConnectTests with Matchers {
     val ir = process(flow.run(s, _ => Some(data)).stepResults.head._2.output).as[Int]
     ir.head() shouldBe answer
   }
+
+}
+
+class CustomExtensions extends SharedPureConnectTests with Matchers with CustomExtensionsUtils {
 
   test("custom result approach should have the same behaviour") {
     // default logic

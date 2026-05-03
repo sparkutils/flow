@@ -14,7 +14,7 @@ trait FlowExceptionType { selfType: Exception =>
 case class FlowException(msg: String, cause: Throwable = null) extends Exception(msg, cause) with Serializable with FlowExceptionType
 
 @SerialVersionUID(1L)
-case class StepException[RP](step: Step[RP], cause: Throwable = null) extends Exception(cause) with Serializable with
+case class StepException[RP](step: Step[RP], cause: Throwable = null, timedOut: Boolean = false) extends Exception(cause) with Serializable with
   StepResultType[RP] with FlowExceptionType {
 
   override def fold[R](success: StepResult[RP] => R)(failure: StepException[RP] => R): R = failure(this)
