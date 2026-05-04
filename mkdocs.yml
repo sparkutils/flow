@@ -32,7 +32,9 @@ extra:
 
 nav:
   - Home: index.md
-  - About: background/about.md
+  - About:
+      - History: background/about.md
+      - Changelog: background/changelog.md
   - Maven Site: site/index.html
   - Scala Docs: scaladocs.md
 

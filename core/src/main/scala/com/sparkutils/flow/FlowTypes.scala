@@ -164,7 +164,7 @@ sealed trait StepResultType[T] {
 /**
  * The result of a step
  * @param step this may be a modified Step if modifyStep was overridden
- * @param output the resulting datafrome from this step
+ * @param output the resulting DataFrame from this step
  * @param timings the time taken to prepare the output
  */
 @SerialVersionUID(1L)
