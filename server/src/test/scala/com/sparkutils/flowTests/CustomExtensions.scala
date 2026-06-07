@@ -52,8 +52,6 @@ class CustomExtensions extends SharedPureConnectTests with Matchers with CustomE
     doFlowTest(buildFlow(CustomApproach(classOf[IStar].getName)), answer = 1, process = identity)
   }
 
-  new ArrayBuffer[String].addAll()
-
   test("custom runner should have the same behaviour") {
     // default logic as part of the above test case
 
