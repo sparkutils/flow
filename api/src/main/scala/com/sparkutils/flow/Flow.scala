@@ -87,7 +87,7 @@ class FlowT[FG, RP: RuleSuiteParam: RuleSuiteTypeParam](val flowId: VersionedId,
 
     val fieldName = step.defaultFieldName
 
-    val ei @ RunnerInputs(struct, withoutFlowAudit, dataRefTypeFields) = runnerInputs(options, dataFrame, step, this)
+    val ei @ RunnerInputs(_, withoutFlowAudit, dataRefTypeFields) = runnerInputs(options, dataFrame, step, this)
 
     val runner =
       function match {
@@ -99,7 +99,8 @@ class FlowT[FG, RP: RuleSuiteParam: RuleSuiteTypeParam](val flowId: VersionedId,
             includeNulls = options.boolean(collectIncludeNulls),
             useInPlaceArray = options.boolean(collectUseInPlaceArray, true),
             unrollInPlaceArray = options.boolean(collectUnrollInPlaceArray),
-            unrollOutputArraySize = options.int(collectUnrollOutputArraySize, 1)).as(fieldName), Seq("ruleSuiteResults", "result"),
+            unrollOutputArraySize = options.int(collectUnrollOutputArraySize, 1),
+            extraConfig = options).as(fieldName), Seq("ruleSuiteResults", "result"),
             dataRefTypeFields
           )
 
@@ -108,7 +109,8 @@ class FlowT[FG, RP: RuleSuiteParam: RuleSuiteTypeParam](val flowId: VersionedId,
             resultDataType = options.dataType(resultDataType),
             debugMode = options.boolean(debugMode),
             variablesPerFunc = options.int("variablesPerFunc", 40),
-            variableFuncGroup = options.int("variableFuncGroup", 20)).as(fieldName), Seq("ruleSuiteResults", "salientRule", "result"),
+            variableFuncGroup = options.int("variableFuncGroup", 20),
+            extraConfig = options).as(fieldName), Seq("ruleSuiteResults", "salientRule", "result"),
             dataRefTypeFields
           )
 
@@ -121,14 +123,16 @@ class FlowT[FG, RP: RuleSuiteParam: RuleSuiteTypeParam](val flowId: VersionedId,
             useType = options.structType("useType").orElse(options.structType(resultDataType)),
             debugMode = options.boolean(debugMode),
             variablesPerFunc = options.int("variablesPerFunc", 40),
-            variableFuncGroup = options.int("variableFuncGroup", 20)).as(fieldName), Seq("ruleSuiteResults", "result"),
+            variableFuncGroup = options.int("variableFuncGroup", 20),
+            extraConfig = options).as(fieldName), Seq("ruleSuiteResults", "result"),
             dataRefTypeFields.orElse{
               Some(withoutFlowAudit.toSet)
             }
           )
 
         case DQ =>
-          RunnerOutput(dq(step.operation.ruleSuite).as(fieldName), Seq(), None)
+          RunnerOutput(dq(step.operation.ruleSuite,
+            extraConfig = options).as(fieldName), Seq(), None)
 
         case NoOp =>
           RunnerOutput(expr("*"), Seq(), None)

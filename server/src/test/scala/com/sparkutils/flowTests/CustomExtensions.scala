@@ -12,6 +12,7 @@ import org.scalatest.Matchers
 import com.sparkutils.flow.implicits._
 import frameless.TypedEncoder
 
+import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.Try
 
@@ -50,6 +51,8 @@ class CustomExtensions extends SharedPureConnectTests with Matchers with CustomE
     // the custom should reply 1
     doFlowTest(buildFlow(CustomApproach(classOf[IStar].getName)), answer = 1, process = identity)
   }
+
+  new ArrayBuffer[String].addAll()
 
   test("custom runner should have the same behaviour") {
     // default logic as part of the above test case
