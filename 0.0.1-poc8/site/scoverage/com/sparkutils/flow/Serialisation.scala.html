@@ -1,0 +1,6040 @@
+<html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title id="title">
+          com/sparkutils/flow/Serialisation.scala.html
+        </title>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        $(document).ready(function() {$(".tablesorter").tablesorter();});
+      </script>
+        <style>
+          table.codegrid { font-family: monospace; font-size: 12px; width: auto!important; }table.statementlist { width: auto!important; font-size: 13px; } table.codegrid td { padding: 0!important; border: 0!important } table td.linenumber { width: 40px!important; } 
+        </style>
+      </head>
+      <body style="font-family: monospace;">
+        <ul class="nav nav-tabs">
+          <li>
+            <a href="#codegrid" data-toggle="tab">Codegrid</a>
+          </li>
+          <li>
+            <a href="#statementlist" data-toggle="tab">Statement List</a>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="codegrid">
+            <pre style='font-size: 12pt; font-family: courier, monospace;'>1 <span style=''>package com.sparkutils.flow
+</span>2 <span style=''>
+</span>3 <span style=''>import com.sparkutils.flow.impl.util.Utils.defaultCombinedFolder
+</span>4 <span style=''>import com.sparkutils.quality
+</span>5 <span style=''>import com.sparkutils.quality.implicits.combinedRuleSuiteRowTypedExpEnc
+</span>6 <span style=''>import com.sparkutils.quality.{CombinedRuleSuiteRows, GroupRuleId, Id, LambdaFunctionRow, MapRow, OutputExpressionRow, RuleRow, RuleSuite, RuleSuiteParam, RuleSuiteRow, VersionedId, ViewRow, register_rule_suite_group_variable, rule_suite, rule_suite_from, toDS, toLambdaDS, toOutputExpressionDS, toRuleSuiteRow}
+</span>7 <span style=''>import org.apache.spark.sql.{Column, DataFrame, Dataset, Encoder, ShimUtils, SparkSession}
+</span>8 <span style=''>import org.apache.spark.sql.functions.{col, lit, struct}
+</span>9 <span style=''>
+</span>10 <span style=''>import scala.concurrent.duration.Duration
+</span>11 <span style=''>import scala.util.Try
+</span>12 <span style=''>
+</span>13 <span style=''>@SerialVersionUID(1L)
+</span>14 <span style=''>case class OperationRow(function: Runner, fieldName: Option[String], resultApproach: ResultApproach,
+</span>15 <span style=''>                        combineAuditWith: Option[Set[String]] = None) extends Serializable
+</span>16 <span style=''>
+</span>17 <span style=''>@SerialVersionUID(1L)
+</span>18 <span style=''>case class StepRow(flowId: Int, flowVersion: Int, name: String, dependencies: scala.collection.immutable.Set[String],
+</span>19 <span style=''>                   ruleSuiteId: Int, ruleSuiteVersion: Int,
+</span>20 <span style=''>                   operation: OperationRow, options: Map[String, String], data: StepData) extends StepLike {
+</span>21 <span style=''>
+</span>22 <span style=''>  override def function: Runner = </span><span style='background: #AEF1AE'>operation.function</span><span style=''>
+</span>23 <span style=''>}
+</span>24 <span style=''>
+</span>25 <span style=''>@SerialVersionUID(1L)
+</span>26 <span style=''>case class FlowRuleGroup[T](ruleGroupName: String, ruleGroup: Seq[T]) extends Serializable
+</span>27 <span style=''>
+</span>28 <span style=''>@SerialVersionUID(1L)
+</span>29 <span style=''>case class FlowRow[FG](flowId: Int, flowVersion: Int, flowAuditColName: String, duration: Duration,
+</span>30 <span style=''>                       flowRuleGroup: Option[FlowRuleGroup[FG]]) extends Serializable
+</span>31 <span style=''>
+</span>32 <span style=''>@SerialVersionUID(1L)
+</span>33 <span style=''>case class FlowDataSets[FG](steps: Dataset[StepRow], flows: Dataset[FlowRow[FG]], ruleRows: Dataset[RuleRow],
+</span>34 <span style=''>                        lambdaFunctionRows: Option[Dataset[LambdaFunctionRow]] = None,
+</span>35 <span style=''>                        outputExpressionRows: Option[Dataset[OutputExpressionRow]] = None,
+</span>36 <span style=''>                        globalLambdaSuites: Option[Dataset[Id]] = None,
+</span>37 <span style=''>                        globalOutputExpressionSuites: Option[Dataset[Id]] = None,
+</span>38 <span style=''>                        ruleSuites: Option[Dataset[RuleSuiteRow]] = None,
+</span>39 <span style=''>                        viewRows: Option[Dataset[ViewRow]] = None,
+</span>40 <span style=''>                        mapRows: Option[Dataset[MapRow]] = None,
+</span>41 <span style=''>                       ) extends Serializable {
+</span>42 <span style=''>
+</span>43 <span style=''>  def combined: Dataset[CombinedRuleSuiteRows] =
+</span>44 <span style=''>    </span><span style='background: #AEF1AE'>quality.combine(ruleRows, lambdaFunctionRows, outputExpressionRows, globalLambdaSuites,
+</span>45 <span style=''></span><span style='background: #AEF1AE'>      globalOutputExpressionSuites, ruleSuites)</span><span style=''>
+</span>46 <span style=''>}
+</span>47 <span style=''>
+</span>48 <span style=''>@SerialVersionUID(1L)
+</span>49 <span style=''>case class FullStep[RP](step: StepRow, ruleSuite: RP, initConfiguration: StepInitConfiguration) extends Serializable
+</span>50 <span style=''>
+</span>51 <span style=''>@SerialVersionUID(1L)
+</span>52 <span style=''>case class FullFlow[FG, RP](flowRow: FlowRow[FG], steps: Seq[FullStep[RP]]) extends Serializable
+</span>53 <span style=''>
+</span>54 <span style=''>/**
+</span>55 <span style=''> * Represents the data needed to create a Flow
+</span>56 <span style=''> * @param flowRow parameters used to create a flow
+</span>57 <span style=''> * @param steps the steps for this flow
+</span>58 <span style=''> */
+</span>59 <span style=''>@SerialVersionUID(1L)
+</span>60 <span style=''>case class FlowData[FG, RP](flowRow: FlowRow[FG], steps: Seq[Step[RP]]) extends Serializable
+</span>61 <span style=''>
+</span>62 <span style=''>trait Serialisation {
+</span>63 <span style=''>
+</span>64 <span style=''>  def loadSteps(dataFrame: DataFrame, flowId: Column, flowVersion: Column, name: Column, dependencies: Column,
+</span>65 <span style=''>                ruleSuiteId: Column, ruleSuiteVersion: Column, operation: Column,
+</span>66 <span style=''>                options: Column, data: Column): Dataset[StepRow] = {
+</span>67 <span style=''>    import frameless._
+</span>68 <span style=''>    import implicits._
+</span>69 <span style=''>    import com.sparkutils.quality.implicits._
+</span>70 <span style=''>
+</span>71 <span style=''>    </span><span style='background: #AEF1AE'>dataFrame.select(
+</span>72 <span style=''></span><span style='background: #AEF1AE'>      flowId.as(&quot;flowId&quot;), flowVersion.as(&quot;flowVersion&quot;), name.as(&quot;name&quot;), dependencies.as(&quot;dependencies&quot;),
+</span>73 <span style=''></span><span style='background: #AEF1AE'>      ruleSuiteId.as(&quot;ruleSuiteId&quot;), ruleSuiteVersion.as(&quot;ruleSuiteVersion&quot;),
+</span>74 <span style=''></span><span style='background: #AEF1AE'>      operation.as(&quot;operation&quot;), options.as(&quot;options&quot;), data.as(&quot;data&quot;)
+</span>75 <span style=''></span><span style='background: #AEF1AE'>    ).as[StepRow]</span><span style=''>
+</span>76 <span style=''>  }
+</span>77 <span style=''>
+</span>78 <span style=''>  def loadSteps(dataFrame: DataFrame): Dataset[StepRow] =
+</span>79 <span style=''>    </span><span style='background: #AEF1AE'>loadSteps(dataFrame, col(&quot;flowId&quot;), col(&quot;flowVersion&quot;), col(&quot;name&quot;), col(&quot;dependencies&quot;),
+</span>80 <span style=''></span><span style='background: #AEF1AE'>      col(&quot;ruleSuiteId&quot;), col(&quot;ruleSuiteVersion&quot;), col(&quot;operation&quot;),
+</span>81 <span style=''></span><span style='background: #AEF1AE'>      col(&quot;options&quot;), col(&quot;data&quot;))</span><span style=''>
+</span>82 <span style=''>
+</span>83 <span style=''>  // TODO versioned impl
+</span>84 <span style=''>
+</span>85 <span style=''>  /**
+</span>86 <span style=''>   * Provides a single struct representation for a Flow, suitable for json usage encoding RuleSuites directly within
+</span>87 <span style=''>   * a Step
+</span>88 <span style=''>   * @param sparkSession
+</span>89 <span style=''>   * @param flow
+</span>90 <span style=''>   * @return
+</span>91 <span style=''>   */
+</span>92 <span style=''>  def toFullFlow[FG: FlowRuleGroupProcessing](
+</span>93 <span style=''>    sparkSession: SparkSession, flow: FlowT[FG, RuleSuite])(
+</span>94 <span style=''>    implicit ffenc: Encoder[FullFlow[FG, CombinedRuleSuiteRows]], fgenc: Encoder[FlowRuleGroup[FG]],
+</span>95 <span style=''>    operation: FlowGroupAndOperationType[FG, RuleSuiteFromDataset.type], idParam: RuleSuiteTypeParam[RuleSuite],
+</span>96 <span style=''>    storageParam: RuleSuiteStorageType[CombinedRuleSuiteRows]):
+</span>97 <span style=''>    Dataset[FullFlow[FG, CombinedRuleSuiteRows]] =
+</span>98 <span style=''>      </span><span style='background: #AEF1AE'>toFullFlow[FG, RuleSuiteFromDataset.type](RuleSuiteFromDataset)(sparkSession, flow)</span><span style=''>
+</span>99 <span style=''>
+</span>100 <span style=''>  /**
+</span>101 <span style=''>   * Provides a single struct representation for a Flow, suitable for json usage, allowing processing
+</span>102 <span style=''>   * [[OperationProcessing]] to dictate how the RuleSuites should be saved (either in-line with
+</span>103 <span style=''>   * the Step's or as part of the [[FlowRuleGroup]]
+</span>104 <span style=''>   * @param sparkSession
+</span>105 <span style=''>   * @param flow
+</span>106 <span style=''>   * @return
+</span>107 <span style=''>   */
+</span>108 <span style=''>  def toFullFlow[FG: FlowRuleGroupProcessing, OP &lt;: OperationProcessing](processing: OP)(
+</span>109 <span style=''>    sparkSession: SparkSession, flow: FlowT[FG, OP#ResType])(
+</span>110 <span style=''>    implicit ffenc: Encoder[FullFlow[FG, OP#StorageType]], fgenc: Encoder[FlowRuleGroup[FG]],
+</span>111 <span style=''>    operation: FlowGroupAndOperationType[FG, OP], idParam: RuleSuiteTypeParam[OP#ResType],
+</span>112 <span style=''>    storageParam: RuleSuiteStorageType[OP#StorageType]):
+</span>113 <span style=''>    Dataset[FullFlow[FG, OP#StorageType]] = {
+</span>114 <span style=''>
+</span>115 <span style=''>    import frameless._
+</span>116 <span style=''>    import implicits._
+</span>117 <span style=''>
+</span>118 <span style=''>    import com.sparkutils.quality.implicits._
+</span>119 <span style=''>
+</span>120 <span style=''>    import sparkSession.implicits._
+</span>121 <span style=''>
+</span>122 <span style=''>    </span><span style='background: #AEF1AE'>Seq(
+</span>123 <span style=''></span><span style='background: #AEF1AE'>      FullFlow(toFlowRow(flow),
+</span>124 <span style=''></span><span style='background: #AEF1AE'>        flow.steps.map{ step =&gt;
+</span>125 <span style=''></span><span style='background: #AEF1AE'>          FullStep(
+</span>126 <span style=''></span><span style='background: #AEF1AE'>            stepRow[FG, OP](flow, step),
+</span>127 <span style=''></span><span style='background: #AEF1AE'>            operation.writableRuleSuite(step.operation.ruleSuite),
+</span>128 <span style=''></span><span style='background: #AEF1AE'>            step.initConfiguration
+</span>129 <span style=''></span><span style='background: #AEF1AE'>          )
+</span>130 <span style=''></span><span style='background: #AEF1AE'>        })
+</span>131 <span style=''></span><span style='background: #AEF1AE'>    ).toDS()</span><span style=''>
+</span>132 <span style=''>  }
+</span>133 <span style=''>
+</span>134 <span style=''>  protected def toFlowRow[FG: FlowRuleGroupProcessing, RP](flow: FlowT[FG, RP])(implicit fgenc: Encoder[FlowRuleGroup[FG]]) = {
+</span>135 <span style=''>    </span><span style='background: #AEF1AE'>FlowRow[FG](flowId = flow.flowId.id, flowVersion = flow.flowId.version,
+</span>136 <span style=''></span><span style='background: #AEF1AE'>      flowAuditColName = flow.flowAuditColName, duration = flow.duration, flowRuleGroup = flow.flowRuleGroup)</span><span style=''>
+</span>137 <span style=''>  }
+</span>138 <span style=''>
+</span>139 <span style=''>  protected def flowFilter(flowId: VersionedId, prefix: String = &quot;&quot;): String =
+</span>140 <span style=''>    s&quot;${prefix}flowID = ${flowId.id} and ${prefix}flowVersion = ${flowId.version} &quot;
+</span>141 <span style=''>
+</span>142 <span style=''>  /**
+</span>143 <span style=''>   * Load a Flow from a FullFlow dataset, defaulting to loading full RuleSuites embedded within Steps
+</span>144 <span style=''>   * @param dataset
+</span>145 <span style=''>   * @param flowId
+</span>146 <span style=''>   * @return
+</span>147 <span style=''>   */
+</span>148 <span style=''>  def fromFullFlow[FG: FlowRuleGroupProcessing](
+</span>149 <span style=''>    dataset: Dataset[FullFlow[FG, CombinedRuleSuiteRows]], flowId: VersionedId)(
+</span>150 <span style=''>      implicit rstp: RuleSuiteTypeParam[RuleSuite], operation: FlowGroupAndOperationType[FG, RuleSuiteFromDataset.type]
+</span>151 <span style=''>    ): FlowData[FG, RuleSuite] =
+</span>152 <span style=''>    </span><span style='background: #AEF1AE'>fromFullFlow(RuleSuiteFromDataset)(dataset, flowId)</span><span style=''>
+</span>153 <span style=''>
+</span>154 <span style=''>  /**
+</span>155 <span style=''>   * Load a Flow from a FullFlow dataset, allowing flexible RuleSuite storage locations
+</span>156 <span style=''>   * @param dataset
+</span>157 <span style=''>   * @param flowId
+</span>158 <span style=''>   * @return
+</span>159 <span style=''>   */
+</span>160 <span style=''>  def fromFullFlow[FG: FlowRuleGroupProcessing, RP &lt;: OperationProcessing](processing: RP)(
+</span>161 <span style=''>    dataset: Dataset[FullFlow[FG, RP#StorageType]], flowId: VersionedId)(
+</span>162 <span style=''>      implicit rstp: RuleSuiteTypeParam[RP#ResType], operation: FlowGroupAndOperationType[FG, RP]
+</span>163 <span style=''>    ): FlowData[FG, RP#ResType] = {
+</span>164 <span style=''>    val r = </span><span style='background: #AEF1AE'>dataset.filter(flowFilter(flowId, &quot;flowRow.&quot;)).collect()</span><span style=''>
+</span>165 <span style=''>    if (</span><span style='background: #AEF1AE'>r.isEmpty</span><span style=''>) {
+</span>166 <span style=''>      </span><span style='background: #F0ADAD'>throw FlowException(s&quot;Flow $flowId could not be loaded fromFullFlow does not contain that flow&quot;)</span><span style=''>
+</span>167 <span style=''>    }
+</span>168 <span style=''>
+</span>169 <span style=''>    val full = </span><span style='background: #AEF1AE'>r.head</span><span style=''>
+</span>170 <span style=''>    // map of id's to default the folder
+</span>171 <span style=''>    val stepIds =
+</span>172 <span style=''>      </span><span style='background: #AEF1AE'>full.steps.map{
+</span>173 <span style=''></span><span style='background: #AEF1AE'>        fullStep =&gt;
+</span>174 <span style=''></span><span style='background: #AEF1AE'>          import fullStep._
+</span>175 <span style=''></span><span style='background: #AEF1AE'>          Id(step.ruleSuiteId, step.ruleSuiteVersion) -&gt; step }.toMap</span><span style=''>
+</span>176 <span style=''>
+</span>177 <span style=''>    val rules = </span><span style='background: #AEF1AE'>(
+</span>178 <span style=''></span><span style='background: #AEF1AE'>        full.flowRow.flowRuleGroup.map(implicitly[FlowRuleGroupProcessing[FG]].combinedRuleSuiteRows)
+</span>179 <span style=''></span><span style='background: #AEF1AE'>          .getOrElse(Seq.empty) ++
+</span>180 <span style=''></span><span style='background: #AEF1AE'>        full.steps.flatMap(s =&gt; operation.toCombinedRows(s.ruleSuite))
+</span>181 <span style=''></span><span style='background: #AEF1AE'>      ).map(defaultCombinedFolder(stepIds))</span><span style=''>
+</span>182 <span style=''>
+</span>183 <span style=''>    import dataset.sparkSession.implicits._
+</span>184 <span style=''>    val variableName =
+</span>185 <span style=''>      </span><span style='background: #AEF1AE'>full.flowRow.flowRuleGroup.fold(
+</span>186 <span style=''></span><span style='background: #AEF1AE'>        register_rule_suite_group_variable(rules.toDS())
+</span>187 <span style=''></span><span style='background: #AEF1AE'>      )( g =&gt;
+</span>188 <span style=''></span><span style='background: #AEF1AE'>        register_rule_suite_group_variable(rules.toDS(), g.ruleGroupName)
+</span>189 <span style=''></span><span style='background: #AEF1AE'>      )</span><span style=''>
+</span>190 <span style=''>
+</span>191 <span style=''>    </span><span style='background: #AEF1AE'>FlowData(full.flowRow,
+</span>192 <span style=''></span><span style='background: #AEF1AE'>      full.steps.map{
+</span>193 <span style=''></span><span style='background: #AEF1AE'>        fullStep =&gt;
+</span>194 <span style=''></span><span style='background: #AEF1AE'>          import fullStep._
+</span>195 <span style=''></span><span style='background: #AEF1AE'>          val rid = Id(step.ruleSuiteId, step.ruleSuiteVersion)
+</span>196 <span style=''></span><span style='background: #AEF1AE'>          val rs = operation.fromFullRow(rules, variableName, full.flowRow, fullStep, rid, ruleSuite)
+</span>197 <span style=''></span><span style='background: #AEF1AE'>
+</span>198 <span style=''></span><span style='background: #AEF1AE'>          Step(name = step.name, dependencies = step.dependencies, operation =
+</span>199 <span style=''></span><span style='background: #AEF1AE'>            Operation(rs, step.operation.function, step.operation.resultApproach,
+</span>200 <span style=''></span><span style='background: #AEF1AE'>              step.operation.fieldName, step.operation.combineAuditWith),
+</span>201 <span style=''></span><span style='background: #AEF1AE'>            initConfiguration = initConfiguration,
+</span>202 <span style=''></span><span style='background: #AEF1AE'>            data = step.data, step.options)
+</span>203 <span style=''></span><span style='background: #AEF1AE'>      }
+</span>204 <span style=''></span><span style='background: #AEF1AE'>    )</span><span style=''>
+</span>205 <span style=''>  }
+</span>206 <span style=''>
+</span>207 <span style=''>  /**
+</span>208 <span style=''>   * Converts to FlowDataSet using Step RuleSuites encoded as part of the top level FlowDataSets instead of [[FlowRuleGroup]]
+</span>209 <span style=''>   */
+</span>210 <span style=''>  def toDatasets[FG: FlowRuleGroupProcessing](
+</span>211 <span style=''>    sparkSession: SparkSession, flow: FlowT[FG, RuleSuite])(
+</span>212 <span style=''>      implicit ffenc: Encoder[FullFlow[FG, CombinedRuleSuiteRows]], fgenc: Encoder[FlowRuleGroup[FG]], frenc: Encoder[FlowRow[FG]],
+</span>213 <span style=''>      rstp: RuleSuiteTypeParam[RuleSuite], operation: FlowGroupAndOperationType[FG, RuleSuiteFromDataset.type]
+</span>214 <span style=''>    ): FlowDataSets[FG] =
+</span>215 <span style=''>    </span><span style='background: #AEF1AE'>toDatasets(RuleSuiteFromDataset)(sparkSession, flow)</span><span style=''>
+</span>216 <span style=''>
+</span>217 <span style=''>  /**
+</span>218 <span style=''>   * Converts a Flow built with RuleSuites to it's underlying datasets, global output and lambdas are not supported
+</span>219 <span style=''>   * (they are treated as part of the ds directly).
+</span>220 <span style=''>   *
+</span>221 <span style=''>   * Use the [[convertToIds]] function with a FullFlow to convert if Id based Flows are desired
+</span>222 <span style=''>   */
+</span>223 <span style=''>  def toDatasets[FG: FlowRuleGroupProcessing, RP &lt;: OperationProcessing](processing: RP)(
+</span>224 <span style=''>    sparkSession: SparkSession, flow: FlowT[FG, RP#ResType])(
+</span>225 <span style=''>      implicit ffenc: Encoder[FullFlow[FG, RP#StorageType]], fgenc: Encoder[FlowRuleGroup[FG]], frenc: Encoder[FlowRow[FG]],
+</span>226 <span style=''>      rstp: RuleSuiteTypeParam[RP#ResType], operation: FlowGroupAndOperationType[FG, RP]
+</span>227 <span style=''>    ): FlowDataSets[FG] = {
+</span>228 <span style=''>
+</span>229 <span style=''>    import frameless._
+</span>230 <span style=''>    import implicits._
+</span>231 <span style=''>
+</span>232 <span style=''>    import com.sparkutils.quality.implicits._
+</span>233 <span style=''>
+</span>234 <span style=''>    import sparkSession.implicits._
+</span>235 <span style=''>
+</span>236 <span style=''>    val ruleSuites = </span><span style='background: #AEF1AE'>flow.steps.flatMap(s =&gt; operation.toRuleSuite(flow, s.operation.ruleSuite ))</span><span style=''>
+</span>237 <span style=''>
+</span>238 <span style=''>    val suiteRows = </span><span style='background: #AEF1AE'>ruleSuites.map(s =&gt; toRuleSuiteRow(s))</span><span style=''>
+</span>239 <span style=''>    val defaultOutputRows = </span><span style='background: #AEF1AE'>suiteRows.flatMap(_._2)</span><span style=''>
+</span>240 <span style=''>
+</span>241 <span style=''>    </span><span style='background: #AEF1AE'>FlowDataSets(
+</span>242 <span style=''></span><span style='background: #AEF1AE'>      flow.steps.map{ step =&gt;
+</span>243 <span style=''></span><span style='background: #AEF1AE'>        stepRow(flow, step)}.toDS(),
+</span>244 <span style=''></span><span style='background: #AEF1AE'>      Seq(toFlowRow(flow)).toDS(),
+</span>245 <span style=''></span><span style='background: #AEF1AE'>      ruleSuites.foldLeft(sparkSession.emptyDataset[RuleRow]){ case (cur, s) =&gt;
+</span>246 <span style=''></span><span style='background: #AEF1AE'>        toDS(s) union cur
+</span>247 <span style=''></span><span style='background: #AEF1AE'>      },
+</span>248 <span style=''></span><span style='background: #AEF1AE'>      Some(ruleSuites.foldLeft(sparkSession.emptyDataset[LambdaFunctionRow]){ case (cur, s) =&gt;
+</span>249 <span style=''></span><span style='background: #AEF1AE'>        toLambdaDS(s) union cur
+</span>250 <span style=''></span><span style='background: #AEF1AE'>      }),
+</span>251 <span style=''></span><span style='background: #AEF1AE'>      Some(ruleSuites.foldLeft(sparkSession.emptyDataset[OutputExpressionRow]){ case (cur, s) =&gt;
+</span>252 <span style=''></span><span style='background: #AEF1AE'>        toOutputExpressionDS(s) union cur
+</span>253 <span style=''></span><span style='background: #AEF1AE'>      } union defaultOutputRows.toDS()),
+</span>254 <span style=''></span><span style='background: #AEF1AE'>      ruleSuites = Some(suiteRows.map(_._1).toDS()),
+</span>255 <span style=''></span><span style='background: #AEF1AE'>      viewRows = Some(flow.steps.foldLeft(sparkSession.emptyDataset[ViewRow]){ case (cur, s) =&gt;
+</span>256 <span style=''></span><span style='background: #AEF1AE'>         s.initConfiguration.viewConfig.toDS() union cur
+</span>257 <span style=''></span><span style='background: #AEF1AE'>      }),
+</span>258 <span style=''></span><span style='background: #AEF1AE'>      mapRows = Some(flow.steps.foldLeft(sparkSession.emptyDataset[MapRow]){ case (cur, s) =&gt;
+</span>259 <span style=''></span><span style='background: #AEF1AE'>        s.initConfiguration.mapConfig.toDS() union cur
+</span>260 <span style=''></span><span style='background: #AEF1AE'>      })
+</span>261 <span style=''></span><span style='background: #AEF1AE'>    )</span><span style=''>
+</span>262 <span style=''>  }
+</span>263 <span style=''>
+</span>264 <span style=''>  protected def stepRow[FG, OP &lt;: OperationProcessing](flow: FlowT[FG, OP#ResType], step: Step[OP#ResType])(
+</span>265 <span style=''>    implicit rp: RuleSuiteTypeParam[OP#ResType]) = {
+</span>266 <span style=''>    </span><span style='background: #AEF1AE'>StepRow(flowId = flow.flowId.id, flowVersion = flow.flowId.version, name = step.name,
+</span>267 <span style=''></span><span style='background: #AEF1AE'>      dependencies = step.dependencies,
+</span>268 <span style=''></span><span style='background: #AEF1AE'>      ruleSuiteId = rp.id(step.operation.ruleSuite).id, ruleSuiteVersion = rp.id(step.operation.ruleSuite).version,
+</span>269 <span style=''></span><span style='background: #AEF1AE'>      data = step.data,
+</span>270 <span style=''></span><span style='background: #AEF1AE'>      operation = OperationRow(step.operation.function, step.operation.fieldName,
+</span>271 <span style=''></span><span style='background: #AEF1AE'>        step.operation.resultApproach, step.operation.combineAuditWith),
+</span>272 <span style=''></span><span style='background: #AEF1AE'>      options = step.options)</span><span style=''>
+</span>273 <span style=''>  }
+</span>274 <span style=''>
+</span>275 <span style=''>  /**
+</span>276 <span style=''>   * Default to using embedded RuleSuite's loaded from the flowDataSets, with optional FlowRuleGroup handling
+</span>277 <span style=''>   * @param sparkSession
+</span>278 <span style=''>   * @param flowDataSets
+</span>279 <span style=''>   * @param flowId
+</span>280 <span style=''>   * @param fgenc
+</span>281 <span style=''>   * @param fgP
+</span>282 <span style=''>   * @param operation
+</span>283 <span style=''>   * @tparam FG
+</span>284 <span style=''>   * @return
+</span>285 <span style=''>   */
+</span>286 <span style=''>  def fromDatasets[FG](sparkSession: SparkSession, flowDataSets: FlowDataSets[FG], flowId: VersionedId)(
+</span>287 <span style=''>    implicit fgenc: Encoder[FlowRuleGroup[FG]], fgP: FlowRuleGroupProcessing[FG],
+</span>288 <span style=''>     operation: FlowGroupAndOperationType[FG, RuleSuiteFromDataset.type] ): FlowData[FG, RuleSuite] =
+</span>289 <span style=''>    </span><span style='background: #AEF1AE'>fromDatasets[FG, RuleSuiteFromDataset.type](RuleSuiteFromDataset)(sparkSession: SparkSession,
+</span>290 <span style=''></span><span style='background: #AEF1AE'>      flowDataSets: FlowDataSets[FG], flowId: VersionedId)</span><span style=''>
+</span>291 <span style=''>
+</span>292 <span style=''>  /**
+</span>293 <span style=''>   * Based on processing loads rules from either [[FlowDataSets.combined]] or rows provided from [[FlowDataSets.flows]]
+</span>294 <span style=''>   * @param processing
+</span>295 <span style=''>   * @param sparkSession
+</span>296 <span style=''>   * @param flowDataSets
+</span>297 <span style=''>   * @param flowId
+</span>298 <span style=''>   * @param fgenc
+</span>299 <span style=''>   * @param fgP
+</span>300 <span style=''>   * @param rstp
+</span>301 <span style=''>   * @param operation
+</span>302 <span style=''>   * @tparam FG
+</span>303 <span style=''>   * @tparam RP
+</span>304 <span style=''>   * @return
+</span>305 <span style=''>   */
+</span>306 <span style=''>  def fromDatasets[FG, RP &lt;: OperationProcessing](processing: RP)(
+</span>307 <span style=''>      sparkSession: SparkSession, flowDataSets: FlowDataSets[FG], flowId: VersionedId)(
+</span>308 <span style=''>      implicit fgenc: Encoder[FlowRuleGroup[FG]], fgP: FlowRuleGroupProcessing[FG],
+</span>309 <span style=''>      rstp: RuleSuiteTypeParam[RP#ResType], operation: FlowGroupAndOperationType[FG, RP]
+</span>310 <span style=''>    ): FlowData[FG, RP#ResType] = {
+</span>311 <span style=''>    import flowDataSets._
+</span>312 <span style=''>
+</span>313 <span style=''>    import com.sparkutils.quality.implicits._
+</span>314 <span style=''>
+</span>315 <span style=''>
+</span>316 <span style=''>    val flowSteps = </span><span style='background: #AEF1AE'>loadSteps(steps.toDF()).filter(flowFilter(flowId))</span><span style=''>
+</span>317 <span style=''>    val sourceSteps = </span><span style='background: #AEF1AE'>flowSteps.collect()</span><span style=''>
+</span>318 <span style=''>    val stepIds = </span><span style='background: #AEF1AE'>sourceSteps.map(s =&gt; Id(s.ruleSuiteId, s.ruleSuiteVersion) -&gt; s).toMap</span><span style=''>
+</span>319 <span style=''>
+</span>320 <span style=''>    val rsRows = </span><span style='background: #AEF1AE'>flowDataSets.combined.map(defaultCombinedFolder(stepIds))</span><span style=''>
+</span>321 <span style=''>
+</span>322 <span style=''>    lazy val rsName = register_rule_suite_group_variable(rsRows)
+</span>323 <span style=''>
+</span>324 <span style=''>    if (</span><span style='background: #AEF1AE'>flowSteps.isEmpty</span><span style=''>) {
+</span>325 <span style=''>      </span><span style='background: #F0ADAD'>throw FlowException(s&quot;Flow $flowId could not be loaded as the Step's dataset does not contain that flow&quot;)</span><span style=''>
+</span>326 <span style=''>    }
+</span>327 <span style=''>    val thisFlow = </span><span style='background: #AEF1AE'>flows.filter(flowFilter(flowId))</span><span style=''>
+</span>328 <span style=''>    val flowRow =
+</span>329 <span style=''>      if (</span><span style='background: #AEF1AE'>thisFlow.isEmpty</span><span style=''>)
+</span>330 <span style=''>        </span><span style='background: #AEF1AE'>FlowRow[FG](flowId.id, flowId.version, flowAuditDefault, defaultFlowDuration, None)</span><span style=''>
+</span>331 <span style=''>      else </span><span style='background: #AEF1AE'>{
+</span>332 <span style=''></span><span style='background: #AEF1AE'>        val f = thisFlow.head()
+</span>333 <span style=''></span><span style='background: #AEF1AE'>        // register all the relevant groups
+</span>334 <span style=''></span><span style='background: #AEF1AE'>        f.flowRuleGroup.foreach{
+</span>335 <span style=''></span><span style='background: #AEF1AE'>          g =&gt;
+</span>336 <span style=''></span><span style='background: #AEF1AE'>            fgP.load(stepIds, rsRows, g)
+</span>337 <span style=''></span><span style='background: #AEF1AE'>        }
+</span>338 <span style=''></span><span style='background: #AEF1AE'>        f
+</span>339 <span style=''></span><span style='background: #AEF1AE'>      }</span><span style=''>
+</span>340 <span style=''>
+</span>341 <span style=''>    val thisSteps = </span><span style='background: #AEF1AE'>sourceSteps.map{
+</span>342 <span style=''></span><span style='background: #AEF1AE'>        step =&gt;
+</span>343 <span style=''></span><span style='background: #AEF1AE'>          val rid = Id(step.ruleSuiteId, step.ruleSuiteVersion)
+</span>344 <span style=''></span><span style='background: #AEF1AE'>          val rs = operation.fromDataset(flowId, rsName, rsRows, rid, flowRow, step)
+</span>345 <span style=''></span><span style='background: #AEF1AE'>
+</span>346 <span style=''></span><span style='background: #AEF1AE'>          val views = viewRows.map{ s =&gt;
+</span>347 <span style=''></span><span style='background: #AEF1AE'>            s.filter(s&quot;ruleSuiteId = ${step.ruleSuiteId} and ruleSuiteVersion = ${step.ruleSuiteVersion}&quot;).collect().toSeq
+</span>348 <span style=''></span><span style='background: #AEF1AE'>          }.getOrElse(</span><span style='background: #F0ADAD'>Seq.empty</span><span style='background: #AEF1AE'>)
+</span>349 <span style=''></span><span style='background: #AEF1AE'>          val maps = mapRows.map{ s =&gt;
+</span>350 <span style=''></span><span style='background: #AEF1AE'>            s.filter(s&quot;ruleSuiteId = ${step.ruleSuiteId} and ruleSuiteVersion = ${step.ruleSuiteVersion}&quot;).collect().toSeq
+</span>351 <span style=''></span><span style='background: #AEF1AE'>          }.getOrElse(</span><span style='background: #F0ADAD'>Seq.empty</span><span style='background: #AEF1AE'>)
+</span>352 <span style=''></span><span style='background: #AEF1AE'>
+</span>353 <span style=''></span><span style='background: #AEF1AE'>          Step(name = step.name, dependencies = step.dependencies, operation =
+</span>354 <span style=''></span><span style='background: #AEF1AE'>            Operation[RP#ResType](rs, step.operation.function, step.operation.resultApproach,
+</span>355 <span style=''></span><span style='background: #AEF1AE'>              step.operation.fieldName, step.operation.combineAuditWith),
+</span>356 <span style=''></span><span style='background: #AEF1AE'>            initConfiguration = StepInitConfiguration(views, maps),
+</span>357 <span style=''></span><span style='background: #AEF1AE'>            data = step.data, step.options)
+</span>358 <span style=''></span><span style='background: #AEF1AE'>      }</span><span style=''>
+</span>359 <span style=''>
+</span>360 <span style=''>    </span><span style='background: #AEF1AE'>FlowData[FG, RP#ResType](flowRow, thisSteps)</span><span style=''>
+</span>361 <span style=''>  }
+</span>362 <span style=''>
+</span>363 <span style=''>  /**
+</span>364 <span style=''>   * Converts all Step level CombinedRuleSuiteRows into Ids by adding them to the [[FlowRuleGroup.ruleGroup]]
+</span>365 <span style=''>   * @param fullFlow
+</span>366 <span style=''>   * @return
+</span>367 <span style=''>   */
+</span>368 <span style=''>  def convertToIds(fullFlow: FullFlow[CombinedRuleSuiteRows, CombinedRuleSuiteRows]): FullFlow[CombinedRuleSuiteRows, Id] = {
+</span>369 <span style=''>
+</span>370 <span style=''>    </span><span style='background: #AEF1AE'>FullFlow(
+</span>371 <span style=''></span><span style='background: #AEF1AE'>      flowRow = {
+</span>372 <span style=''></span><span style='background: #AEF1AE'>        val group = fullFlow.flowRow.flowRuleGroup.map(</span><span style='background: #F0ADAD'>_.ruleGroup</span><span style='background: #AEF1AE'>).getOrElse(Seq.empty) ++ fullFlow.steps.map(_.ruleSuite)
+</span>373 <span style=''></span><span style='background: #AEF1AE'>        val name = fullFlow.flowRow.flowRuleGroup.map(</span><span style='background: #F0ADAD'>_.ruleGroupName</span><span style='background: #AEF1AE'>).getOrElse(defaultConvertGroupName)
+</span>374 <span style=''></span><span style='background: #AEF1AE'>        fullFlow.flowRow.copy( flowRuleGroup = Some( FlowRuleGroup(name, group) ) )
+</span>375 <span style=''></span><span style='background: #AEF1AE'>      },
+</span>376 <span style=''></span><span style='background: #AEF1AE'>      steps = fullFlow.steps.map {
+</span>377 <span style=''></span><span style='background: #AEF1AE'>        fullStep =&gt;
+</span>378 <span style=''></span><span style='background: #AEF1AE'>          FullStep[Id](fullStep.step, Id(fullStep.ruleSuite.ruleSuiteId, fullStep.ruleSuite.ruleSuiteVersion), fullStep.initConfiguration)
+</span>379 <span style=''></span><span style='background: #AEF1AE'>      }
+</span>380 <span style=''></span><span style='background: #AEF1AE'>    )</span><span style=''>
+</span>381 <span style=''>  }
+</span>382 <span style=''>
+</span>383 <span style=''>}
+</span></pre>
+          </div>
+          <div class="tab-pane" id="statementlist">
+            <table cellspacing="0" cellpadding="0" class="table statementlist">
+      <tr>
+        <th>Line</th>
+        <th>Stmt Id</th>
+        <th>Pos</th>
+        <th>Tree</th>
+        <th>Symbol</th>
+        <th>Tests</th>
+        <th>Code</th>
+      </tr><tr>
+        <td>
+          22
+        </td>
+        <td>
+          377
+        </td>
+        <td>
+          1281
+          -
+          1299
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.OperationRow.function
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          StepRow.this.operation.function
+        </td>
+      </tr><tr>
+        <td>
+          44
+        </td>
+        <td>
+          378
+        </td>
+        <td>
+          2414
+          -
+          2422
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FlowDataSets.ruleRows
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          FlowDataSets.this.ruleRows
+        </td>
+      </tr><tr>
+        <td>
+          44
+        </td>
+        <td>
+          379
+        </td>
+        <td>
+          2424
+          -
+          2442
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FlowDataSets.lambdaFunctionRows
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          FlowDataSets.this.lambdaFunctionRows
+        </td>
+      </tr><tr>
+        <td>
+          44
+        </td>
+        <td>
+          380
+        </td>
+        <td>
+          2444
+          -
+          2464
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FlowDataSets.outputExpressionRows
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          FlowDataSets.this.outputExpressionRows
+        </td>
+      </tr><tr>
+        <td>
+          44
+        </td>
+        <td>
+          381
+        </td>
+        <td>
+          2466
+          -
+          2484
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FlowDataSets.globalLambdaSuites
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          FlowDataSets.this.globalLambdaSuites
+        </td>
+      </tr><tr>
+        <td>
+          44
+        </td>
+        <td>
+          384
+        </td>
+        <td>
+          2413
+          -
+          2413
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.quality.impl.EncodersImplicits.combinedRuleSuiteRowTypedExpEnc
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          com.sparkutils.quality.implicits.`package`.combinedRuleSuiteRowTypedExpEnc
+        </td>
+      </tr><tr>
+        <td>
+          44
+        </td>
+        <td>
+          385
+        </td>
+        <td>
+          2398
+          -
+          2533
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          com.sparkutils.quality.impl.util.VersionSpecificSerializingImports.combine
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          com.sparkutils.quality.`package`.combine(FlowDataSets.this.ruleRows, FlowDataSets.this.lambdaFunctionRows, FlowDataSets.this.outputExpressionRows, FlowDataSets.this.globalLambdaSuites, FlowDataSets.this.globalOutputExpressionSuites, FlowDataSets.this.ruleSuites)(com.sparkutils.quality.implicits.`package`.combinedRuleSuiteRowTypedExpEnc)
+        </td>
+      </tr><tr>
+        <td>
+          45
+        </td>
+        <td>
+          382
+        </td>
+        <td>
+          2492
+          -
+          2520
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FlowDataSets.globalOutputExpressionSuites
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          FlowDataSets.this.globalOutputExpressionSuites
+        </td>
+      </tr><tr>
+        <td>
+          45
+        </td>
+        <td>
+          383
+        </td>
+        <td>
+          2522
+          -
+          2532
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FlowDataSets.ruleSuites
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          FlowDataSets.this.ruleSuites
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          386
+        </td>
+        <td>
+          3465
+          -
+          3484
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Column.as
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flowId.as(&quot;flowId&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          387
+        </td>
+        <td>
+          3486
+          -
+          3515
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Column.as
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flowVersion.as(&quot;flowVersion&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          388
+        </td>
+        <td>
+          3517
+          -
+          3532
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Column.as
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          name.as(&quot;name&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          389
+        </td>
+        <td>
+          3534
+          -
+          3565
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Column.as
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          dependencies.as(&quot;dependencies&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          73
+        </td>
+        <td>
+          390
+        </td>
+        <td>
+          3573
+          -
+          3602
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Column.as
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          ruleSuiteId.as(&quot;ruleSuiteId&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          73
+        </td>
+        <td>
+          391
+        </td>
+        <td>
+          3604
+          -
+          3643
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Column.as
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          ruleSuiteVersion.as(&quot;ruleSuiteVersion&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          392
+        </td>
+        <td>
+          3651
+          -
+          3676
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Column.as
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          operation.as(&quot;operation&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          393
+        </td>
+        <td>
+          3678
+          -
+          3699
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Column.as
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          options.as(&quot;options&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          394
+        </td>
+        <td>
+          3701
+          -
+          3716
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Column.as
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          data.as(&quot;data&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          75
+        </td>
+        <td>
+          395
+        </td>
+        <td>
+          3725
+          -
+          3725
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.implicits.typedStepExpEnc
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          implicits.typedStepExpEnc
+        </td>
+      </tr><tr>
+        <td>
+          75
+        </td>
+        <td>
+          396
+        </td>
+        <td>
+          3441
+          -
+          3734
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.as
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          dataFrame.select(flowId.as(&quot;flowId&quot;), flowVersion.as(&quot;flowVersion&quot;), name.as(&quot;name&quot;), dependencies.as(&quot;dependencies&quot;), ruleSuiteId.as(&quot;ruleSuiteId&quot;), ruleSuiteVersion.as(&quot;ruleSuiteVersion&quot;), operation.as(&quot;operation&quot;), options.as(&quot;options&quot;), data.as(&quot;data&quot;)).as[com.sparkutils.flow.StepRow](implicits.typedStepExpEnc)
+        </td>
+      </tr><tr>
+        <td>
+          79
+        </td>
+        <td>
+          397
+        </td>
+        <td>
+          3823
+          -
+          3836
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.functions.col
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          org.apache.spark.sql.functions.col(&quot;flowId&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          79
+        </td>
+        <td>
+          398
+        </td>
+        <td>
+          3838
+          -
+          3856
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.functions.col
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          org.apache.spark.sql.functions.col(&quot;flowVersion&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          79
+        </td>
+        <td>
+          399
+        </td>
+        <td>
+          3858
+          -
+          3869
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.functions.col
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          org.apache.spark.sql.functions.col(&quot;name&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          79
+        </td>
+        <td>
+          400
+        </td>
+        <td>
+          3871
+          -
+          3890
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.functions.col
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          org.apache.spark.sql.functions.col(&quot;dependencies&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          79
+        </td>
+        <td>
+          406
+        </td>
+        <td>
+          3802
+          -
+          3995
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.Serialisation.loadSteps
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          Serialisation.this.loadSteps(dataFrame, org.apache.spark.sql.functions.col(&quot;flowId&quot;), org.apache.spark.sql.functions.col(&quot;flowVersion&quot;), org.apache.spark.sql.functions.col(&quot;name&quot;), org.apache.spark.sql.functions.col(&quot;dependencies&quot;), org.apache.spark.sql.functions.col(&quot;ruleSuiteId&quot;), org.apache.spark.sql.functions.col(&quot;ruleSuiteVersion&quot;), org.apache.spark.sql.functions.col(&quot;operation&quot;), org.apache.spark.sql.functions.col(&quot;options&quot;), org.apache.spark.sql.functions.col(&quot;data&quot;))
+        </td>
+      </tr><tr>
+        <td>
+          80
+        </td>
+        <td>
+          401
+        </td>
+        <td>
+          3898
+          -
+          3916
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.functions.col
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          org.apache.spark.sql.functions.col(&quot;ruleSuiteId&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          80
+        </td>
+        <td>
+          402
+        </td>
+        <td>
+          3918
+          -
+          3941
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.functions.col
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          org.apache.spark.sql.functions.col(&quot;ruleSuiteVersion&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          80
+        </td>
+        <td>
+          403
+        </td>
+        <td>
+          3943
+          -
+          3959
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.functions.col
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          org.apache.spark.sql.functions.col(&quot;operation&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          81
+        </td>
+        <td>
+          404
+        </td>
+        <td>
+          3967
+          -
+          3981
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.functions.col
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          org.apache.spark.sql.functions.col(&quot;options&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          81
+        </td>
+        <td>
+          405
+        </td>
+        <td>
+          3983
+          -
+          3994
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.functions.col
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          org.apache.spark.sql.functions.col(&quot;data&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          407
+        </td>
+        <td>
+          4662
+          -
+          4745
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          com.sparkutils.flow.Serialisation.toFullFlow
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          Serialisation.this.toFullFlow[FG, com.sparkutils.flow.RuleSuiteFromDataset.type](RuleSuiteFromDataset)(sparkSession, flow)(evidence$1, ffenc, fgenc, operation, idParam, storageParam)
+        </td>
+      </tr><tr>
+        <td>
+          131
+        </td>
+        <td>
+          408
+        </td>
+        <td>
+          5640
+          -
+          5907
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.DatasetHolder.toDS
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          sparkSession.implicits.localSeqToDatasetHolder[com.sparkutils.flow.FullFlow[FG,OP#StorageType]](scala.`package`.Seq.apply[com.sparkutils.flow.FullFlow[FG,OP#StorageType]](FullFlow.apply[FG, OP#StorageType](Serialisation.this.toFlowRow[FG, OP#ResType](flow)(evidence$2, fgenc), flow.steps.map[com.sparkutils.flow.FullStep[OP#StorageType]](((step: com.sparkutils.flow.Step[OP#ResType]) =&gt; FullStep.apply[OP#StorageType](Serialisation.this.stepRow[FG, OP](flow, step)(idParam), operation.writableRuleSuite(step.operation.ruleSuite), step.initConfiguration))))))(ffenc).toDS()
+        </td>
+      </tr><tr>
+        <td>
+          135
+        </td>
+        <td>
+          409
+        </td>
+        <td>
+          6066
+          -
+          6080
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.quality.VersionedId.id
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.flowId.id
+        </td>
+      </tr><tr>
+        <td>
+          135
+        </td>
+        <td>
+          410
+        </td>
+        <td>
+          6096
+          -
+          6115
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.quality.VersionedId.version
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.flowId.version
+        </td>
+      </tr><tr>
+        <td>
+          135
+        </td>
+        <td>
+          414
+        </td>
+        <td>
+          6045
+          -
+          6226
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.FlowRow.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          FlowRow.apply[FG](flow.flowId.id, flow.flowId.version, flow.flowAuditColName, flow.duration, flow.flowRuleGroup)
+        </td>
+      </tr><tr>
+        <td>
+          136
+        </td>
+        <td>
+          411
+        </td>
+        <td>
+          6142
+          -
+          6163
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FlowT.flowAuditColName
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.flowAuditColName
+        </td>
+      </tr><tr>
+        <td>
+          136
+        </td>
+        <td>
+          412
+        </td>
+        <td>
+          6176
+          -
+          6189
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FlowT.duration
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.duration
+        </td>
+      </tr><tr>
+        <td>
+          136
+        </td>
+        <td>
+          413
+        </td>
+        <td>
+          6207
+          -
+          6225
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FlowT.flowRuleGroup
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.flowRuleGroup
+        </td>
+      </tr><tr>
+        <td>
+          152
+        </td>
+        <td>
+          415
+        </td>
+        <td>
+          6849
+          -
+          6900
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          com.sparkutils.flow.Serialisation.fromFullFlow
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          Serialisation.this.fromFullFlow[FG, com.sparkutils.flow.RuleSuiteFromDataset.type](RuleSuiteFromDataset)(dataset, flowId)(evidence$4, rstp, operation)
+        </td>
+      </tr><tr>
+        <td>
+          164
+        </td>
+        <td>
+          416
+        </td>
+        <td>
+          7366
+          -
+          7422
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.collect
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          dataset.filter(Serialisation.this.flowFilter(flowId, &quot;flowRow.&quot;)).collect()
+        </td>
+      </tr><tr>
+        <td>
+          165
+        </td>
+        <td>
+          417
+        </td>
+        <td>
+          7431
+          -
+          7440
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.ArrayOps.isEmpty
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Predef.refArrayOps[com.sparkutils.flow.FullFlow[FG,RP#StorageType]](r).isEmpty
+        </td>
+      </tr><tr>
+        <td>
+          165
+        </td>
+        <td>
+          420
+        </td>
+        <td>
+          7427
+          -
+          7427
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          165
+        </td>
+        <td>
+          421
+        </td>
+        <td>
+          7427
+          -
+          7427
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          418
+        </td>
+        <td>
+          7450
+          -
+          7546
+        </td>
+        <td>
+          Throw
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #F0ADAD">
+          throw FlowException.apply(&quot;Flow &quot;.+(flowId).+(&quot; could not be loaded fromFullFlow does not contain that flow&quot;), FlowException.apply$default$2)
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          419
+        </td>
+        <td>
+          7450
+          -
+          7546
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #F0ADAD">
+          throw FlowException.apply(&quot;Flow &quot;.+(flowId).+(&quot; could not be loaded fromFullFlow does not contain that flow&quot;), FlowException.apply$default$2)
+        </td>
+      </tr><tr>
+        <td>
+          169
+        </td>
+        <td>
+          422
+        </td>
+        <td>
+          7569
+          -
+          7575
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.ArrayOps.head
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Predef.refArrayOps[com.sparkutils.flow.FullFlow[FG,RP#StorageType]](r).head
+        </td>
+      </tr><tr>
+        <td>
+          175
+        </td>
+        <td>
+          423
+        </td>
+        <td>
+          7718
+          -
+          7734
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.StepRow.ruleSuiteId
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          fullStep.step.ruleSuiteId
+        </td>
+      </tr><tr>
+        <td>
+          175
+        </td>
+        <td>
+          424
+        </td>
+        <td>
+          7736
+          -
+          7757
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.StepRow.ruleSuiteVersion
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          fullStep.step.ruleSuiteVersion
+        </td>
+      </tr><tr>
+        <td>
+          175
+        </td>
+        <td>
+          425
+        </td>
+        <td>
+          7715
+          -
+          7758
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.quality.Id.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          com.sparkutils.quality.Id.apply(fullStep.step.ruleSuiteId, fullStep.step.ruleSuiteVersion)
+        </td>
+      </tr><tr>
+        <td>
+          175
+        </td>
+        <td>
+          426
+        </td>
+        <td>
+          7762
+          -
+          7766
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FullStep.step
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          fullStep.step
+        </td>
+      </tr><tr>
+        <td>
+          175
+        </td>
+        <td>
+          427
+        </td>
+        <td>
+          7715
+          -
+          7766
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Predef.ArrowAssoc[com.sparkutils.quality.Id](com.sparkutils.quality.Id.apply(fullStep.step.ruleSuiteId, fullStep.step.ruleSuiteVersion)).-&gt;[com.sparkutils.flow.StepRow](fullStep.step)
+        </td>
+      </tr><tr>
+        <td>
+          175
+        </td>
+        <td>
+          428
+        </td>
+        <td>
+          7769
+          -
+          7769
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.&lt;:&lt;.refl
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.&lt;:&lt;.refl[(com.sparkutils.quality.Id, com.sparkutils.flow.StepRow)]
+        </td>
+      </tr><tr>
+        <td>
+          175
+        </td>
+        <td>
+          429
+        </td>
+        <td>
+          7641
+          -
+          7774
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          scala.collection.IterableOnceOps.toMap
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          full.steps.map[(com.sparkutils.quality.Id, com.sparkutils.flow.StepRow)](((fullStep: com.sparkutils.flow.FullStep[RP#StorageType]) =&gt; {
+  import fullStep._;
+  scala.Predef.ArrowAssoc[com.sparkutils.quality.Id](com.sparkutils.quality.Id.apply(fullStep.step.ruleSuiteId, fullStep.step.ruleSuiteVersion)).-&gt;[com.sparkutils.flow.StepRow](fullStep.step)
+})).toMap[com.sparkutils.quality.Id, com.sparkutils.flow.StepRow](scala.this.&lt;:&lt;.refl[(com.sparkutils.quality.Id, com.sparkutils.flow.StepRow)])
+        </td>
+      </tr><tr>
+        <td>
+          178
+        </td>
+        <td>
+          430
+        </td>
+        <td>
+          7833
+          -
+          7872
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          scala.Predef.implicitly
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Predef.implicitly[com.sparkutils.flow.FlowRuleGroupProcessing[FG]](evidence$5)
+        </td>
+      </tr><tr>
+        <td>
+          178
+        </td>
+        <td>
+          431
+        </td>
+        <td>
+          7833
+          -
+          7894
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.FlowRuleGroupProcessing.combinedRuleSuiteRows
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          eta$0$1.combinedRuleSuiteRows(flowRuleGroup)
+        </td>
+      </tr><tr>
+        <td>
+          179
+        </td>
+        <td>
+          432
+        </td>
+        <td>
+          7917
+          -
+          7926
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.collection.SeqFactory.Delegate.empty
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.`package`.Seq.empty[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          180
+        </td>
+        <td>
+          433
+        </td>
+        <td>
+          7988
+          -
+          7999
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FullStep.ruleSuite
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          s.ruleSuite
+        </td>
+      </tr><tr>
+        <td>
+          180
+        </td>
+        <td>
+          434
+        </td>
+        <td>
+          7963
+          -
+          8000
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.FlowGroupAndOperationType.toCombinedRows
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          operation.toCombinedRows(s.ruleSuite)
+        </td>
+      </tr><tr>
+        <td>
+          180
+        </td>
+        <td>
+          435
+        </td>
+        <td>
+          7939
+          -
+          8001
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableOps.flatMap
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          full.steps.flatMap[com.sparkutils.quality.CombinedRuleSuiteRows](((s: com.sparkutils.flow.FullStep[RP#StorageType]) =&gt; operation.toCombinedRows(s.ruleSuite)))
+        </td>
+      </tr><tr>
+        <td>
+          181
+        </td>
+        <td>
+          436
+        </td>
+        <td>
+          8014
+          -
+          8044
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.impl.util.Utils.defaultCombinedFolder
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          com.sparkutils.flow.impl.util.Utils.defaultCombinedFolder(stepIds)
+        </td>
+      </tr><tr>
+        <td>
+          181
+        </td>
+        <td>
+          437
+        </td>
+        <td>
+          7792
+          -
+          8045
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableOps.map
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          full.flowRow.flowRuleGroup.map[Seq[com.sparkutils.quality.CombinedRuleSuiteRows]]({
+  &lt;synthetic&gt; val eta$0$1: com.sparkutils.flow.FlowRuleGroupProcessing[FG] = scala.Predef.implicitly[com.sparkutils.flow.FlowRuleGroupProcessing[FG]](evidence$5);
+  ((flowRuleGroup: com.sparkutils.flow.FlowRuleGroup[FG]) =&gt; eta$0$1.combinedRuleSuiteRows(flowRuleGroup))
+}).getOrElse[Seq[com.sparkutils.quality.CombinedRuleSuiteRows]](scala.`package`.Seq.empty[Nothing]).++[com.sparkutils.quality.CombinedRuleSuiteRows](full.steps.flatMap[com.sparkutils.quality.CombinedRuleSuiteRows](((s: com.sparkutils.flow.FullStep[RP#StorageType]) =&gt; operation.toCombinedRows(s.ruleSuite)))).map[com.sparkutils.quality.CombinedRuleSuiteRows](com.sparkutils.flow.impl.util.Utils.defaultCombinedFolder(stepIds))
+        </td>
+      </tr><tr>
+        <td>
+          186
+        </td>
+        <td>
+          438
+        </td>
+        <td>
+          8196
+          -
+          8208
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.DatasetHolder.toDS
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          dataset.sparkSession.implicits.localSeqToDatasetHolder[com.sparkutils.quality.CombinedRuleSuiteRows](rules)(com.sparkutils.quality.implicits.`package`.combinedRuleSuiteRowTypedExpEnc).toDS()
+        </td>
+      </tr><tr>
+        <td>
+          186
+        </td>
+        <td>
+          439
+        </td>
+        <td>
+          8161
+          -
+          8209
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.quality.impl.util.VersionSpecificSerializingImports.register_rule_suite_group_variable
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          com.sparkutils.quality.`package`.register_rule_suite_group_variable(dataset.sparkSession.implicits.localSeqToDatasetHolder[com.sparkutils.quality.CombinedRuleSuiteRows](rules)(com.sparkutils.quality.implicits.`package`.combinedRuleSuiteRowTypedExpEnc).toDS())
+        </td>
+      </tr><tr>
+        <td>
+          187
+        </td>
+        <td>
+          443
+        </td>
+        <td>
+          8120
+          -
+          8305
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.fold
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          full.flowRow.flowRuleGroup.fold[String](com.sparkutils.quality.`package`.register_rule_suite_group_variable(dataset.sparkSession.implicits.localSeqToDatasetHolder[com.sparkutils.quality.CombinedRuleSuiteRows](rules)(com.sparkutils.quality.implicits.`package`.combinedRuleSuiteRowTypedExpEnc).toDS()))(((g: com.sparkutils.flow.FlowRuleGroup[FG]) =&gt; com.sparkutils.quality.`package`.register_rule_suite_group_variable(dataset.sparkSession.implicits.localSeqToDatasetHolder[com.sparkutils.quality.CombinedRuleSuiteRows](rules)(com.sparkutils.quality.implicits.`package`.combinedRuleSuiteRowTypedExpEnc).toDS(), g.ruleGroupName)))
+        </td>
+      </tr><tr>
+        <td>
+          188
+        </td>
+        <td>
+          440
+        </td>
+        <td>
+          8267
+          -
+          8279
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.DatasetHolder.toDS
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          dataset.sparkSession.implicits.localSeqToDatasetHolder[com.sparkutils.quality.CombinedRuleSuiteRows](rules)(com.sparkutils.quality.implicits.`package`.combinedRuleSuiteRowTypedExpEnc).toDS()
+        </td>
+      </tr><tr>
+        <td>
+          188
+        </td>
+        <td>
+          441
+        </td>
+        <td>
+          8281
+          -
+          8296
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FlowRuleGroup.ruleGroupName
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          g.ruleGroupName
+        </td>
+      </tr><tr>
+        <td>
+          188
+        </td>
+        <td>
+          442
+        </td>
+        <td>
+          8232
+          -
+          8297
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.quality.impl.util.VersionSpecificSerializingImports.register_rule_suite_group_variable
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          com.sparkutils.quality.`package`.register_rule_suite_group_variable(dataset.sparkSession.implicits.localSeqToDatasetHolder[com.sparkutils.quality.CombinedRuleSuiteRows](rules)(com.sparkutils.quality.implicits.`package`.combinedRuleSuiteRowTypedExpEnc).toDS(), g.ruleGroupName)
+        </td>
+      </tr><tr>
+        <td>
+          191
+        </td>
+        <td>
+          444
+        </td>
+        <td>
+          8320
+          -
+          8332
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FullFlow.flowRow
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          full.flowRow
+        </td>
+      </tr><tr>
+        <td>
+          191
+        </td>
+        <td>
+          453
+        </td>
+        <td>
+          8311
+          -
+          8914
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.FlowData.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          FlowData.apply[FG, RP#ResType](full.flowRow, full.steps.map[com.sparkutils.flow.Step[RP#ResType]](((fullStep: com.sparkutils.flow.FullStep[RP#StorageType]) =&gt; {
+  import fullStep._;
+  val rid: com.sparkutils.quality.Id = com.sparkutils.quality.Id.apply(fullStep.step.ruleSuiteId, fullStep.step.ruleSuiteVersion);
+  val rs: RP#ResType = operation.fromFullRow(rules, variableName, full.flowRow, fullStep, rid, fullStep.ruleSuite);
+  Step.apply[RP#ResType](fullStep.step.name, fullStep.step.dependencies, Operation.apply[RP#ResType](rs, fullStep.step.operation.function, fullStep.step.operation.resultApproach, fullStep.step.operation.fieldName, fullStep.step.operation.combineAuditWith)(rstp), fullStep.initConfiguration, fullStep.step.data, fullStep.step.options)(rstp)
+})))
+        </td>
+      </tr><tr>
+        <td>
+          192
+        </td>
+        <td>
+          452
+        </td>
+        <td>
+          8340
+          -
+          8908
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableOps.map
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          full.steps.map[com.sparkutils.flow.Step[RP#ResType]](((fullStep: com.sparkutils.flow.FullStep[RP#StorageType]) =&gt; {
+  import fullStep._;
+  val rid: com.sparkutils.quality.Id = com.sparkutils.quality.Id.apply(fullStep.step.ruleSuiteId, fullStep.step.ruleSuiteVersion);
+  val rs: RP#ResType = operation.fromFullRow(rules, variableName, full.flowRow, fullStep, rid, fullStep.ruleSuite);
+  Step.apply[RP#ResType](fullStep.step.name, fullStep.step.dependencies, Operation.apply[RP#ResType](rs, fullStep.step.operation.function, fullStep.step.operation.resultApproach, fullStep.step.operation.fieldName, fullStep.step.operation.combineAuditWith)(rstp), fullStep.initConfiguration, fullStep.step.data, fullStep.step.options)(rstp)
+}))
+        </td>
+      </tr><tr>
+        <td>
+          195
+        </td>
+        <td>
+          445
+        </td>
+        <td>
+          8427
+          -
+          8443
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.StepRow.ruleSuiteId
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          fullStep.step.ruleSuiteId
+        </td>
+      </tr><tr>
+        <td>
+          195
+        </td>
+        <td>
+          446
+        </td>
+        <td>
+          8445
+          -
+          8466
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.StepRow.ruleSuiteVersion
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          fullStep.step.ruleSuiteVersion
+        </td>
+      </tr><tr>
+        <td>
+          195
+        </td>
+        <td>
+          447
+        </td>
+        <td>
+          8424
+          -
+          8467
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.quality.Id.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          com.sparkutils.quality.Id.apply(fullStep.step.ruleSuiteId, fullStep.step.ruleSuiteVersion)
+        </td>
+      </tr><tr>
+        <td>
+          196
+        </td>
+        <td>
+          448
+        </td>
+        <td>
+          8530
+          -
+          8542
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FullFlow.flowRow
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          full.flowRow
+        </td>
+      </tr><tr>
+        <td>
+          196
+        </td>
+        <td>
+          449
+        </td>
+        <td>
+          8559
+          -
+          8568
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FullStep.ruleSuite
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          fullStep.ruleSuite
+        </td>
+      </tr><tr>
+        <td>
+          196
+        </td>
+        <td>
+          450
+        </td>
+        <td>
+          8487
+          -
+          8569
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.FlowGroupAndOperationType.fromFullRow
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          operation.fromFullRow(rules, variableName, full.flowRow, fullStep, rid, fullStep.ruleSuite)
+        </td>
+      </tr><tr>
+        <td>
+          198
+        </td>
+        <td>
+          451
+        </td>
+        <td>
+          8581
+          -
+          8900
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          com.sparkutils.flow.Step.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          Step.apply[RP#ResType](fullStep.step.name, fullStep.step.dependencies, Operation.apply[RP#ResType](rs, fullStep.step.operation.function, fullStep.step.operation.resultApproach, fullStep.step.operation.fieldName, fullStep.step.operation.combineAuditWith)(rstp), fullStep.initConfiguration, fullStep.step.data, fullStep.step.options)(rstp)
+        </td>
+      </tr><tr>
+        <td>
+          215
+        </td>
+        <td>
+          454
+        </td>
+        <td>
+          9439
+          -
+          9491
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          com.sparkutils.flow.Serialisation.toDatasets
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          Serialisation.this.toDatasets[FG, com.sparkutils.flow.RuleSuiteFromDataset.type](RuleSuiteFromDataset)(sparkSession, flow)(evidence$6, ffenc, fgenc, frenc, rstp, operation)
+        </td>
+      </tr><tr>
+        <td>
+          236
+        </td>
+        <td>
+          455
+        </td>
+        <td>
+          10373
+          -
+          10394
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.Operation.ruleSuite
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          s.operation.ruleSuite
+        </td>
+      </tr><tr>
+        <td>
+          236
+        </td>
+        <td>
+          456
+        </td>
+        <td>
+          10345
+          -
+          10396
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.FlowGroupAndOperationType.toRuleSuite
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          operation.toRuleSuite(flow, s.operation.ruleSuite)
+        </td>
+      </tr><tr>
+        <td>
+          236
+        </td>
+        <td>
+          457
+        </td>
+        <td>
+          10321
+          -
+          10397
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableOps.flatMap
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.steps.flatMap[com.sparkutils.quality.RuleSuite](((s: com.sparkutils.flow.Step[RP#ResType]) =&gt; operation.toRuleSuite(flow, s.operation.ruleSuite)))
+        </td>
+      </tr><tr>
+        <td>
+          238
+        </td>
+        <td>
+          458
+        </td>
+        <td>
+          10439
+          -
+          10456
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.quality.impl.util.SerializingImports.toRuleSuiteRow
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          com.sparkutils.quality.`package`.toRuleSuiteRow(s)
+        </td>
+      </tr><tr>
+        <td>
+          238
+        </td>
+        <td>
+          459
+        </td>
+        <td>
+          10419
+          -
+          10457
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableOps.map
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          ruleSuites.map[(com.sparkutils.quality.RuleSuiteRow, Option[com.sparkutils.quality.OutputExpressionRow])](((s: com.sparkutils.quality.RuleSuite) =&gt; com.sparkutils.quality.`package`.toRuleSuiteRow(s)))
+        </td>
+      </tr><tr>
+        <td>
+          239
+        </td>
+        <td>
+          460
+        </td>
+        <td>
+          10504
+          -
+          10508
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Tuple2._2
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          x$1._2
+        </td>
+      </tr><tr>
+        <td>
+          239
+        </td>
+        <td>
+          461
+        </td>
+        <td>
+          10486
+          -
+          10509
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableOps.flatMap
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          suiteRows.flatMap[com.sparkutils.quality.OutputExpressionRow](((x$1: (com.sparkutils.quality.RuleSuiteRow, Option[com.sparkutils.quality.OutputExpressionRow])) =&gt; x$1._2))
+        </td>
+      </tr><tr>
+        <td>
+          241
+        </td>
+        <td>
+          496
+        </td>
+        <td>
+          10515
+          -
+          10515
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.sparkutils.flow.FlowDataSets.apply$default$6
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          FlowDataSets.apply$default$6[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          241
+        </td>
+        <td>
+          497
+        </td>
+        <td>
+          10515
+          -
+          10515
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.sparkutils.flow.FlowDataSets.apply$default$7
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          FlowDataSets.apply$default$7[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          241
+        </td>
+        <td>
+          498
+        </td>
+        <td>
+          10515
+          -
+          11442
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.FlowDataSets.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          FlowDataSets.apply[FG](x$1, x$2, x$3, x$4, x$5, x$9, x$10, x$6, x$7, x$8)
+        </td>
+      </tr><tr>
+        <td>
+          243
+        </td>
+        <td>
+          462
+        </td>
+        <td>
+          10535
+          -
+          10594
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.DatasetHolder.toDS
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          sparkSession.implicits.localSeqToDatasetHolder[com.sparkutils.flow.StepRow](flow.steps.map[com.sparkutils.flow.StepRow](((step: com.sparkutils.flow.Step[RP#ResType]) =&gt; Serialisation.this.stepRow[FG, RP](flow, step)(rstp))))(implicits.typedStepExpEnc).toDS()
+        </td>
+      </tr><tr>
+        <td>
+          244
+        </td>
+        <td>
+          463
+        </td>
+        <td>
+          10602
+          -
+          10629
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.DatasetHolder.toDS
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          sparkSession.implicits.localSeqToDatasetHolder[com.sparkutils.flow.FlowRow[FG]](scala.`package`.Seq.apply[com.sparkutils.flow.FlowRow[FG]](Serialisation.this.toFlowRow[FG, RP#ResType](flow)(evidence$7, fgenc)))(frenc).toDS()
+        </td>
+      </tr><tr>
+        <td>
+          245
+        </td>
+        <td>
+          464
+        </td>
+        <td>
+          10682
+          -
+          10682
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          org.apache.spark.sql.LowPrioritySQLImplicits.newProductEncoder
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          sparkSession.implicits.newProductEncoder[com.sparkutils.quality.RuleRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.RuleRow]($m, {
+    final class $typecreator15 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator15 = {
+        $typecreator15.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.RuleRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator15()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.RuleRow]))
+        </td>
+      </tr><tr>
+        <td>
+          245
+        </td>
+        <td>
+          465
+        </td>
+        <td>
+          10657
+          -
+          10691
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          org.apache.spark.sql.SparkSession.emptyDataset
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          sparkSession.emptyDataset[com.sparkutils.quality.RuleRow](sparkSession.implicits.newProductEncoder[com.sparkutils.quality.RuleRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.RuleRow]($m, {
+    final class $typecreator15 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator15 = {
+        $typecreator15.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.RuleRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator15()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.RuleRow])))
+        </td>
+      </tr><tr>
+        <td>
+          245
+        </td>
+        <td>
+          468
+        </td>
+        <td>
+          10637
+          -
+          10744
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableOnceOps.foldLeft
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          ruleSuites.foldLeft[org.apache.spark.sql.Dataset[com.sparkutils.quality.RuleRow]](sparkSession.emptyDataset[com.sparkutils.quality.RuleRow](sparkSession.implicits.newProductEncoder[com.sparkutils.quality.RuleRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.RuleRow]($m, {
+    final class $typecreator15 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator15 = {
+        $typecreator15.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.RuleRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator15()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.RuleRow]))))(((x0$1: org.apache.spark.sql.Dataset[com.sparkutils.quality.RuleRow], x1$1: com.sparkutils.quality.RuleSuite) =&gt; scala.Tuple2.apply[org.apache.spark.sql.Dataset[com.sparkutils.quality.RuleRow], com.sparkutils.quality.RuleSuite](x0$1, x1$1) match {
+  case (_1: org.apache.spark.sql.Dataset[com.sparkutils.quality.RuleRow], _2: com.sparkutils.quality.RuleSuite): (org.apache.spark.sql.Dataset[com.sparkutils.quality.RuleRow], com.sparkutils.quality.RuleSuite)((cur @ _), (s @ _)) =&gt; com.sparkutils.quality.`package`.toDS(s).union(cur)
+}))
+        </td>
+      </tr><tr>
+        <td>
+          246
+        </td>
+        <td>
+          466
+        </td>
+        <td>
+          10719
+          -
+          10736
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.union
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          com.sparkutils.quality.`package`.toDS(s).union(cur)
+        </td>
+      </tr><tr>
+        <td>
+          246
+        </td>
+        <td>
+          467
+        </td>
+        <td>
+          10719
+          -
+          10736
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.union
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          com.sparkutils.quality.`package`.toDS(s).union(cur)
+        </td>
+      </tr><tr>
+        <td>
+          248
+        </td>
+        <td>
+          469
+        </td>
+        <td>
+          10802
+          -
+          10802
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          org.apache.spark.sql.LowPrioritySQLImplicits.newProductEncoder
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          sparkSession.implicits.newProductEncoder[com.sparkutils.quality.LambdaFunctionRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.LambdaFunctionRow]($m, {
+    final class $typecreator20 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator20 = {
+        $typecreator20.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.LambdaFunctionRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator20()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.LambdaFunctionRow]))
+        </td>
+      </tr><tr>
+        <td>
+          248
+        </td>
+        <td>
+          470
+        </td>
+        <td>
+          10777
+          -
+          10821
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          org.apache.spark.sql.SparkSession.emptyDataset
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          sparkSession.emptyDataset[com.sparkutils.quality.LambdaFunctionRow](sparkSession.implicits.newProductEncoder[com.sparkutils.quality.LambdaFunctionRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.LambdaFunctionRow]($m, {
+    final class $typecreator20 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator20 = {
+        $typecreator20.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.LambdaFunctionRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator20()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.LambdaFunctionRow])))
+        </td>
+      </tr><tr>
+        <td>
+          248
+        </td>
+        <td>
+          473
+        </td>
+        <td>
+          10757
+          -
+          10880
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableOnceOps.foldLeft
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          ruleSuites.foldLeft[org.apache.spark.sql.Dataset[com.sparkutils.quality.LambdaFunctionRow]](sparkSession.emptyDataset[com.sparkutils.quality.LambdaFunctionRow](sparkSession.implicits.newProductEncoder[com.sparkutils.quality.LambdaFunctionRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.LambdaFunctionRow]($m, {
+    final class $typecreator20 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator20 = {
+        $typecreator20.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.LambdaFunctionRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator20()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.LambdaFunctionRow]))))(((x0$2: org.apache.spark.sql.Dataset[com.sparkutils.quality.LambdaFunctionRow], x1$2: com.sparkutils.quality.RuleSuite) =&gt; scala.Tuple2.apply[org.apache.spark.sql.Dataset[com.sparkutils.quality.LambdaFunctionRow], com.sparkutils.quality.RuleSuite](x0$2, x1$2) match {
+  case (_1: org.apache.spark.sql.Dataset[com.sparkutils.quality.LambdaFunctionRow], _2: com.sparkutils.quality.RuleSuite): (org.apache.spark.sql.Dataset[com.sparkutils.quality.LambdaFunctionRow], com.sparkutils.quality.RuleSuite)((cur @ _), (s @ _)) =&gt; com.sparkutils.quality.`package`.toLambdaDS(s).union(cur)
+}))
+        </td>
+      </tr><tr>
+        <td>
+          248
+        </td>
+        <td>
+          474
+        </td>
+        <td>
+          10752
+          -
+          10881
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[org.apache.spark.sql.Dataset[com.sparkutils.quality.LambdaFunctionRow]](ruleSuites.foldLeft[org.apache.spark.sql.Dataset[com.sparkutils.quality.LambdaFunctionRow]](sparkSession.emptyDataset[com.sparkutils.quality.LambdaFunctionRow](sparkSession.implicits.newProductEncoder[com.sparkutils.quality.LambdaFunctionRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.LambdaFunctionRow]($m, {
+    final class $typecreator20 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator20 = {
+        $typecreator20.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.LambdaFunctionRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator20()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.LambdaFunctionRow]))))(((x0$2: org.apache.spark.sql.Dataset[com.sparkutils.quality.LambdaFunctionRow], x1$2: com.sparkutils.quality.RuleSuite) =&gt; scala.Tuple2.apply[org.apache.spark.sql.Dataset[com.sparkutils.quality.LambdaFunctionRow], com.sparkutils.quality.RuleSuite](x0$2, x1$2) match {
+  case (_1: org.apache.spark.sql.Dataset[com.sparkutils.quality.LambdaFunctionRow], _2: com.sparkutils.quality.RuleSuite): (org.apache.spark.sql.Dataset[com.sparkutils.quality.LambdaFunctionRow], com.sparkutils.quality.RuleSuite)((cur @ _), (s @ _)) =&gt; com.sparkutils.quality.`package`.toLambdaDS(s).union(cur)
+})))
+        </td>
+      </tr><tr>
+        <td>
+          249
+        </td>
+        <td>
+          471
+        </td>
+        <td>
+          10849
+          -
+          10872
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.union
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          com.sparkutils.quality.`package`.toLambdaDS(s).union(cur)
+        </td>
+      </tr><tr>
+        <td>
+          249
+        </td>
+        <td>
+          472
+        </td>
+        <td>
+          10849
+          -
+          10872
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.union
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          com.sparkutils.quality.`package`.toLambdaDS(s).union(cur)
+        </td>
+      </tr><tr>
+        <td>
+          251
+        </td>
+        <td>
+          475
+        </td>
+        <td>
+          10939
+          -
+          10939
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          org.apache.spark.sql.LowPrioritySQLImplicits.newProductEncoder
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          sparkSession.implicits.newProductEncoder[com.sparkutils.quality.OutputExpressionRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.OutputExpressionRow]($m, {
+    final class $typecreator25 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator25 = {
+        $typecreator25.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.OutputExpressionRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator25()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.OutputExpressionRow]))
+        </td>
+      </tr><tr>
+        <td>
+          251
+        </td>
+        <td>
+          476
+        </td>
+        <td>
+          10914
+          -
+          10960
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          org.apache.spark.sql.SparkSession.emptyDataset
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          sparkSession.emptyDataset[com.sparkutils.quality.OutputExpressionRow](sparkSession.implicits.newProductEncoder[com.sparkutils.quality.OutputExpressionRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.OutputExpressionRow]($m, {
+    final class $typecreator25 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator25 = {
+        $typecreator25.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.OutputExpressionRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator25()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.OutputExpressionRow])))
+        </td>
+      </tr><tr>
+        <td>
+          251
+        </td>
+        <td>
+          481
+        </td>
+        <td>
+          10889
+          -
+          11061
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[org.apache.spark.sql.Dataset[com.sparkutils.quality.OutputExpressionRow]](ruleSuites.foldLeft[org.apache.spark.sql.Dataset[com.sparkutils.quality.OutputExpressionRow]](sparkSession.emptyDataset[com.sparkutils.quality.OutputExpressionRow](sparkSession.implicits.newProductEncoder[com.sparkutils.quality.OutputExpressionRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.OutputExpressionRow]($m, {
+    final class $typecreator25 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator25 = {
+        $typecreator25.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.OutputExpressionRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator25()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.OutputExpressionRow]))))(((x0$3: org.apache.spark.sql.Dataset[com.sparkutils.quality.OutputExpressionRow], x1$3: com.sparkutils.quality.RuleSuite) =&gt; scala.Tuple2.apply[org.apache.spark.sql.Dataset[com.sparkutils.quality.OutputExpressionRow], com.sparkutils.quality.RuleSuite](x0$3, x1$3) match {
+  case (_1: org.apache.spark.sql.Dataset[com.sparkutils.quality.OutputExpressionRow], _2: com.sparkutils.quality.RuleSuite): (org.apache.spark.sql.Dataset[com.sparkutils.quality.OutputExpressionRow], com.sparkutils.quality.RuleSuite)((cur @ _), (s @ _)) =&gt; com.sparkutils.quality.`package`.toOutputExpressionDS(s).union(cur)
+})).union(sparkSession.implicits.localSeqToDatasetHolder[com.sparkutils.quality.OutputExpressionRow](defaultOutputRows)(sparkSession.implicits.newProductEncoder[com.sparkutils.quality.OutputExpressionRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.OutputExpressionRow]($m, {
+    final class $typecreator35 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator35 = {
+        $typecreator35.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.OutputExpressionRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator35()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.OutputExpressionRow]))).toDS()))
+        </td>
+      </tr><tr>
+        <td>
+          252
+        </td>
+        <td>
+          477
+        </td>
+        <td>
+          10988
+          -
+          11021
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.union
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          com.sparkutils.quality.`package`.toOutputExpressionDS(s).union(cur)
+        </td>
+      </tr><tr>
+        <td>
+          252
+        </td>
+        <td>
+          478
+        </td>
+        <td>
+          10988
+          -
+          11021
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.union
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          com.sparkutils.quality.`package`.toOutputExpressionDS(s).union(cur)
+        </td>
+      </tr><tr>
+        <td>
+          253
+        </td>
+        <td>
+          479
+        </td>
+        <td>
+          11036
+          -
+          11060
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.DatasetHolder.toDS
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          sparkSession.implicits.localSeqToDatasetHolder[com.sparkutils.quality.OutputExpressionRow](defaultOutputRows)(sparkSession.implicits.newProductEncoder[com.sparkutils.quality.OutputExpressionRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.OutputExpressionRow]($m, {
+    final class $typecreator35 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator35 = {
+        $typecreator35.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.OutputExpressionRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator35()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.OutputExpressionRow]))).toDS()
+        </td>
+      </tr><tr>
+        <td>
+          253
+        </td>
+        <td>
+          480
+        </td>
+        <td>
+          10894
+          -
+          11060
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.union
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          ruleSuites.foldLeft[org.apache.spark.sql.Dataset[com.sparkutils.quality.OutputExpressionRow]](sparkSession.emptyDataset[com.sparkutils.quality.OutputExpressionRow](sparkSession.implicits.newProductEncoder[com.sparkutils.quality.OutputExpressionRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.OutputExpressionRow]($m, {
+    final class $typecreator25 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator25 = {
+        $typecreator25.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.OutputExpressionRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator25()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.OutputExpressionRow]))))(((x0$3: org.apache.spark.sql.Dataset[com.sparkutils.quality.OutputExpressionRow], x1$3: com.sparkutils.quality.RuleSuite) =&gt; scala.Tuple2.apply[org.apache.spark.sql.Dataset[com.sparkutils.quality.OutputExpressionRow], com.sparkutils.quality.RuleSuite](x0$3, x1$3) match {
+  case (_1: org.apache.spark.sql.Dataset[com.sparkutils.quality.OutputExpressionRow], _2: com.sparkutils.quality.RuleSuite): (org.apache.spark.sql.Dataset[com.sparkutils.quality.OutputExpressionRow], com.sparkutils.quality.RuleSuite)((cur @ _), (s @ _)) =&gt; com.sparkutils.quality.`package`.toOutputExpressionDS(s).union(cur)
+})).union(sparkSession.implicits.localSeqToDatasetHolder[com.sparkutils.quality.OutputExpressionRow](defaultOutputRows)(sparkSession.implicits.newProductEncoder[com.sparkutils.quality.OutputExpressionRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.OutputExpressionRow]($m, {
+    final class $typecreator35 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator35 = {
+        $typecreator35.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.OutputExpressionRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator35()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.OutputExpressionRow]))).toDS())
+        </td>
+      </tr><tr>
+        <td>
+          254
+        </td>
+        <td>
+          482
+        </td>
+        <td>
+          11087
+          -
+          11113
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.DatasetHolder.toDS
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          sparkSession.implicits.localSeqToDatasetHolder[com.sparkutils.quality.RuleSuiteRow](suiteRows.map[com.sparkutils.quality.RuleSuiteRow](((x$2: (com.sparkutils.quality.RuleSuiteRow, Option[com.sparkutils.quality.OutputExpressionRow])) =&gt; x$2._1)))(sparkSession.implicits.newProductEncoder[com.sparkutils.quality.RuleSuiteRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.RuleSuiteRow]($m, {
+    final class $typecreator45 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator45 = {
+        $typecreator45.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.RuleSuiteRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator45()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.RuleSuiteRow]))).toDS()
+        </td>
+      </tr><tr>
+        <td>
+          254
+        </td>
+        <td>
+          483
+        </td>
+        <td>
+          11082
+          -
+          11114
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[org.apache.spark.sql.Dataset[com.sparkutils.quality.RuleSuiteRow]](sparkSession.implicits.localSeqToDatasetHolder[com.sparkutils.quality.RuleSuiteRow](suiteRows.map[com.sparkutils.quality.RuleSuiteRow](((x$2: (com.sparkutils.quality.RuleSuiteRow, Option[com.sparkutils.quality.OutputExpressionRow])) =&gt; x$2._1)))(sparkSession.implicits.newProductEncoder[com.sparkutils.quality.RuleSuiteRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.RuleSuiteRow]($m, {
+    final class $typecreator45 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator45 = {
+        $typecreator45.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.RuleSuiteRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator45()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.RuleSuiteRow]))).toDS())
+        </td>
+      </tr><tr>
+        <td>
+          255
+        </td>
+        <td>
+          484
+        </td>
+        <td>
+          11183
+          -
+          11183
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          org.apache.spark.sql.LowPrioritySQLImplicits.newProductEncoder
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          sparkSession.implicits.newProductEncoder[com.sparkutils.quality.ViewRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.ViewRow]($m, {
+    final class $typecreator50 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator50 = {
+        $typecreator50.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.ViewRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator50()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.ViewRow]))
+        </td>
+      </tr><tr>
+        <td>
+          255
+        </td>
+        <td>
+          485
+        </td>
+        <td>
+          11158
+          -
+          11192
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          org.apache.spark.sql.SparkSession.emptyDataset
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          sparkSession.emptyDataset[com.sparkutils.quality.ViewRow](sparkSession.implicits.newProductEncoder[com.sparkutils.quality.ViewRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.ViewRow]($m, {
+    final class $typecreator50 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator50 = {
+        $typecreator50.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.ViewRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator50()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.ViewRow])))
+        </td>
+      </tr><tr>
+        <td>
+          255
+        </td>
+        <td>
+          488
+        </td>
+        <td>
+          11138
+          -
+          11276
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableOnceOps.foldLeft
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.steps.foldLeft[org.apache.spark.sql.Dataset[com.sparkutils.quality.ViewRow]](sparkSession.emptyDataset[com.sparkutils.quality.ViewRow](sparkSession.implicits.newProductEncoder[com.sparkutils.quality.ViewRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.ViewRow]($m, {
+    final class $typecreator50 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator50 = {
+        $typecreator50.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.ViewRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator50()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.ViewRow]))))(((x0$4: org.apache.spark.sql.Dataset[com.sparkutils.quality.ViewRow], x1$4: com.sparkutils.flow.Step[RP#ResType]) =&gt; scala.Tuple2.apply[org.apache.spark.sql.Dataset[com.sparkutils.quality.ViewRow], com.sparkutils.flow.Step[RP#ResType]](x0$4, x1$4) match {
+  case (_1: org.apache.spark.sql.Dataset[com.sparkutils.quality.ViewRow], _2: com.sparkutils.flow.Step[RP#ResType]): (org.apache.spark.sql.Dataset[com.sparkutils.quality.ViewRow], com.sparkutils.flow.Step[RP#ResType])((cur @ _), (s @ _)) =&gt; sparkSession.implicits.localSeqToDatasetHolder[com.sparkutils.quality.ViewRow](s.initConfiguration.viewConfig)(sparkSession.implicits.newProductEncoder[com.sparkutils.quality.ViewRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.ViewRow]($m, {
+    final class $typecreator60 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator60 = {
+        $typecreator60.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.ViewRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator60()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.ViewRow]))).toDS().union(cur)
+}))
+        </td>
+      </tr><tr>
+        <td>
+          255
+        </td>
+        <td>
+          489
+        </td>
+        <td>
+          11133
+          -
+          11277
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[org.apache.spark.sql.Dataset[com.sparkutils.quality.ViewRow]](flow.steps.foldLeft[org.apache.spark.sql.Dataset[com.sparkutils.quality.ViewRow]](sparkSession.emptyDataset[com.sparkutils.quality.ViewRow](sparkSession.implicits.newProductEncoder[com.sparkutils.quality.ViewRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.ViewRow]($m, {
+    final class $typecreator50 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator50 = {
+        $typecreator50.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.ViewRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator50()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.ViewRow]))))(((x0$4: org.apache.spark.sql.Dataset[com.sparkutils.quality.ViewRow], x1$4: com.sparkutils.flow.Step[RP#ResType]) =&gt; scala.Tuple2.apply[org.apache.spark.sql.Dataset[com.sparkutils.quality.ViewRow], com.sparkutils.flow.Step[RP#ResType]](x0$4, x1$4) match {
+  case (_1: org.apache.spark.sql.Dataset[com.sparkutils.quality.ViewRow], _2: com.sparkutils.flow.Step[RP#ResType]): (org.apache.spark.sql.Dataset[com.sparkutils.quality.ViewRow], com.sparkutils.flow.Step[RP#ResType])((cur @ _), (s @ _)) =&gt; sparkSession.implicits.localSeqToDatasetHolder[com.sparkutils.quality.ViewRow](s.initConfiguration.viewConfig)(sparkSession.implicits.newProductEncoder[com.sparkutils.quality.ViewRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.ViewRow]($m, {
+    final class $typecreator60 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator60 = {
+        $typecreator60.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.ViewRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator60()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.ViewRow]))).toDS().union(cur)
+})))
+        </td>
+      </tr><tr>
+        <td>
+          256
+        </td>
+        <td>
+          486
+        </td>
+        <td>
+          11221
+          -
+          11268
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.union
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          sparkSession.implicits.localSeqToDatasetHolder[com.sparkutils.quality.ViewRow](s.initConfiguration.viewConfig)(sparkSession.implicits.newProductEncoder[com.sparkutils.quality.ViewRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.ViewRow]($m, {
+    final class $typecreator60 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator60 = {
+        $typecreator60.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.ViewRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator60()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.ViewRow]))).toDS().union(cur)
+        </td>
+      </tr><tr>
+        <td>
+          256
+        </td>
+        <td>
+          487
+        </td>
+        <td>
+          11221
+          -
+          11268
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.union
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          sparkSession.implicits.localSeqToDatasetHolder[com.sparkutils.quality.ViewRow](s.initConfiguration.viewConfig)(sparkSession.implicits.newProductEncoder[com.sparkutils.quality.ViewRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.ViewRow]($m, {
+    final class $typecreator60 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator60 = {
+        $typecreator60.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.ViewRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator60()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.ViewRow]))).toDS().union(cur)
+        </td>
+      </tr><tr>
+        <td>
+          258
+        </td>
+        <td>
+          490
+        </td>
+        <td>
+          11345
+          -
+          11345
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          org.apache.spark.sql.LowPrioritySQLImplicits.newProductEncoder
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          sparkSession.implicits.newProductEncoder[com.sparkutils.quality.MapRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.MapRow]($m, {
+    final class $typecreator65 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator65 = {
+        $typecreator65.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.MapRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator65()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.MapRow]))
+        </td>
+      </tr><tr>
+        <td>
+          258
+        </td>
+        <td>
+          491
+        </td>
+        <td>
+          11320
+          -
+          11353
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          org.apache.spark.sql.SparkSession.emptyDataset
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          sparkSession.emptyDataset[com.sparkutils.quality.MapRow](sparkSession.implicits.newProductEncoder[com.sparkutils.quality.MapRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.MapRow]($m, {
+    final class $typecreator65 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator65 = {
+        $typecreator65.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.MapRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator65()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.MapRow])))
+        </td>
+      </tr><tr>
+        <td>
+          258
+        </td>
+        <td>
+          494
+        </td>
+        <td>
+          11300
+          -
+          11435
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableOnceOps.foldLeft
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.steps.foldLeft[org.apache.spark.sql.Dataset[com.sparkutils.quality.MapRow]](sparkSession.emptyDataset[com.sparkutils.quality.MapRow](sparkSession.implicits.newProductEncoder[com.sparkutils.quality.MapRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.MapRow]($m, {
+    final class $typecreator65 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator65 = {
+        $typecreator65.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.MapRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator65()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.MapRow]))))(((x0$5: org.apache.spark.sql.Dataset[com.sparkutils.quality.MapRow], x1$5: com.sparkutils.flow.Step[RP#ResType]) =&gt; scala.Tuple2.apply[org.apache.spark.sql.Dataset[com.sparkutils.quality.MapRow], com.sparkutils.flow.Step[RP#ResType]](x0$5, x1$5) match {
+  case (_1: org.apache.spark.sql.Dataset[com.sparkutils.quality.MapRow], _2: com.sparkutils.flow.Step[RP#ResType]): (org.apache.spark.sql.Dataset[com.sparkutils.quality.MapRow], com.sparkutils.flow.Step[RP#ResType])((cur @ _), (s @ _)) =&gt; sparkSession.implicits.localSeqToDatasetHolder[com.sparkutils.quality.MapRow](s.initConfiguration.mapConfig)(sparkSession.implicits.newProductEncoder[com.sparkutils.quality.MapRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.MapRow]($m, {
+    final class $typecreator75 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator75 = {
+        $typecreator75.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.MapRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator75()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.MapRow]))).toDS().union(cur)
+}))
+        </td>
+      </tr><tr>
+        <td>
+          258
+        </td>
+        <td>
+          495
+        </td>
+        <td>
+          11295
+          -
+          11436
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[org.apache.spark.sql.Dataset[com.sparkutils.quality.MapRow]](flow.steps.foldLeft[org.apache.spark.sql.Dataset[com.sparkutils.quality.MapRow]](sparkSession.emptyDataset[com.sparkutils.quality.MapRow](sparkSession.implicits.newProductEncoder[com.sparkutils.quality.MapRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.MapRow]($m, {
+    final class $typecreator65 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator65 = {
+        $typecreator65.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.MapRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator65()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.MapRow]))))(((x0$5: org.apache.spark.sql.Dataset[com.sparkutils.quality.MapRow], x1$5: com.sparkutils.flow.Step[RP#ResType]) =&gt; scala.Tuple2.apply[org.apache.spark.sql.Dataset[com.sparkutils.quality.MapRow], com.sparkutils.flow.Step[RP#ResType]](x0$5, x1$5) match {
+  case (_1: org.apache.spark.sql.Dataset[com.sparkutils.quality.MapRow], _2: com.sparkutils.flow.Step[RP#ResType]): (org.apache.spark.sql.Dataset[com.sparkutils.quality.MapRow], com.sparkutils.flow.Step[RP#ResType])((cur @ _), (s @ _)) =&gt; sparkSession.implicits.localSeqToDatasetHolder[com.sparkutils.quality.MapRow](s.initConfiguration.mapConfig)(sparkSession.implicits.newProductEncoder[com.sparkutils.quality.MapRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.MapRow]($m, {
+    final class $typecreator75 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator75 = {
+        $typecreator75.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.MapRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator75()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.MapRow]))).toDS().union(cur)
+})))
+        </td>
+      </tr><tr>
+        <td>
+          259
+        </td>
+        <td>
+          492
+        </td>
+        <td>
+          11381
+          -
+          11427
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.union
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          sparkSession.implicits.localSeqToDatasetHolder[com.sparkutils.quality.MapRow](s.initConfiguration.mapConfig)(sparkSession.implicits.newProductEncoder[com.sparkutils.quality.MapRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.MapRow]($m, {
+    final class $typecreator75 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator75 = {
+        $typecreator75.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.MapRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator75()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.MapRow]))).toDS().union(cur)
+        </td>
+      </tr><tr>
+        <td>
+          259
+        </td>
+        <td>
+          493
+        </td>
+        <td>
+          11381
+          -
+          11427
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.union
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          sparkSession.implicits.localSeqToDatasetHolder[com.sparkutils.quality.MapRow](s.initConfiguration.mapConfig)(sparkSession.implicits.newProductEncoder[com.sparkutils.quality.MapRow](({
+  val $u: reflect.runtime.universe.type = scala.reflect.runtime.`package`.universe;
+  val $m: $u.Mirror = scala.reflect.runtime.`package`.universe.runtimeMirror(classOf[com.sparkutils.flow.Serialisation].getClassLoader());
+  $u.TypeTag.apply[com.sparkutils.quality.MapRow]($m, {
+    final class $typecreator75 extends TypeCreator {
+      def &lt;init&gt;(): $typecreator75 = {
+        $typecreator75.super.&lt;init&gt;();
+        ()
+      };
+      def apply[U &lt;: scala.reflect.api.Universe with Singleton]($m$untyped: scala.reflect.api.Mirror[U]): U#Type = {
+        val $u: U = $m$untyped.universe;
+        val $m: $u.Mirror = $m$untyped.asInstanceOf[$u.Mirror];
+        $m.staticClass(&quot;com.sparkutils.quality.MapRow&quot;).asType.toTypeConstructor
+      }
+    };
+    new $typecreator75()
+  })
+}: reflect.runtime.universe.TypeTag[com.sparkutils.quality.MapRow]))).toDS().union(cur)
+        </td>
+      </tr><tr>
+        <td>
+          266
+        </td>
+        <td>
+          499
+        </td>
+        <td>
+          11631
+          -
+          11645
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.quality.VersionedId.id
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.flowId.id
+        </td>
+      </tr><tr>
+        <td>
+          266
+        </td>
+        <td>
+          500
+        </td>
+        <td>
+          11661
+          -
+          11680
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.quality.VersionedId.version
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.flowId.version
+        </td>
+      </tr><tr>
+        <td>
+          266
+        </td>
+        <td>
+          501
+        </td>
+        <td>
+          11689
+          -
+          11698
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.Step.name
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          step.name
+        </td>
+      </tr><tr>
+        <td>
+          266
+        </td>
+        <td>
+          514
+        </td>
+        <td>
+          11614
+          -
+          12064
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.StepRow.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          StepRow.apply(x$1, x$2, x$3, x$4, x$5, x$6, x$8, x$9, x$7)
+        </td>
+      </tr><tr>
+        <td>
+          267
+        </td>
+        <td>
+          502
+        </td>
+        <td>
+          11721
+          -
+          11738
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.Step.dependencies
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          step.dependencies
+        </td>
+      </tr><tr>
+        <td>
+          268
+        </td>
+        <td>
+          503
+        </td>
+        <td>
+          11766
+          -
+          11790
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.Operation.ruleSuite
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          step.operation.ruleSuite
+        </td>
+      </tr><tr>
+        <td>
+          268
+        </td>
+        <td>
+          504
+        </td>
+        <td>
+          11760
+          -
+          11794
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.quality.Id.id
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          rp.id(step.operation.ruleSuite).id
+        </td>
+      </tr><tr>
+        <td>
+          268
+        </td>
+        <td>
+          505
+        </td>
+        <td>
+          11821
+          -
+          11845
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.Operation.ruleSuite
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          step.operation.ruleSuite
+        </td>
+      </tr><tr>
+        <td>
+          268
+        </td>
+        <td>
+          506
+        </td>
+        <td>
+          11815
+          -
+          11854
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.quality.Id.version
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          rp.id(step.operation.ruleSuite).version
+        </td>
+      </tr><tr>
+        <td>
+          269
+        </td>
+        <td>
+          507
+        </td>
+        <td>
+          11869
+          -
+          11878
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.Step.data
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          step.data
+        </td>
+      </tr><tr>
+        <td>
+          270
+        </td>
+        <td>
+          508
+        </td>
+        <td>
+          11911
+          -
+          11934
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.Operation.function
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          step.operation.function
+        </td>
+      </tr><tr>
+        <td>
+          270
+        </td>
+        <td>
+          509
+        </td>
+        <td>
+          11936
+          -
+          11960
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.Operation.fieldName
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          step.operation.fieldName
+        </td>
+      </tr><tr>
+        <td>
+          270
+        </td>
+        <td>
+          512
+        </td>
+        <td>
+          11898
+          -
+          12033
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.OperationRow.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          OperationRow.apply(step.operation.function, step.operation.fieldName, step.operation.resultApproach, step.operation.combineAuditWith)
+        </td>
+      </tr><tr>
+        <td>
+          271
+        </td>
+        <td>
+          510
+        </td>
+        <td>
+          11970
+          -
+          11999
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.Operation.resultApproach
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          step.operation.resultApproach
+        </td>
+      </tr><tr>
+        <td>
+          271
+        </td>
+        <td>
+          511
+        </td>
+        <td>
+          12001
+          -
+          12032
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.Operation.combineAuditWith
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          step.operation.combineAuditWith
+        </td>
+      </tr><tr>
+        <td>
+          272
+        </td>
+        <td>
+          513
+        </td>
+        <td>
+          12051
+          -
+          12063
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.Step.options
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          step.options
+        </td>
+      </tr><tr>
+        <td>
+          289
+        </td>
+        <td>
+          515
+        </td>
+        <td>
+          12704
+          -
+          12704
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.RuleSuiteTypeParam.rsParam
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.this.RuleSuiteTypeParam.rsParam
+        </td>
+      </tr><tr>
+        <td>
+          289
+        </td>
+        <td>
+          516
+        </td>
+        <td>
+          12639
+          -
+          12791
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          com.sparkutils.flow.Serialisation.fromDatasets
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          Serialisation.this.fromDatasets[FG, com.sparkutils.flow.RuleSuiteFromDataset.type](RuleSuiteFromDataset)((sparkSession: org.apache.spark.sql.SparkSession), (flowDataSets: com.sparkutils.flow.FlowDataSets[FG]), (flowId: com.sparkutils.quality.VersionedId))(fgenc, fgP, flow.this.RuleSuiteTypeParam.rsParam, operation)
+        </td>
+      </tr><tr>
+        <td>
+          316
+        </td>
+        <td>
+          517
+        </td>
+        <td>
+          13604
+          -
+          13616
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.toDF
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flowDataSets.steps.toDF()
+        </td>
+      </tr><tr>
+        <td>
+          316
+        </td>
+        <td>
+          518
+        </td>
+        <td>
+          13625
+          -
+          13643
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.Serialisation.flowFilter
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          Serialisation.this.flowFilter(flowId, Serialisation.this.flowFilter$default$2)
+        </td>
+      </tr><tr>
+        <td>
+          316
+        </td>
+        <td>
+          519
+        </td>
+        <td>
+          13594
+          -
+          13644
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.filter
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          Serialisation.this.loadSteps(flowDataSets.steps.toDF()).filter(Serialisation.this.flowFilter(flowId, Serialisation.this.flowFilter$default$2))
+        </td>
+      </tr><tr>
+        <td>
+          317
+        </td>
+        <td>
+          520
+        </td>
+        <td>
+          13667
+          -
+          13686
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.collect
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flowSteps.collect()
+        </td>
+      </tr><tr>
+        <td>
+          318
+        </td>
+        <td>
+          521
+        </td>
+        <td>
+          13726
+          -
+          13768
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Predef.ArrowAssoc[com.sparkutils.quality.Id](com.sparkutils.quality.Id.apply(s.ruleSuiteId, s.ruleSuiteVersion)).-&gt;[com.sparkutils.flow.StepRow](s)
+        </td>
+      </tr><tr>
+        <td>
+          318
+        </td>
+        <td>
+          522
+        </td>
+        <td>
+          13705
+          -
+          13769
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          scala.collection.ArrayOps.map
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Predef.refArrayOps[com.sparkutils.flow.StepRow](sourceSteps).map[(com.sparkutils.quality.Id, com.sparkutils.flow.StepRow)](((s: com.sparkutils.flow.StepRow) =&gt; scala.Predef.ArrowAssoc[com.sparkutils.quality.Id](com.sparkutils.quality.Id.apply(s.ruleSuiteId, s.ruleSuiteVersion)).-&gt;[com.sparkutils.flow.StepRow](s)))((ClassTag.apply[(com.sparkutils.quality.Id, com.sparkutils.flow.StepRow)](classOf[scala.Tuple2]): scala.reflect.ClassTag[(com.sparkutils.quality.Id, com.sparkutils.flow.StepRow)]))
+        </td>
+      </tr><tr>
+        <td>
+          318
+        </td>
+        <td>
+          523
+        </td>
+        <td>
+          13770
+          -
+          13770
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.&lt;:&lt;.refl
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.&lt;:&lt;.refl[(com.sparkutils.quality.Id, com.sparkutils.flow.StepRow)]
+        </td>
+      </tr><tr>
+        <td>
+          318
+        </td>
+        <td>
+          524
+        </td>
+        <td>
+          13705
+          -
+          13775
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          scala.collection.IterableOnceOps.toMap
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Predef.wrapRefArray[(com.sparkutils.quality.Id, com.sparkutils.flow.StepRow)](scala.Predef.refArrayOps[com.sparkutils.flow.StepRow](sourceSteps).map[(com.sparkutils.quality.Id, com.sparkutils.flow.StepRow)](((s: com.sparkutils.flow.StepRow) =&gt; scala.Predef.ArrowAssoc[com.sparkutils.quality.Id](com.sparkutils.quality.Id.apply(s.ruleSuiteId, s.ruleSuiteVersion)).-&gt;[com.sparkutils.flow.StepRow](s)))((ClassTag.apply[(com.sparkutils.quality.Id, com.sparkutils.flow.StepRow)](classOf[scala.Tuple2]): scala.reflect.ClassTag[(com.sparkutils.quality.Id, com.sparkutils.flow.StepRow)]))).toMap[com.sparkutils.quality.Id, com.sparkutils.flow.StepRow](scala.this.&lt;:&lt;.refl[(com.sparkutils.quality.Id, com.sparkutils.flow.StepRow)])
+        </td>
+      </tr><tr>
+        <td>
+          320
+        </td>
+        <td>
+          525
+        </td>
+        <td>
+          13820
+          -
+          13850
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.impl.util.Utils.defaultCombinedFolder
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          com.sparkutils.flow.impl.util.Utils.defaultCombinedFolder(stepIds)
+        </td>
+      </tr><tr>
+        <td>
+          320
+        </td>
+        <td>
+          526
+        </td>
+        <td>
+          13819
+          -
+          13819
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.quality.impl.EncodersImplicits.combinedRuleSuiteRowTypedExpEnc
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          com.sparkutils.quality.implicits.`package`.combinedRuleSuiteRowTypedExpEnc
+        </td>
+      </tr><tr>
+        <td>
+          320
+        </td>
+        <td>
+          527
+        </td>
+        <td>
+          13794
+          -
+          13851
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.map
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flowDataSets.combined.map[com.sparkutils.quality.CombinedRuleSuiteRows](com.sparkutils.flow.impl.util.Utils.defaultCombinedFolder(stepIds))(com.sparkutils.quality.implicits.`package`.combinedRuleSuiteRowTypedExpEnc)
+        </td>
+      </tr><tr>
+        <td>
+          324
+        </td>
+        <td>
+          528
+        </td>
+        <td>
+          13927
+          -
+          13944
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.isEmpty
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flowSteps.isEmpty
+        </td>
+      </tr><tr>
+        <td>
+          324
+        </td>
+        <td>
+          531
+        </td>
+        <td>
+          13923
+          -
+          13923
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          324
+        </td>
+        <td>
+          532
+        </td>
+        <td>
+          13923
+          -
+          13923
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          325
+        </td>
+        <td>
+          529
+        </td>
+        <td>
+          13954
+          -
+          14059
+        </td>
+        <td>
+          Throw
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #F0ADAD">
+          throw FlowException.apply(&quot;Flow &quot;.+(flowId).+(&quot; could not be loaded as the Step\'s dataset does not contain that flow&quot;), FlowException.apply$default$2)
+        </td>
+      </tr><tr>
+        <td>
+          325
+        </td>
+        <td>
+          530
+        </td>
+        <td>
+          13954
+          -
+          14059
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #F0ADAD">
+          throw FlowException.apply(&quot;Flow &quot;.+(flowId).+(&quot; could not be loaded as the Step\'s dataset does not contain that flow&quot;), FlowException.apply$default$2)
+        </td>
+      </tr><tr>
+        <td>
+          327
+        </td>
+        <td>
+          533
+        </td>
+        <td>
+          14098
+          -
+          14116
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.Serialisation.flowFilter
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          Serialisation.this.flowFilter(flowId, Serialisation.this.flowFilter$default$2)
+        </td>
+      </tr><tr>
+        <td>
+          327
+        </td>
+        <td>
+          534
+        </td>
+        <td>
+          14085
+          -
+          14117
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.filter
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flowDataSets.flows.filter(Serialisation.this.flowFilter(flowId, Serialisation.this.flowFilter$default$2))
+        </td>
+      </tr><tr>
+        <td>
+          329
+        </td>
+        <td>
+          535
+        </td>
+        <td>
+          14146
+          -
+          14162
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.isEmpty
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          thisFlow.isEmpty
+        </td>
+      </tr><tr>
+        <td>
+          330
+        </td>
+        <td>
+          536
+        </td>
+        <td>
+          14184
+          -
+          14193
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.quality.VersionedId.id
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flowId.id
+        </td>
+      </tr><tr>
+        <td>
+          330
+        </td>
+        <td>
+          537
+        </td>
+        <td>
+          14195
+          -
+          14209
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.quality.VersionedId.version
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flowId.version
+        </td>
+      </tr><tr>
+        <td>
+          330
+        </td>
+        <td>
+          538
+        </td>
+        <td>
+          14211
+          -
+          14227
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.Constants.flowAuditDefault
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.this.`package`.flowAuditDefault
+        </td>
+      </tr><tr>
+        <td>
+          330
+        </td>
+        <td>
+          539
+        </td>
+        <td>
+          14229
+          -
+          14248
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.Constants.defaultFlowDuration
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.this.`package`.defaultFlowDuration
+        </td>
+      </tr><tr>
+        <td>
+          330
+        </td>
+        <td>
+          540
+        </td>
+        <td>
+          14250
+          -
+          14254
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          330
+        </td>
+        <td>
+          541
+        </td>
+        <td>
+          14172
+          -
+          14255
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.FlowRow.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          FlowRow.apply[FG](flowId.id, flowId.version, flow.this.`package`.flowAuditDefault, flow.this.`package`.defaultFlowDuration, scala.None)
+        </td>
+      </tr><tr>
+        <td>
+          330
+        </td>
+        <td>
+          542
+        </td>
+        <td>
+          14172
+          -
+          14255
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          com.sparkutils.flow.FlowRow.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          FlowRow.apply[FG](flowId.id, flowId.version, flow.this.`package`.flowAuditDefault, flow.this.`package`.defaultFlowDuration, scala.None)
+        </td>
+      </tr><tr>
+        <td>
+          331
+        </td>
+        <td>
+          546
+        </td>
+        <td>
+          14267
+          -
+          14461
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  val f: com.sparkutils.flow.FlowRow[FG] = thisFlow.head();
+  f.flowRuleGroup.foreach[Unit](((g: com.sparkutils.flow.FlowRuleGroup[FG]) =&gt; fgP.load(stepIds, rsRows, g)));
+  f
+}
+        </td>
+      </tr><tr>
+        <td>
+          332
+        </td>
+        <td>
+          543
+        </td>
+        <td>
+          14285
+          -
+          14300
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.head
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          thisFlow.head()
+        </td>
+      </tr><tr>
+        <td>
+          334
+        </td>
+        <td>
+          545
+        </td>
+        <td>
+          14353
+          -
+          14443
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.foreach
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          f.flowRuleGroup.foreach[Unit](((g: com.sparkutils.flow.FlowRuleGroup[FG]) =&gt; fgP.load(stepIds, rsRows, g)))
+        </td>
+      </tr><tr>
+        <td>
+          336
+        </td>
+        <td>
+          544
+        </td>
+        <td>
+          14405
+          -
+          14433
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.FlowRuleGroupProcessing.load
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          fgP.load(stepIds, rsRows, g)
+        </td>
+      </tr><tr>
+        <td>
+          341
+        </td>
+        <td>
+          560
+        </td>
+        <td>
+          14483
+          -
+          15425
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          scala.collection.ArrayOps.map
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Predef.refArrayOps[com.sparkutils.flow.StepRow](sourceSteps).map[com.sparkutils.flow.Step[RP#ResType]](((step: com.sparkutils.flow.StepRow) =&gt; {
+  val rid: com.sparkutils.quality.Id = com.sparkutils.quality.Id.apply(step.ruleSuiteId, step.ruleSuiteVersion);
+  val rs: RP#ResType = operation.fromDataset(flowId, rsName, rsRows, rid, flowRow, step);
+  val views: Seq[com.sparkutils.quality.ViewRow] = flowDataSets.viewRows.map[Seq[com.sparkutils.quality.ViewRow]](((s: org.apache.spark.sql.Dataset[com.sparkutils.quality.ViewRow]) =&gt; scala.Predef.refArrayOps[com.sparkutils.quality.ViewRow](s.filter(&quot;ruleSuiteId = &quot;.+(step.ruleSuiteId).+(&quot; and ruleSuiteVersion = &quot;).+(step.ruleSuiteVersion)).collect()).toSeq)).getOrElse[Seq[com.sparkutils.quality.ViewRow]](scala.`package`.Seq.empty[Nothing]);
+  val maps: Seq[com.sparkutils.quality.MapRow] = flowDataSets.mapRows.map[Seq[com.sparkutils.quality.MapRow]](((s: org.apache.spark.sql.Dataset[com.sparkutils.quality.MapRow]) =&gt; scala.Predef.refArrayOps[com.sparkutils.quality.MapRow](s.filter(&quot;ruleSuiteId = &quot;.+(step.ruleSuiteId).+(&quot; and ruleSuiteVersion = &quot;).+(step.ruleSuiteVersion)).collect()).toSeq)).getOrElse[Seq[com.sparkutils.quality.MapRow]](scala.`package`.Seq.empty[Nothing]);
+  Step.apply[RP#ResType](step.name, step.dependencies, Operation.apply[RP#ResType](rs, step.operation.function, step.operation.resultApproach, step.operation.fieldName, step.operation.combineAuditWith)(rstp), StepInitConfiguration.apply(views, maps, StepInitConfiguration.apply$default$3), step.data, step.options)(rstp)
+}))((ClassTag.apply[com.sparkutils.flow.Step[RP#ResType]](classOf[com.sparkutils.flow.Step]): scala.reflect.ClassTag[com.sparkutils.flow.Step[RP#ResType]]))
+        </td>
+      </tr><tr>
+        <td>
+          343
+        </td>
+        <td>
+          547
+        </td>
+        <td>
+          14539
+          -
+          14555
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.StepRow.ruleSuiteId
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          step.ruleSuiteId
+        </td>
+      </tr><tr>
+        <td>
+          343
+        </td>
+        <td>
+          548
+        </td>
+        <td>
+          14557
+          -
+          14578
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.StepRow.ruleSuiteVersion
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          step.ruleSuiteVersion
+        </td>
+      </tr><tr>
+        <td>
+          343
+        </td>
+        <td>
+          549
+        </td>
+        <td>
+          14536
+          -
+          14579
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.quality.Id.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          com.sparkutils.quality.Id.apply(step.ruleSuiteId, step.ruleSuiteVersion)
+        </td>
+      </tr><tr>
+        <td>
+          344
+        </td>
+        <td>
+          550
+        </td>
+        <td>
+          14599
+          -
+          14664
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.FlowGroupAndOperationType.fromDataset
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          operation.fromDataset(flowId, rsName, rsRows, rid, flowRow, step)
+        </td>
+      </tr><tr>
+        <td>
+          347
+        </td>
+        <td>
+          551
+        </td>
+        <td>
+          14719
+          -
+          14823
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.collect
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          s.filter(&quot;ruleSuiteId = &quot;.+(step.ruleSuiteId).+(&quot; and ruleSuiteVersion = &quot;).+(step.ruleSuiteVersion)).collect()
+        </td>
+      </tr><tr>
+        <td>
+          347
+        </td>
+        <td>
+          552
+        </td>
+        <td>
+          14719
+          -
+          14829
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.ArrayOps.toSeq
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Predef.refArrayOps[com.sparkutils.quality.ViewRow](s.filter(&quot;ruleSuiteId = &quot;.+(step.ruleSuiteId).+(&quot; and ruleSuiteVersion = &quot;).+(step.ruleSuiteVersion)).collect()).toSeq
+        </td>
+      </tr><tr>
+        <td>
+          348
+        </td>
+        <td>
+          553
+        </td>
+        <td>
+          14852
+          -
+          14861
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.collection.SeqFactory.Delegate.empty
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #F0ADAD">
+          scala.`package`.Seq.empty[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          348
+        </td>
+        <td>
+          554
+        </td>
+        <td>
+          14688
+          -
+          14862
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flowDataSets.viewRows.map[Seq[com.sparkutils.quality.ViewRow]](((s: org.apache.spark.sql.Dataset[com.sparkutils.quality.ViewRow]) =&gt; scala.Predef.refArrayOps[com.sparkutils.quality.ViewRow](s.filter(&quot;ruleSuiteId = &quot;.+(step.ruleSuiteId).+(&quot; and ruleSuiteVersion = &quot;).+(step.ruleSuiteVersion)).collect()).toSeq)).getOrElse[Seq[com.sparkutils.quality.ViewRow]](scala.`package`.Seq.empty[Nothing])
+        </td>
+      </tr><tr>
+        <td>
+          350
+        </td>
+        <td>
+          555
+        </td>
+        <td>
+          14914
+          -
+          15018
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.spark.sql.Dataset.collect
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          s.filter(&quot;ruleSuiteId = &quot;.+(step.ruleSuiteId).+(&quot; and ruleSuiteVersion = &quot;).+(step.ruleSuiteVersion)).collect()
+        </td>
+      </tr><tr>
+        <td>
+          350
+        </td>
+        <td>
+          556
+        </td>
+        <td>
+          14914
+          -
+          15024
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.ArrayOps.toSeq
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Predef.refArrayOps[com.sparkutils.quality.MapRow](s.filter(&quot;ruleSuiteId = &quot;.+(step.ruleSuiteId).+(&quot; and ruleSuiteVersion = &quot;).+(step.ruleSuiteVersion)).collect()).toSeq
+        </td>
+      </tr><tr>
+        <td>
+          351
+        </td>
+        <td>
+          557
+        </td>
+        <td>
+          15047
+          -
+          15056
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.collection.SeqFactory.Delegate.empty
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #F0ADAD">
+          scala.`package`.Seq.empty[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          351
+        </td>
+        <td>
+          558
+        </td>
+        <td>
+          14884
+          -
+          15057
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flowDataSets.mapRows.map[Seq[com.sparkutils.quality.MapRow]](((s: org.apache.spark.sql.Dataset[com.sparkutils.quality.MapRow]) =&gt; scala.Predef.refArrayOps[com.sparkutils.quality.MapRow](s.filter(&quot;ruleSuiteId = &quot;.+(step.ruleSuiteId).+(&quot; and ruleSuiteVersion = &quot;).+(step.ruleSuiteVersion)).collect()).toSeq)).getOrElse[Seq[com.sparkutils.quality.MapRow]](scala.`package`.Seq.empty[Nothing])
+        </td>
+      </tr><tr>
+        <td>
+          353
+        </td>
+        <td>
+          559
+        </td>
+        <td>
+          15069
+          -
+          15417
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          com.sparkutils.flow.Step.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          Step.apply[RP#ResType](step.name, step.dependencies, Operation.apply[RP#ResType](rs, step.operation.function, step.operation.resultApproach, step.operation.fieldName, step.operation.combineAuditWith)(rstp), StepInitConfiguration.apply(views, maps, StepInitConfiguration.apply$default$3), step.data, step.options)(rstp)
+        </td>
+      </tr><tr>
+        <td>
+          360
+        </td>
+        <td>
+          561
+        </td>
+        <td>
+          15465
+          -
+          15474
+        </td>
+        <td>
+          ApplyImplicitView
+        </td>
+        <td>
+          scala.LowPriorityImplicits2.copyArrayToImmutableIndexedSeq
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Predef.copyArrayToImmutableIndexedSeq[com.sparkutils.flow.Step[RP#ResType]](thisSteps)
+        </td>
+      </tr><tr>
+        <td>
+          360
+        </td>
+        <td>
+          562
+        </td>
+        <td>
+          15431
+          -
+          15475
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.FlowData.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          FlowData.apply[FG, RP#ResType](flowRow, scala.Predef.copyArrayToImmutableIndexedSeq[com.sparkutils.flow.Step[RP#ResType]](thisSteps))
+        </td>
+      </tr><tr>
+        <td>
+          370
+        </td>
+        <td>
+          585
+        </td>
+        <td>
+          15768
+          -
+          16326
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.FullFlow.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          FullFlow.apply[com.sparkutils.quality.CombinedRuleSuiteRows, com.sparkutils.quality.Id]({
+  val group: Seq[com.sparkutils.quality.CombinedRuleSuiteRows] = fullFlow.flowRow.flowRuleGroup.map[Seq[com.sparkutils.quality.CombinedRuleSuiteRows]](((x$3: com.sparkutils.flow.FlowRuleGroup[com.sparkutils.quality.CombinedRuleSuiteRows]) =&gt; x$3.ruleGroup)).getOrElse[Seq[com.sparkutils.quality.CombinedRuleSuiteRows]](scala.`package`.Seq.empty[Nothing]).++[com.sparkutils.quality.CombinedRuleSuiteRows](fullFlow.steps.map[com.sparkutils.quality.CombinedRuleSuiteRows](((x$4: com.sparkutils.flow.FullStep[com.sparkutils.quality.CombinedRuleSuiteRows]) =&gt; x$4.ruleSuite)));
+  val name: String = fullFlow.flowRow.flowRuleGroup.map[String](((x$5: com.sparkutils.flow.FlowRuleGroup[com.sparkutils.quality.CombinedRuleSuiteRows]) =&gt; x$5.ruleGroupName)).getOrElse[String](flow.this.`package`.defaultConvertGroupName);
+  {
+    &lt;artifact&gt; val x$1: Some[com.sparkutils.flow.FlowRuleGroup[com.sparkutils.quality.CombinedRuleSuiteRows]] @scala.reflect.internal.annotations.uncheckedBounds = scala.Some.apply[com.sparkutils.flow.FlowRuleGroup[com.sparkutils.quality.CombinedRuleSuiteRows]](FlowRuleGroup.apply[com.sparkutils.quality.CombinedRuleSuiteRows](name, group));
+    &lt;artifact&gt; val x$2: Int = fullFlow.flowRow.copy$default$1[Nothing];
+    &lt;artifact&gt; val x$3: Int = fullFlow.flowRow.copy$default$2[Nothing];
+    &lt;artifact&gt; val x$4: String = fullFlow.flowRow.copy$default$3[Nothing];
+    &lt;artifact&gt; val x$5: scala.concurrent.duration.Duration = fullFlow.flowRow.copy$default$4[Nothing];
+    fullFlow.flowRow.copy[com.sparkutils.quality.CombinedRuleSuiteRows](x$2, x$3, x$4, x$5, x$1)
+  }
+}, fullFlow.steps.map[com.sparkutils.flow.FullStep[com.sparkutils.quality.Id]](((fullStep: com.sparkutils.flow.FullStep[com.sparkutils.quality.CombinedRuleSuiteRows]) =&gt; FullStep.apply[com.sparkutils.quality.Id](fullStep.step, com.sparkutils.quality.Id.apply(fullStep.ruleSuite.ruleSuiteId, fullStep.ruleSuite.ruleSuiteVersion), fullStep.initConfiguration))))
+        </td>
+      </tr><tr>
+        <td>
+          372
+        </td>
+        <td>
+          563
+        </td>
+        <td>
+          15851
+          -
+          15862
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FlowRuleGroup.ruleGroup
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #F0ADAD">
+          x$3.ruleGroup
+        </td>
+      </tr><tr>
+        <td>
+          372
+        </td>
+        <td>
+          564
+        </td>
+        <td>
+          15874
+          -
+          15883
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.collection.SeqFactory.Delegate.empty
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.`package`.Seq.empty[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          372
+        </td>
+        <td>
+          565
+        </td>
+        <td>
+          15907
+          -
+          15918
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FullStep.ruleSuite
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          x$4.ruleSuite
+        </td>
+      </tr><tr>
+        <td>
+          372
+        </td>
+        <td>
+          566
+        </td>
+        <td>
+          15888
+          -
+          15919
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableOps.map
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          fullFlow.steps.map[com.sparkutils.quality.CombinedRuleSuiteRows](((x$4: com.sparkutils.flow.FullStep[com.sparkutils.quality.CombinedRuleSuiteRows]) =&gt; x$4.ruleSuite))
+        </td>
+      </tr><tr>
+        <td>
+          372
+        </td>
+        <td>
+          567
+        </td>
+        <td>
+          15816
+          -
+          15919
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableOps.++
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          fullFlow.flowRow.flowRuleGroup.map[Seq[com.sparkutils.quality.CombinedRuleSuiteRows]](((x$3: com.sparkutils.flow.FlowRuleGroup[com.sparkutils.quality.CombinedRuleSuiteRows]) =&gt; x$3.ruleGroup)).getOrElse[Seq[com.sparkutils.quality.CombinedRuleSuiteRows]](scala.`package`.Seq.empty[Nothing]).++[com.sparkutils.quality.CombinedRuleSuiteRows](fullFlow.steps.map[com.sparkutils.quality.CombinedRuleSuiteRows](((x$4: com.sparkutils.flow.FullStep[com.sparkutils.quality.CombinedRuleSuiteRows]) =&gt; x$4.ruleSuite)))
+        </td>
+      </tr><tr>
+        <td>
+          373
+        </td>
+        <td>
+          568
+        </td>
+        <td>
+          15974
+          -
+          15989
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FlowRuleGroup.ruleGroupName
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #F0ADAD">
+          x$5.ruleGroupName
+        </td>
+      </tr><tr>
+        <td>
+          373
+        </td>
+        <td>
+          569
+        </td>
+        <td>
+          16001
+          -
+          16024
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.Constants.defaultConvertGroupName
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          flow.this.`package`.defaultConvertGroupName
+        </td>
+      </tr><tr>
+        <td>
+          373
+        </td>
+        <td>
+          570
+        </td>
+        <td>
+          15939
+          -
+          16025
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          fullFlow.flowRow.flowRuleGroup.map[String](((x$5: com.sparkutils.flow.FlowRuleGroup[com.sparkutils.quality.CombinedRuleSuiteRows]) =&gt; x$5.ruleGroupName)).getOrElse[String](flow.this.`package`.defaultConvertGroupName)
+        </td>
+      </tr><tr>
+        <td>
+          374
+        </td>
+        <td>
+          571
+        </td>
+        <td>
+          16079
+          -
+          16105
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.FlowRuleGroup.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          FlowRuleGroup.apply[com.sparkutils.quality.CombinedRuleSuiteRows](name, group)
+        </td>
+      </tr><tr>
+        <td>
+          374
+        </td>
+        <td>
+          572
+        </td>
+        <td>
+          16073
+          -
+          16107
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[com.sparkutils.flow.FlowRuleGroup[com.sparkutils.quality.CombinedRuleSuiteRows]](FlowRuleGroup.apply[com.sparkutils.quality.CombinedRuleSuiteRows](name, group))
+        </td>
+      </tr><tr>
+        <td>
+          374
+        </td>
+        <td>
+          573
+        </td>
+        <td>
+          16051
+          -
+          16051
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.sparkutils.flow.FlowRow.copy$default$1
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          fullFlow.flowRow.copy$default$1[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          374
+        </td>
+        <td>
+          574
+        </td>
+        <td>
+          16051
+          -
+          16051
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.sparkutils.flow.FlowRow.copy$default$2
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          fullFlow.flowRow.copy$default$2[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          374
+        </td>
+        <td>
+          575
+        </td>
+        <td>
+          16051
+          -
+          16051
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.sparkutils.flow.FlowRow.copy$default$3
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          fullFlow.flowRow.copy$default$3[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          374
+        </td>
+        <td>
+          576
+        </td>
+        <td>
+          16051
+          -
+          16051
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.sparkutils.flow.FlowRow.copy$default$4
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          fullFlow.flowRow.copy$default$4[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          374
+        </td>
+        <td>
+          577
+        </td>
+        <td>
+          16034
+          -
+          16109
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.FlowRow.copy
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          fullFlow.flowRow.copy[com.sparkutils.quality.CombinedRuleSuiteRows](x$2, x$3, x$4, x$5, x$1)
+        </td>
+      </tr><tr>
+        <td>
+          376
+        </td>
+        <td>
+          584
+        </td>
+        <td>
+          16133
+          -
+          16320
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableOps.map
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          fullFlow.steps.map[com.sparkutils.flow.FullStep[com.sparkutils.quality.Id]](((fullStep: com.sparkutils.flow.FullStep[com.sparkutils.quality.CombinedRuleSuiteRows]) =&gt; FullStep.apply[com.sparkutils.quality.Id](fullStep.step, com.sparkutils.quality.Id.apply(fullStep.ruleSuite.ruleSuiteId, fullStep.ruleSuite.ruleSuiteVersion), fullStep.initConfiguration)))
+        </td>
+      </tr><tr>
+        <td>
+          378
+        </td>
+        <td>
+          578
+        </td>
+        <td>
+          16197
+          -
+          16210
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FullStep.step
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          fullStep.step
+        </td>
+      </tr><tr>
+        <td>
+          378
+        </td>
+        <td>
+          579
+        </td>
+        <td>
+          16215
+          -
+          16245
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.quality.CombinedRuleSuiteRows.ruleSuiteId
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          fullStep.ruleSuite.ruleSuiteId
+        </td>
+      </tr><tr>
+        <td>
+          378
+        </td>
+        <td>
+          580
+        </td>
+        <td>
+          16247
+          -
+          16282
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.quality.CombinedRuleSuiteRows.ruleSuiteVersion
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          fullStep.ruleSuite.ruleSuiteVersion
+        </td>
+      </tr><tr>
+        <td>
+          378
+        </td>
+        <td>
+          581
+        </td>
+        <td>
+          16212
+          -
+          16283
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.quality.Id.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          com.sparkutils.quality.Id.apply(fullStep.ruleSuite.ruleSuiteId, fullStep.ruleSuite.ruleSuiteVersion)
+        </td>
+      </tr><tr>
+        <td>
+          378
+        </td>
+        <td>
+          582
+        </td>
+        <td>
+          16285
+          -
+          16311
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.FullStep.initConfiguration
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          fullStep.initConfiguration
+        </td>
+      </tr><tr>
+        <td>
+          378
+        </td>
+        <td>
+          583
+        </td>
+        <td>
+          16184
+          -
+          16312
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.sparkutils.flow.FullStep.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          FullStep.apply[com.sparkutils.quality.Id](fullStep.step, com.sparkutils.quality.Id.apply(fullStep.ruleSuite.ruleSuiteId, fullStep.ruleSuite.ruleSuiteVersion), fullStep.initConfiguration)
+        </td>
+      </tr>
+    </table>
+          </div>
+        </div>
+      </body>
+    </html>

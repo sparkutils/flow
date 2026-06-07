@@ -1,0 +1,535 @@
+<html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title id="title">
+          com/sparkutils/flow/CoreUtils.scala.html
+        </title>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        $(document).ready(function() {$(".tablesorter").tablesorter();});
+      </script>
+        <style>
+          table.codegrid { font-family: monospace; font-size: 12px; width: auto!important; }table.statementlist { width: auto!important; font-size: 13px; } table.codegrid td { padding: 0!important; border: 0!important } table td.linenumber { width: 40px!important; } 
+        </style>
+      </head>
+      <body style="font-family: monospace;">
+        <ul class="nav nav-tabs">
+          <li>
+            <a href="#codegrid" data-toggle="tab">Codegrid</a>
+          </li>
+          <li>
+            <a href="#statementlist" data-toggle="tab">Statement List</a>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="codegrid">
+            <pre style='font-size: 12pt; font-family: courier, monospace;'>1 <span style=''>package com.sparkutils.flow
+</span>2 <span style=''>
+</span>3 <span style=''>import java.util.concurrent.TimeUnit
+</span>4 <span style=''>import scala.concurrent.duration.{Duration, durationToPair}
+</span>5 <span style=''>
+</span>6 <span style=''>protected[flow] object ClassUtils {
+</span>7 <span style=''>  def load[T](obj: Object, name: String): T =
+</span>8 <span style=''>    try {
+</span>9 <span style=''>      </span><span style='background: #AEF1AE'>obj.getClass.getClassLoader.loadClass(name).newInstance().asInstanceOf[T]</span><span style=''>
+</span>10 <span style=''>    } catch {
+</span>11 <span style=''>      case t: Throwable =&gt;
+</span>12 <span style=''>        </span><span style='background: #AEF1AE'>throw FlowException(s&quot;Attempted to load CustomResultApproach $name&quot;,t)</span><span style=''>
+</span>13 <span style=''>    }
+</span>14 <span style=''>}
+</span>15 <span style=''>
+</span>16 <span style=''>/**
+</span>17 <span style=''> * A simple timer and conversion utils
+</span>18 <span style=''> */
+</span>19 <span style=''>object Timer {
+</span>20 <span style=''>
+</span>21 <span style=''>  implicit class DurationOps(val duration: Duration) {
+</span>22 <span style=''>    def pretty: String = </span><span style='background: #AEF1AE'>duration</span><span style=''> match {
+</span>23 <span style=''>      case d if </span><span style='background: #AEF1AE'>d.toHours &gt; 0L</span><span style=''> =&gt; s&quot;${duration.toHours}h${duration.toMinutes % 60}m&quot;
+</span>24 <span style=''>      case d if </span><span style='background: #AEF1AE'>d.toMinutes &gt; 0L</span><span style=''> =&gt; s&quot;${duration.toMinutes}m${duration.toSeconds % 60}s&quot;
+</span>25 <span style=''>      case d if </span><span style='background: #AEF1AE'>d.toSeconds &gt; 0L</span><span style=''> =&gt; s&quot;${duration.toSeconds}s${duration.toMillis % 1000}ms&quot;
+</span>26 <span style=''>      case d if </span><span style='background: #AEF1AE'>d.toMillis &gt; 0L</span><span style=''> =&gt; s&quot;${duration.toUnit(TimeUnit.MILLISECONDS)}ms&quot;
+</span>27 <span style=''>      case d =&gt; </span><span style='background: #AEF1AE'>d.toString</span><span style=''>
+</span>28 <span style=''>    }
+</span>29 <span style=''>  }
+</span>30 <span style=''>
+</span>31 <span style=''>  def apply[T](thunk: =&gt; T): (T, Duration) = {
+</span>32 <span style=''>    val start = </span><span style='background: #AEF1AE'>System.nanoTime()</span><span style=''>
+</span>33 <span style=''>    val r = thunk
+</span>34 <span style=''>    val duration = </span><span style='background: #AEF1AE'>Duration.fromNanos( System.nanoTime() - start )</span><span style=''>
+</span>35 <span style=''>    </span><span style='background: #AEF1AE'>(r, duration)</span><span style=''>
+</span>36 <span style=''>  }
+</span>37 <span style=''>}
+</span></pre>
+          </div>
+          <div class="tab-pane" id="statementlist">
+            <table cellspacing="0" cellpadding="0" class="table statementlist">
+      <tr>
+        <th>Line</th>
+        <th>Stmt Id</th>
+        <th>Pos</th>
+        <th>Tree</th>
+        <th>Symbol</th>
+        <th>Tests</th>
+        <th>Code</th>
+      </tr><tr>
+        <td>
+          9
+        </td>
+        <td>
+          0
+        </td>
+        <td>
+          225
+          -
+          298
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.Any.asInstanceOf
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          obj.getClass().getClassLoader().loadClass(name).newInstance().asInstanceOf[T]
+        </td>
+      </tr><tr>
+        <td>
+          9
+        </td>
+        <td>
+          1
+        </td>
+        <td>
+          225
+          -
+          298
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          scala.Any.asInstanceOf
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          obj.getClass().getClassLoader().loadClass(name).newInstance().asInstanceOf[T]
+        </td>
+      </tr><tr>
+        <td>
+          12
+        </td>
+        <td>
+          2
+        </td>
+        <td>
+          348
+          -
+          418
+        </td>
+        <td>
+          Throw
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          throw FlowException.apply(&quot;Attempted to load CustomResultApproach &quot;.+(name), t)
+        </td>
+      </tr><tr>
+        <td>
+          12
+        </td>
+        <td>
+          3
+        </td>
+        <td>
+          348
+          -
+          418
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          throw FlowException.apply(&quot;Attempted to load CustomResultApproach &quot;.+(name), t)
+        </td>
+      </tr><tr>
+        <td>
+          22
+        </td>
+        <td>
+          4
+        </td>
+        <td>
+          571
+          -
+          579
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.sparkutils.flow.Timer.DurationOps.duration
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          DurationOps.this.duration
+        </td>
+      </tr><tr>
+        <td>
+          23
+        </td>
+        <td>
+          5
+        </td>
+        <td>
+          604
+          -
+          618
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Long.&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          d.toHours.&gt;(0L)
+        </td>
+      </tr><tr>
+        <td>
+          23
+        </td>
+        <td>
+          6
+        </td>
+        <td>
+          670
+          -
+          670
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.String.+
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;.+(DurationOps.this.duration.toHours).+(&quot;h&quot;).+(DurationOps.this.duration.toMinutes.%(60)).+(&quot;m&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          24
+        </td>
+        <td>
+          7
+        </td>
+        <td>
+          689
+          -
+          705
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Long.&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          d.toMinutes.&gt;(0L)
+        </td>
+      </tr><tr>
+        <td>
+          24
+        </td>
+        <td>
+          8
+        </td>
+        <td>
+          759
+          -
+          759
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.String.+
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;.+(DurationOps.this.duration.toMinutes).+(&quot;m&quot;).+(DurationOps.this.duration.toSeconds.%(60)).+(&quot;s&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          25
+        </td>
+        <td>
+          9
+        </td>
+        <td>
+          778
+          -
+          794
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Long.&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          d.toSeconds.&gt;(0L)
+        </td>
+      </tr><tr>
+        <td>
+          25
+        </td>
+        <td>
+          10
+        </td>
+        <td>
+          849
+          -
+          849
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.String.+
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;&quot;.+(DurationOps.this.duration.toSeconds).+(&quot;s&quot;).+(DurationOps.this.duration.toMillis.%(1000)).+(&quot;ms&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          26
+        </td>
+        <td>
+          11
+        </td>
+        <td>
+          869
+          -
+          884
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Long.&gt;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          d.toMillis.&gt;(0L)
+        </td>
+      </tr><tr>
+        <td>
+          26
+        </td>
+        <td>
+          12
+        </td>
+        <td>
+          931
+          -
+          931
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.String.+
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;&quot;.+(DurationOps.this.duration.toUnit(MILLISECONDS)).+(&quot;ms&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          27
+        </td>
+        <td>
+          13
+        </td>
+        <td>
+          951
+          -
+          961
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.toString
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          d.toString()
+        </td>
+      </tr><tr>
+        <td>
+          27
+        </td>
+        <td>
+          14
+        </td>
+        <td>
+          951
+          -
+          961
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          java.lang.Object.toString
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          d.toString()
+        </td>
+      </tr><tr>
+        <td>
+          32
+        </td>
+        <td>
+          15
+        </td>
+        <td>
+          1036
+          -
+          1053
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.System.nanoTime
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          java.lang.System.nanoTime()
+        </td>
+      </tr><tr>
+        <td>
+          34
+        </td>
+        <td>
+          16
+        </td>
+        <td>
+          1111
+          -
+          1136
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Long.-
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          java.lang.System.nanoTime().-(start)
+        </td>
+      </tr><tr>
+        <td>
+          34
+        </td>
+        <td>
+          17
+        </td>
+        <td>
+          1091
+          -
+          1138
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.concurrent.duration.Duration.fromNanos
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.concurrent.duration.Duration.fromNanos(java.lang.System.nanoTime().-(start))
+        </td>
+      </tr><tr>
+        <td>
+          35
+        </td>
+        <td>
+          18
+        </td>
+        <td>
+          1143
+          -
+          1156
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Tuple2.apply
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Tuple2.apply[T, scala.concurrent.duration.FiniteDuration](r, duration)
+        </td>
+      </tr>
+    </table>
+          </div>
+        </div>
+      </body>
+    </html>
