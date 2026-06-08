@@ -67,7 +67,6 @@ jobs:
   publishShadeBuilds_21:
     needs: [ publish_21 ]
     uses: sparkutils/building/.github/workflows/publish_build.yml@main
-    if: false
     with:
       theMatrix: |
         {
