@@ -1,0 +1,239 @@
+<html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title id="title">
+          com/sparkutils/flow/ProcessingTypes.scala.html
+        </title>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        $(document).ready(function() {$(".tablesorter").tablesorter();});
+      </script>
+        <style>
+          table.codegrid { font-family: monospace; font-size: 12px; width: auto!important; }table.statementlist { width: auto!important; font-size: 13px; } table.codegrid td { padding: 0!important; border: 0!important } table td.linenumber { width: 40px!important; } 
+        </style>
+      </head>
+      <body style="font-family: monospace;">
+        <ul class="nav nav-tabs">
+          <li>
+            <a href="#codegrid" data-toggle="tab">Codegrid</a>
+          </li>
+          <li>
+            <a href="#statementlist" data-toggle="tab">Statement List</a>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="codegrid">
+            <pre style='font-size: 12pt; font-family: courier, monospace;'>1 <span style=''>package com.sparkutils.flow
+</span>2 <span style=''>
+</span>3 <span style=''>import com.sparkutils.quality.impl.Encoders
+</span>4 <span style=''>import org.apache.spark.sql.Column
+</span>5 <span style=''>import org.apache.spark.sql.types.StructType
+</span>6 <span style=''>
+</span>7 <span style=''>/**
+</span>8 <span style=''> * Inputs provided to runners derived from both the input dataset and any present [[Step.options]] [[resultDataType]] entry
+</span>9 <span style=''> * @param struct
+</span>10 <span style=''> * @param withoutFlowAudit
+</span>11 <span style=''> * @param dataRefTypeFields
+</span>12 <span style=''> */
+</span>13 <span style=''>@SerialVersionUID(1L)
+</span>14 <span style=''>case class RunnerInputs(struct: StructType, withoutFlowAudit: Seq[String], dataRefTypeFields: Option[Set[String]]) extends Serializable {
+</span>15 <span style=''>
+</span>16 <span style=''>  /**
+</span>17 <span style=''>   * Similar to an option.fold, uses the struct information to verify if an audit column is present for a given Flow's Step
+</span>18 <span style=''>   *
+</span>19 <span style=''>   * @param flowAuditColName provided by the Flow
+</span>20 <span style=''>   * @param auditF called when an audit field is present
+</span>21 <span style=''>   * @param noAudit called when no audit field is present
+</span>22 <span style=''>   * @tparam T
+</span>23 <span style=''>   * @return
+</span>24 <span style=''>   */
+</span>25 <span style=''>  def hasAudit[T](flowAuditColName: String)(auditF: =&gt; T)(noAudit: =&gt; T): T =
+</span>26 <span style=''>    if (</span><span style='background: #AEF1AE'>struct.exists(s =&gt; s.name == flowAuditColName &amp;&amp; s.dataType == Encoders.ruleSuiteGroupResultsTypedEnc.catalystRepr)</span><span style=''>)
+</span>27 <span style=''>      </span><span style='background: #AEF1AE'>auditF</span><span style=''>
+</span>28 <span style=''>    else
+</span>29 <span style=''>      </span><span style='background: #AEF1AE'>noAudit</span><span style=''>
+</span>30 <span style=''>
+</span>31 <span style=''>}
+</span>32 <span style=''>
+</span>33 <span style=''>/**
+</span>34 <span style=''> * Returned by runners specified by [[Operation.function]]
+</span>35 <span style=''> *
+</span>36 <span style=''> * @param column         The column containing the runner output
+</span>37 <span style=''> * @param runnerChildren Direct children of the runner (e.g. result, ruleSuiteResults etc.)
+</span>38 <span style=''> * @param outputFields   Any declared output, e.g. typically just [[RunnerInputs.dataRefTypeFields]]
+</span>39 <span style=''> */
+</span>40 <span style=''>@SerialVersionUID(1L)
+</span>41 <span style=''>case class RunnerOutput(column: Column, runnerChildren: Seq[String], outputFields: Option[Set[String]]) extends Serializable
+</span>42 <span style=''>
+</span>43 <span style=''>/**
+</span>44 <span style=''> * Represents the processing inputs needed to handle an engines results
+</span>45 <span style=''> * @param outputFields
+</span>46 <span style=''> * @param starterColumns
+</span>47 <span style=''> * @param fieldName
+</span>48 <span style=''> * @param children
+</span>49 <span style=''> * @param group_auditF
+</span>50 <span style=''> */
+</span>51 <span style=''>@SerialVersionUID(1L)
+</span>52 <span style=''>case class ResultProcessInputs(outputFields: Option[Set[String]], starterColumns: Seq[Column],
+</span>53 <span style=''>                               fieldName: String, children: Seq[Column], group_auditF: Column) extends Serializable
+</span></pre>
+          </div>
+          <div class="tab-pane" id="statementlist">
+            <table cellspacing="0" cellpadding="0" class="table statementlist">
+      <tr>
+        <th>Line</th>
+        <th>Stmt Id</th>
+        <th>Pos</th>
+        <th>Tree</th>
+        <th>Symbol</th>
+        <th>Tests</th>
+        <th>Code</th>
+      </tr><tr>
+        <td>
+          26
+        </td>
+        <td>
+          46
+        </td>
+        <td>
+          1002
+          -
+          1053
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          frameless.TypedEncoder.catalystRepr
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          com.sparkutils.quality.impl.Encoders.ruleSuiteGroupResultsTypedEnc.catalystRepr
+        </td>
+      </tr><tr>
+        <td>
+          26
+        </td>
+        <td>
+          47
+        </td>
+        <td>
+          988
+          -
+          1053
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          s.dataType.==(com.sparkutils.quality.impl.Encoders.ruleSuiteGroupResultsTypedEnc.catalystRepr)
+        </td>
+      </tr><tr>
+        <td>
+          26
+        </td>
+        <td>
+          48
+        </td>
+        <td>
+          958
+          -
+          1053
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Boolean.&amp;&amp;
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          s.name.==(flowAuditColName).&amp;&amp;(s.dataType.==(com.sparkutils.quality.impl.Encoders.ruleSuiteGroupResultsTypedEnc.catalystRepr))
+        </td>
+      </tr><tr>
+        <td>
+          26
+        </td>
+        <td>
+          49
+        </td>
+        <td>
+          939
+          -
+          1054
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableOnceOps.exists
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          RunnerInputs.this.struct.exists(((s: org.apache.spark.sql.types.StructField) =&gt; s.name.==(flowAuditColName).&amp;&amp;(s.dataType.==(com.sparkutils.quality.impl.Encoders.ruleSuiteGroupResultsTypedEnc.catalystRepr))))
+        </td>
+      </tr><tr>
+        <td>
+          27
+        </td>
+        <td>
+          50
+        </td>
+        <td>
+          1062
+          -
+          1068
+        </td>
+        <td>
+          Ident
+        </td>
+        <td>
+          com.sparkutils.flow.RunnerInputs.auditF
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          auditF
+        </td>
+      </tr><tr>
+        <td>
+          29
+        </td>
+        <td>
+          51
+        </td>
+        <td>
+          1084
+          -
+          1091
+        </td>
+        <td>
+          Ident
+        </td>
+        <td>
+          com.sparkutils.flow.RunnerInputs.noAudit
+        </td>
+        <td>
+          
+        </td>
+        <td style="background: #AEF1AE">
+          noAudit
+        </td>
+      </tr>
+    </table>
+          </div>
+        </div>
+      </body>
+    </html>
