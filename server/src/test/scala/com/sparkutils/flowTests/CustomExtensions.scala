@@ -152,7 +152,7 @@ class CustomExtensions extends SharedPureConnectTests with Matchers with CustomE
     val reread = new FlowT(flow.flowId, fromFull.steps, fromFull.flowRow.flowAuditColName,
       flowRuleGroup = fromFull.flowRow.flowRuleGroup)
     val fr = flow.run(s, _ => Some(data))
-    // enough to prove it worked as non tolerant
+    // enough to prove it worked as non-tolerant
   }
 
   test("NoOp runner and var rule group loading works id's") {
