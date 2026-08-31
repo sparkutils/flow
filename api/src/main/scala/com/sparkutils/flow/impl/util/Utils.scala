@@ -1,13 +1,12 @@
 package com.sparkutils.flow.impl.util
 
-import com.google.common.util.concurrent.ThreadFactoryBuilder
 import com.sparkutils.flow.{FlowException, Folder, RuleSuiteTypeParam, StepLike, StepRow, doNotAddFolderDefault}
 import com.sparkutils.quality.{CombinedRuleSuiteRows, DefaultProcessor, Id, NoOpDefaultProcessor, OutputExpression, OutputExpressionRow, RuleSuite}
 import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.sql.{Column, functions}
 
-import java.util.concurrent.{Executors, ScheduledExecutorService, ScheduledThreadPoolExecutor}
-import scala.concurrent.{ExecutionContext, Future, Promise}
+import java.util.concurrent.Executors
+import scala.concurrent.{ExecutionContext, Promise}
 import scala.concurrent.duration.{Duration, MILLISECONDS, NANOSECONDS}
 import scala.util.Try
 
