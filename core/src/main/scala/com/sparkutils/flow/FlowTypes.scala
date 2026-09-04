@@ -80,10 +80,16 @@ case class StepInitConfiguration(viewConfig: Seq[ViewRow] = Seq.empty, mapConfig
  *                  one dependency
  * @param outputView the output view name, when not specified the step name is used.
  * @param cacheResults should the resulting dataframe be cached
+ * @param persistor the fully qualified name of the persistor to use, by default it performs no saves
+ * @param persistorOptions the set of options provided to the persistor, this may include format and location,
+ *                         or security tokens etc.  The entire set of options will be passed to the
+ *                         DataFrameWriter where possible.
  */
 @SerialVersionUID(1L)
 case class StepData(inputView: Option[String] = None, outputView: Option[String] = None,
-                    cacheResults: Boolean = false) extends Serializable
+                    cacheResults: Boolean = false,
+                    persistor: String = classOf[NoOpPersistor].getName,
+                    persistorOptions: Map[String, String] = Map.empty) extends Serializable
 
 object StepData {
   def apply(inputView: String, outputView: String, cacheResults: Boolean): StepData =

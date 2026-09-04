@@ -21,4 +21,6 @@ object FlowExceptionConstants {
   def FlowEarlyExitException(stepName: String): String =
     s"Step stepName had flowEarlyExitSQL configured which returned false - the Flow will be stopped"
 
+  def MissingPersistorParameters(step: Step[_], clazz: Class[_], params: Seq[String]): String =
+    s"Step ${step.name} could not use Persistor ${clazz.getName} as it had missing required parameters (${params.mkString(",")})"
 }
