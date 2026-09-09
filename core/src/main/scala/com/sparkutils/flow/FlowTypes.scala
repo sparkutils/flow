@@ -88,7 +88,7 @@ case class StepInitConfiguration(viewConfig: Seq[ViewRow] = Seq.empty, mapConfig
 @SerialVersionUID(1L)
 case class StepData(inputView: Option[String] = None, outputView: Option[String] = None,
                     cacheResults: Boolean = false,
-                    persistor: String = classOf[NoOpPersistor].getName,
+                    persistor: String = NoOpPersistor.getClass.getName,
                     persistorOptions: Map[String, String] = Map.empty) extends Serializable
 
 object StepData {

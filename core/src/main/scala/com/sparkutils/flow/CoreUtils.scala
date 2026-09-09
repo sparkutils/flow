@@ -1,6 +1,6 @@
 package com.sparkutils.flow
 
-import org.apache.spark.sql.classic.DataFrame
+import org.apache.spark.sql.DataFrame
 
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.{Duration, durationToPair}

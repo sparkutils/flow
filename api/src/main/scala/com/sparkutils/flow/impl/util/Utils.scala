@@ -20,6 +20,11 @@ object Utils {
   def getX[T](keyName: String, config: Map[String, String], default: T)(f: String => T): T =
     config.get(keyName).map(s => Try{f(s)}.getOrElse(default)).getOrElse(default)
 
+  def orThrow[T](err: (String, String) => String)(keyName: String)(f: String => T)(s: String): T =
+    Try(f(s)).getOrElse(
+      throw FlowException(err(keyName,s))
+    )
+
   implicit class MapOps(val config: Map[String, String]) {
     def boolean(keyName: String, default: Boolean = false): Boolean =
       getX(keyName, config, default)(_.toBoolean)
@@ -38,6 +43,7 @@ object Utils {
     }
 
     def expr(keyName: String): Option[Column] = config.get(keyName).map(s => functions.expr(s))
+
   }
 
   /**

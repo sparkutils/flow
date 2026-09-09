@@ -19,8 +19,8 @@ import org.apache.spark.sql.classic.DataFrame
  *
  * If options has 'use_result' with value 'true', the default is false, the result of the command will be rebound to the [[Step.defaultOutputViewName]]
  */
-@SerialVersionUID(1L)
+/*@SerialVersionUID(1L)
 class Command() extends Persistor {
 
   override def persist(step: Step[_], options: Map[String, String], dataFrame: DataFrame): Option[DataFrame] = ???
-}
+}*/
